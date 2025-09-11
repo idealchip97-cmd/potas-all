@@ -18,10 +18,10 @@ const {
   getSystemMetrics,
   getAuditLogs
 } = require('../controllers/reportController');
-const auth = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
 
 // All report routes require authentication
-router.use(auth);
+router.use(authenticate);
 
 // Dashboard and analytics routes
 router.get('/dashboard', getDashboardStats);

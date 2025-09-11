@@ -12,7 +12,24 @@ A comprehensive Node.js backend API system for managing speed detection radars i
 
 ## 🏭 System Overview
 
-The Potassium Factory Radar Speed Detection System is an enterprise-level solution designed to:
+The Potassium Factory Radar Speed Detection System is an enterprise-level solution designed for comprehensive speed monitoring across factory premises. The system integrates physical radar devices with a centralized backend API to provide real-time violation tracking and advanced analytics.
+
+### 🏗️ Physical Infrastructure
+- **Radar Devices**: Strategic placement across factory roads and internal streets
+- **Arduino Integration**: Each radar connected via Arduino microcontroller for data processing
+- **GSM Connectivity**: GSM modules enable wireless data transmission to central servers
+- **FTP Server Integration**: Automated file transfer for violation images and data packets
+- **Real-time Monitoring**: Continuous speed detection with immediate violation processing
+
+### 🔄 Data Flow Architecture
+1. **Speed Detection**: Radar devices monitor vehicle speeds on factory premises
+2. **Arduino Processing**: Local processing of speed data and violation detection
+3. **GSM Transmission**: Wireless data transmission via GSM modules to FTP server
+4. **FTP Integration**: Automated upload of violation images and metadata
+5. **API Processing**: Backend system processes FTP data and generates violations
+6. **Real-time Analytics**: Live dashboard updates and notification systems
+
+### 🎯 Core Capabilities
 - Monitor vehicle speeds across factory premises with high precision
 - Automatically detect and record speed violations with image capture
 - Generate comprehensive reports and analytics for safety management
@@ -49,14 +66,40 @@ The Potassium Factory Radar Speed Detection System is an enterprise-level soluti
 - Violation severity classification and escalation
 
 ### 📊 **Enterprise Reporting System**
-- **Real-time Dashboard**: Live KPIs, violation counts, revenue tracking
+
+#### 📋 Report Types Available
+
+**1. Fines Reports**
+- **All Fines Report**: Comprehensive listing of all violations with filtering options
+- **Fines by Status**: Categorized reports (Pending, Processed, Paid, Cancelled)
+- **Fines by Speed Range**: Violations grouped by speed thresholds
+- **Fines by Date Range**: Time-based violation analysis
+- **Outstanding Fines**: Unpaid violations requiring follow-up
+
+**2. Fines by Radar ID Reports**
+- **Single Radar Performance**: Detailed analysis per radar device
+- **Radar Comparison**: Side-by-side performance metrics
+- **Radar Efficiency**: Detection rates and accuracy statistics
+- **Location-based Analysis**: Violations by specific factory areas
+
+**3. Single Fine Reports**
+- **Individual Violation Details**: Complete violation record with images
+- **Processing History**: Violation lifecycle tracking
+- **Evidence Package**: Comprehensive documentation for legal proceedings
+- **Payment Status**: Financial tracking per violation
+
+**4. Dashboard Analytics**
+- **Real-time KPIs**: Live violation counts, revenue tracking
 - **Trend Analysis**: Hourly, daily, weekly, monthly violation patterns
-- **Radar Performance**: Individual radar statistics and comparisons
-- **Speed Analytics**: Distribution analysis and peak time identification
-- **Financial Reports**: Revenue tracking, collection rates, outstanding fines
-- **Compliance Reports**: Regulatory compliance and audit trail reports
-- **Custom Reports**: Configurable report templates with advanced filtering
-- **Scheduled Reports**: Automated report generation and email distribution
+- **Speed Distribution**: Analytics on speed ranges and patterns
+- **Peak Time Analysis**: High-violation periods identification
+- **Revenue Metrics**: Financial performance and collection rates
+
+**5. System Performance Reports**
+- **Radar Uptime**: Device availability and maintenance schedules
+- **API Performance**: Response times and system health metrics
+- **User Activity**: Access logs and system usage patterns
+- **Audit Trail**: Comprehensive security and compliance logs
 
 ### 🔄 **System Integration & Monitoring**
 - Arduino + GSM module support with real-time data reception
