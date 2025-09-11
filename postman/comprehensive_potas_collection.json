@@ -1,0 +1,576 @@
+{
+  "info": {
+    "name": "Potassium Factory - Comprehensive Radar Speed Detection API",
+    "description": "Complete API collection for the enhanced radar speed detection system with comprehensive reporting, audit logging, and system monitoring capabilities.",
+    "version": "2.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{jwt_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000/api",
+      "type": "string"
+    },
+    {
+      "key": "jwt_token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "🔐 Authentication",
+      "item": [
+        {
+          "name": "User Signup",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"newuser@potasfactory.com\",\n  \"password\": \"password123\",\n  \"firstName\": \"New\",\n  \"lastName\": \"User\",\n  \"role\": \"operator\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/signup",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "signup"]
+            }
+          }
+        },
+        {
+          "name": "User Signin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('jwt_token', response.data.token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@potasfactory.com\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/signin",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "signin"]
+            }
+          }
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@potasfactory.com\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/forgot-password",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "forgot-password"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📡 Radar Management",
+      "item": [
+        {
+          "name": "Get All Radars",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/radars",
+              "host": ["{{base_url}}"],
+              "path": ["radars"]
+            }
+          }
+        },
+        {
+          "name": "Get Radar by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/radars/1",
+              "host": ["{{base_url}}"],
+              "path": ["radars", "1"]
+            }
+          }
+        },
+        {
+          "name": "Create New Radar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Radar\",\n  \"location\": \"Test Location\",\n  \"serialNumber\": \"RDR-TEST-001\",\n  \"speedLimit\": 30,\n  \"status\": \"active\",\n  \"latitude\": 40.7128,\n  \"longitude\": -74.0060,\n  \"ipAddress\": \"192.168.1.200\",\n  \"ftpPath\": \"/ftp/test-radar\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/radars",
+              "host": ["{{base_url}}"],
+              "path": ["radars"]
+            }
+          }
+        },
+        {
+          "name": "Update Radar",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Radar Name\",\n  \"status\": \"maintenance\",\n  \"speedLimit\": 25\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/radars/1",
+              "host": ["{{base_url}}"],
+              "path": ["radars", "1"]
+            }
+          }
+        },
+        {
+          "name": "Delete Radar",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/radars/1",
+              "host": ["{{base_url}}"],
+              "path": ["radars", "1"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🚨 Fine Management",
+      "item": [
+        {
+          "name": "Get All Fines",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/fines?page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["fines"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Fines by Radar",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/fines/radar/1",
+              "host": ["{{base_url}}"],
+              "path": ["fines", "radar", "1"]
+            }
+          }
+        },
+        {
+          "name": "Get Fine by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/fines/1",
+              "host": ["{{base_url}}"],
+              "path": ["fines", "1"]
+            }
+          }
+        },
+        {
+          "name": "Create Fine",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"radarId\": 1,\n  \"vehiclePlate\": \"ABC123\",\n  \"speedDetected\": 45,\n  \"speedLimit\": 30,\n  \"violationAmount\": 15,\n  \"fineAmount\": 150.00,\n  \"violationDateTime\": \"2024-01-15T10:30:00Z\",\n  \"imageUrl\": \"https://images.potasfactory.com/violations/test.jpg\",\n  \"notes\": \"Test violation\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/fines",
+              "host": ["{{base_url}}"],
+              "path": ["fines"]
+            }
+          }
+        },
+        {
+          "name": "Update Fine Status",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"processed\",\n  \"notes\": \"Processed by operator\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/fines/1",
+              "host": ["{{base_url}}"],
+              "path": ["fines", "1"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📊 Reports & Analytics",
+      "item": [
+        {
+          "name": "Dashboard Statistics",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/reports/dashboard?startDate=2024-01-01&endDate=2024-12-31",
+              "host": ["{{base_url}}"],
+              "path": ["reports", "dashboard"],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2024-01-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2024-12-31"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Violation Trends",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/reports/trends?period=daily&days=30",
+              "host": ["{{base_url}}"],
+              "path": ["reports", "trends"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "daily"
+                },
+                {
+                  "key": "days",
+                  "value": "30"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Radar Performance",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/reports/radar-performance",
+              "host": ["{{base_url}}"],
+              "path": ["reports", "radar-performance"]
+            }
+          }
+        },
+        {
+          "name": "Speed Analysis",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/reports/speed-analysis?radarId=1",
+              "host": ["{{base_url}}"],
+              "path": ["reports", "speed-analysis"],
+              "query": [
+                {
+                  "key": "radarId",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Monthly Report",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/reports/monthly?year=2024",
+              "host": ["{{base_url}}"],
+              "path": ["reports", "monthly"],
+              "query": [
+                {
+                  "key": "year",
+                  "value": "2024"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Compliance Report",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/reports/compliance",
+              "host": ["{{base_url}}"],
+              "path": ["reports", "compliance"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📋 Report Management",
+      "item": [
+        {
+          "name": "Get Report Types",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/reports/types",
+              "host": ["{{base_url}}"],
+              "path": ["reports", "types"]
+            }
+          }
+        },
+        {
+          "name": "Create Report Type",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Custom Traffic Report\",\n  \"description\": \"Custom report for traffic analysis\",\n  \"category\": \"traffic_analysis\",\n  \"templateConfig\": {\n    \"columns\": [\"time\", \"radar\", \"violations\"],\n    \"charts\": [\"timeline\"]\n  },\n  \"accessLevel\": \"operator\",\n  \"estimatedGenerationTime\": 60\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/reports/types",
+              "host": ["{{base_url}}"],
+              "path": ["reports", "types"]
+            }
+          }
+        },
+        {
+          "name": "Generate Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reportTypeId\": 1,\n  \"title\": \"Daily Violations Report\",\n  \"description\": \"Daily summary of all violations\",\n  \"parameters\": {\n    \"dateRange\": {\n      \"start\": \"2024-01-01\",\n      \"end\": \"2024-01-31\"\n    },\n    \"includeImages\": true\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/reports/generate",
+              "host": ["{{base_url}}"],
+              "path": ["reports", "generate"]
+            }
+          }
+        },
+        {
+          "name": "Get All Reports",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/reports?page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["reports"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Report by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/reports/1",
+              "host": ["{{base_url}}"],
+              "path": ["reports", "1"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "⏰ Report Scheduling",
+      "item": [
+        {
+          "name": "Create Report Schedule",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reportTypeId\": 1,\n  \"name\": \"Daily Auto Report\",\n  \"description\": \"Automated daily violation summary\",\n  \"frequency\": \"daily\",\n  \"cronExpression\": \"0 8 * * *\",\n  \"parameters\": {\n    \"includeImages\": true,\n    \"emailNotification\": true\n  },\n  \"recipients\": [\"admin@potasfactory.com\", \"operator@potasfactory.com\"],\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/reports/schedules",
+              "host": ["{{base_url}}"],
+              "path": ["reports", "schedules"]
+            }
+          }
+        },
+        {
+          "name": "Get Report Schedules",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/reports/schedules",
+              "host": ["{{base_url}}"],
+              "path": ["reports", "schedules"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📊 System Monitoring",
+      "item": [
+        {
+          "name": "Get System Metrics",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/reports/metrics?metricType=radar_uptime&entityType=radar",
+              "host": ["{{base_url}}"],
+              "path": ["reports", "metrics"],
+              "query": [
+                {
+                  "key": "metricType",
+                  "value": "radar_uptime"
+                },
+                {
+                  "key": "entityType",
+                  "value": "radar"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Audit Logs",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/reports/audit-logs?page=1&limit=50",
+              "host": ["{{base_url}}"],
+              "path": ["reports", "audit-logs"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🔧 System Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

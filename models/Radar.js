@@ -64,7 +64,31 @@ const Radar = sequelize.define('Radar', {
   }
 }, {
   tableName: 'radars',
-  timestamps: true
+  timestamps: true,
+  indexes: [
+    {
+      fields: ['serialNumber'],
+      unique: true
+    },
+    {
+      fields: ['status']
+    },
+    {
+      fields: ['location']
+    },
+    {
+      fields: ['speedLimit']
+    },
+    {
+      fields: ['latitude', 'longitude']
+    },
+    {
+      fields: ['installationDate']
+    },
+    {
+      fields: ['lastMaintenance']
+    }
+  ]
 });
 
 module.exports = Radar;

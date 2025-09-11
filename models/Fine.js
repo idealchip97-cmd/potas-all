@@ -73,7 +73,39 @@ const Fine = sequelize.define('Fine', {
   }
 }, {
   tableName: 'fines',
-  timestamps: true
+  timestamps: true,
+  indexes: [
+    {
+      fields: ['radarId']
+    },
+    {
+      fields: ['status']
+    },
+    {
+      fields: ['violationDateTime']
+    },
+    {
+      fields: ['speedDetected']
+    },
+    {
+      fields: ['vehiclePlate']
+    },
+    {
+      fields: ['processedBy']
+    },
+    {
+      fields: ['processedAt']
+    },
+    {
+      fields: ['radarId', 'violationDateTime']
+    },
+    {
+      fields: ['status', 'violationDateTime']
+    },
+    {
+      fields: ['speedDetected', 'violationDateTime']
+    }
+  ]
 });
 
 module.exports = Fine;

@@ -1,4 +1,4 @@
-const { Fine, Radar, User, sequelize } = require('../models');
+const { Fine, Radar, User, ReportType, Report, ReportSchedule, ReportData, AuditLog, SystemMetric, sequelize } = require('../models');
 const { Op } = require('sequelize');
 
 const getDashboardStats = async (req, res) => {
@@ -170,8 +170,628 @@ const getRadarPerformance = async (req, res) => {
   }
 };
 
+const getSpeedAnalysis = async (req, res) => {
+  try {
+    const { radarId, startDate, endDate } = req.query;
+    
+    let whereClause = {};
+    if (radarId) whereClause.radarId = radarId;
+    if (startDate && endDate) {
+      whereClause.violationDateTime = {
+        [Op.between]: [new Date(startDate), new Date(endDate)]
+      };
+    }
+
+    // Speed distribution analysis
+    const speedDistribution = await sequelize.query(`
+      SELECT 
+        CASE 
+          WHEN speedDetected BETWEEN 0 AND 30 THEN '0-30 km/h'
+          WHEN speedDetected BETWEEN 31 AND 50 THEN '31-50 km/h'
+          WHEN speedDetected BETWEEN 51 AND 70 THEN '51-70 km/h'
+          WHEN speedDetected BETWEEN 71 AND 90 THEN '71-90 km/h'
+          ELSE '90+ km/h'
+        END as speedRange,
+        COUNT(*) as violationCount,
+        AVG(fineAmount) as avgFineAmount
+      FROM fines 
+      ${radarId ? `WHERE radarId = ${radarId}` : ''}
+      ${startDate && endDate ? `${radarId ? 'AND' : 'WHERE'} violationDateTime BETWEEN '${startDate}' AND '${endDate}'` : ''}
+      GROUP BY speedRange
+      ORDER BY MIN(speedDetected)
+    `, { type: sequelize.QueryTypes.SELECT });
+
+    // Peak violation times
+    const peakTimes = await sequelize.query(`
+      SELECT 
+        HOUR(violationDateTime) as hour,
+        COUNT(*) as violationCount,
+        AVG(speedDetected) as avgSpeed
+      FROM fines 
+      ${radarId ? `WHERE radarId = ${radarId}` : ''}
+      ${startDate && endDate ? `${radarId ? 'AND' : 'WHERE'} violationDateTime BETWEEN '${startDate}' AND '${endDate}'` : ''}
+      GROUP BY HOUR(violationDateTime)
+      ORDER BY violationCount DESC
+      LIMIT 5
+    `, { type: sequelize.QueryTypes.SELECT });
+
+    res.json({
+      success: true,
+      message: 'Speed analysis retrieved successfully',
+      data: {
+        speedDistribution,
+        peakTimes
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+const getViolationsByLocation = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    
+    let dateFilter = '';
+    if (startDate && endDate) {
+      dateFilter = `WHERE f.violationDateTime BETWEEN '${startDate}' AND '${endDate}'`;
+    }
+
+    const locationStats = await sequelize.query(`
+      SELECT 
+        r.location,
+        r.name as radarName,
+        COUNT(f.id) as totalViolations,
+        AVG(f.speedDetected) as avgSpeed,
+        MAX(f.speedDetected) as maxSpeed,
+        SUM(f.fineAmount) as totalFines,
+        r.speedLimit
+      FROM radars r
+      LEFT JOIN fines f ON r.id = f.radarId
+      ${dateFilter}
+      GROUP BY r.id, r.location, r.name, r.speedLimit
+      ORDER BY totalViolations DESC
+    `, { type: sequelize.QueryTypes.SELECT });
+
+    res.json({
+      success: true,
+      message: 'Location-based violations retrieved successfully',
+      data: { locationStats }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+const getMonthlyReport = async (req, res) => {
+  try {
+    const { year = new Date().getFullYear() } = req.query;
+
+    const monthlyData = await sequelize.query(`
+      SELECT 
+        MONTH(violationDateTime) as month,
+        MONTHNAME(violationDateTime) as monthName,
+        COUNT(*) as totalViolations,
+        AVG(speedDetected) as avgSpeed,
+        SUM(fineAmount) as totalFines,
+        COUNT(DISTINCT radarId) as activeRadars
+      FROM fines 
+      WHERE YEAR(violationDateTime) = ${year}
+      GROUP BY MONTH(violationDateTime), MONTHNAME(violationDateTime)
+      ORDER BY month
+    `, { type: sequelize.QueryTypes.SELECT });
+
+    res.json({
+      success: true,
+      message: 'Monthly report retrieved successfully',
+      data: { 
+        year: parseInt(year),
+        monthlyData 
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+const getComplianceReport = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    
+    let dateFilter = '';
+    if (startDate && endDate) {
+      dateFilter = `WHERE violationDateTime BETWEEN '${startDate}' AND '${endDate}'`;
+    }
+
+    // Calculate compliance metrics
+    const complianceData = await sequelize.query(`
+      SELECT 
+        COUNT(*) as totalViolations,
+        AVG(violationAmount) as avgExcessSpeed,
+        COUNT(CASE WHEN violationAmount <= 10 THEN 1 END) as minorViolations,
+        COUNT(CASE WHEN violationAmount BETWEEN 11 AND 20 THEN 1 END) as moderateViolations,
+        COUNT(CASE WHEN violationAmount > 20 THEN 1 END) as severeViolations,
+        SUM(fineAmount) as totalFinesIssued,
+        COUNT(CASE WHEN status = 'paid' THEN 1 END) as paidFines,
+        COUNT(CASE WHEN status = 'pending' THEN 1 END) as pendingFines
+      FROM fines 
+      ${dateFilter}
+    `, { type: sequelize.QueryTypes.SELECT });
+
+    const complianceRate = complianceData[0];
+    complianceRate.compliancePercentage = (
+      (complianceRate.minorViolations / complianceRate.totalViolations) * 100
+    ).toFixed(2);
+    complianceRate.paymentRate = (
+      (complianceRate.paidFines / complianceRate.totalViolations) * 100
+    ).toFixed(2);
+
+    res.json({
+      success: true,
+      message: 'Compliance report retrieved successfully',
+      data: { complianceData: complianceRate }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+// Report Type Management
+const getReportTypes = async (req, res) => {
+  try {
+    const { category, accessLevel } = req.query;
+    
+    let whereClause = { isActive: true };
+    if (category) whereClause.category = category;
+    if (accessLevel) whereClause.accessLevel = { [Op.in]: [accessLevel, 'viewer'] };
+
+    const reportTypes = await ReportType.findAll({
+      where: whereClause,
+      order: [['category', 'ASC'], ['name', 'ASC']]
+    });
+
+    res.json({
+      success: true,
+      message: 'Report types retrieved successfully',
+      data: { reportTypes }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+const createReportType = async (req, res) => {
+  try {
+    const reportType = await ReportType.create(req.body);
+    
+    res.status(201).json({
+      success: true,
+      message: 'Report type created successfully',
+      data: { reportType }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+// Report Generation and Management
+const generateReport = async (req, res) => {
+  try {
+    const { reportTypeId, title, description, parameters } = req.body;
+    const userId = req.user.id;
+
+    const reportType = await ReportType.findByPk(reportTypeId);
+    if (!reportType) {
+      return res.status(404).json({
+        success: false,
+        message: 'Report type not found'
+      });
+    }
+
+    const report = await Report.create({
+      reportTypeId,
+      title: title || `${reportType.name} - ${new Date().toISOString().split('T')[0]}`,
+      description,
+      generatedBy: userId,
+      status: 'generating',
+      parameters: parameters || {},
+      generationStartTime: new Date()
+    });
+
+    // Simulate report generation (in real implementation, this would be async)
+    setTimeout(async () => {
+      try {
+        const reportData = await generateReportData(report, reportType, parameters);
+        
+        await report.update({
+          status: 'completed',
+          filePath: `/reports/${report.id}_${reportType.name.replace(/\s+/g, '_')}.pdf`,
+          fileFormat: 'pdf',
+          fileSize: Math.floor(Math.random() * 5000000) + 1000000,
+          recordCount: reportData.recordCount,
+          generationEndTime: new Date()
+        });
+
+        // Store report data
+        if (reportData.data && reportData.data.length > 0) {
+          await ReportData.bulkCreate(reportData.data.map(item => ({
+            reportId: report.id,
+            ...item
+          })));
+        }
+      } catch (error) {
+        await report.update({
+          status: 'failed',
+          errorMessage: error.message,
+          generationEndTime: new Date()
+        });
+      }
+    }, 2000);
+
+    res.status(201).json({
+      success: true,
+      message: 'Report generation started',
+      data: { report }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+const getReports = async (req, res) => {
+  try {
+    const { status, reportTypeId, generatedBy, page = 1, limit = 10 } = req.query;
+    const offset = (page - 1) * limit;
+
+    let whereClause = {};
+    if (status) whereClause.status = status;
+    if (reportTypeId) whereClause.reportTypeId = reportTypeId;
+    if (generatedBy) whereClause.generatedBy = generatedBy;
+
+    const { count, rows: reports } = await Report.findAndCountAll({
+      where: whereClause,
+      include: [
+        {
+          model: ReportType,
+          as: 'reportType',
+          attributes: ['name', 'category', 'description']
+        },
+        {
+          model: User,
+          as: 'generator',
+          attributes: ['firstName', 'lastName', 'email']
+        }
+      ],
+      order: [['createdAt', 'DESC']],
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+
+    res.json({
+      success: true,
+      message: 'Reports retrieved successfully',
+      data: {
+        reports,
+        pagination: {
+          total: count,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          totalPages: Math.ceil(count / limit)
+        }
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+const getReportById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const report = await Report.findByPk(id, {
+      include: [
+        {
+          model: ReportType,
+          as: 'reportType'
+        },
+        {
+          model: User,
+          as: 'generator',
+          attributes: ['firstName', 'lastName', 'email']
+        },
+        {
+          model: ReportData,
+          as: 'data'
+        }
+      ]
+    });
+
+    if (!report) {
+      return res.status(404).json({
+        success: false,
+        message: 'Report not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Report retrieved successfully',
+      data: { report }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+// Report Scheduling
+const createReportSchedule = async (req, res) => {
+  try {
+    const schedule = await ReportSchedule.create({
+      ...req.body,
+      createdBy: req.user.id
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Report schedule created successfully',
+      data: { schedule }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+const getReportSchedules = async (req, res) => {
+  try {
+    const { isActive, frequency } = req.query;
+
+    let whereClause = {};
+    if (isActive !== undefined) whereClause.isActive = isActive === 'true';
+    if (frequency) whereClause.frequency = frequency;
+
+    const schedules = await ReportSchedule.findAll({
+      where: whereClause,
+      include: [
+        {
+          model: ReportType,
+          as: 'reportType',
+          attributes: ['name', 'category']
+        },
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['firstName', 'lastName', 'email']
+        }
+      ],
+      order: [['nextRunTime', 'ASC']]
+    });
+
+    res.json({
+      success: true,
+      message: 'Report schedules retrieved successfully',
+      data: { schedules }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+// System Metrics and Monitoring
+const getSystemMetrics = async (req, res) => {
+  try {
+    const { metricType, entityType, entityId, startDate, endDate } = req.query;
+
+    let whereClause = {};
+    if (metricType) whereClause.metricType = metricType;
+    if (entityType) whereClause.entityType = entityType;
+    if (entityId) whereClause.entityId = entityId;
+    if (startDate && endDate) {
+      whereClause.timestamp = {
+        [Op.between]: [new Date(startDate), new Date(endDate)]
+      };
+    }
+
+    const metrics = await SystemMetric.findAll({
+      where: whereClause,
+      order: [['timestamp', 'DESC']],
+      limit: 1000
+    });
+
+    res.json({
+      success: true,
+      message: 'System metrics retrieved successfully',
+      data: { metrics }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+const getAuditLogs = async (req, res) => {
+  try {
+    const { userId, action, entityType, severity, startDate, endDate, page = 1, limit = 50 } = req.query;
+    const offset = (page - 1) * limit;
+
+    let whereClause = {};
+    if (userId) whereClause.userId = userId;
+    if (action) whereClause.action = action;
+    if (entityType) whereClause.entityType = entityType;
+    if (severity) whereClause.severity = severity;
+    if (startDate && endDate) {
+      whereClause.createdAt = {
+        [Op.between]: [new Date(startDate), new Date(endDate)]
+      };
+    }
+
+    const { count, rows: auditLogs } = await AuditLog.findAndCountAll({
+      where: whereClause,
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['firstName', 'lastName', 'email'],
+          required: false
+        }
+      ],
+      order: [['createdAt', 'DESC']],
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+
+    res.json({
+      success: true,
+      message: 'Audit logs retrieved successfully',
+      data: {
+        auditLogs,
+        pagination: {
+          total: count,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          totalPages: Math.ceil(count / limit)
+        }
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+// Helper function to generate report data
+const generateReportData = async (report, reportType, parameters) => {
+  const data = [];
+  let recordCount = 0;
+
+  switch (reportType.category) {
+    case 'violation_summary':
+      const violations = await Fine.findAll({
+        include: [{ model: Radar, as: 'radar' }],
+        where: parameters.dateRange ? {
+          violationDateTime: {
+            [Op.between]: [parameters.dateRange.start, parameters.dateRange.end]
+          }
+        } : {},
+        limit: 1000
+      });
+      
+      recordCount = violations.length;
+      violations.forEach(violation => {
+        data.push({
+          dataType: 'violation_summary',
+          dataKey: `violation_${violation.id}`,
+          dataValue: {
+            radarName: violation.radar.name,
+            speed: violation.speedDetected,
+            violationAmount: violation.violationAmount,
+            fineAmount: violation.fineAmount,
+            status: violation.status,
+            date: violation.violationDateTime
+          },
+          aggregationLevel: 'daily',
+          periodStart: violation.violationDateTime,
+          periodEnd: violation.violationDateTime
+        });
+      });
+      break;
+
+    case 'radar_performance':
+      const radars = await Radar.findAll({
+        include: [{ model: Fine, as: 'fines' }]
+      });
+      
+      recordCount = radars.length;
+      radars.forEach(radar => {
+        const uptime = 95 + Math.random() * 5; // Simulated uptime
+        data.push({
+          dataType: 'radar_statistics',
+          dataKey: `radar_${radar.id}`,
+          dataValue: {
+            name: radar.name,
+            location: radar.location,
+            status: radar.status,
+            uptime: uptime.toFixed(2),
+            totalDetections: radar.fines.length,
+            avgSpeed: radar.fines.reduce((sum, f) => sum + f.speedDetected, 0) / radar.fines.length || 0
+          },
+          aggregationLevel: 'total'
+        });
+      });
+      break;
+
+    default:
+      recordCount = 0;
+  }
+
+  return { data, recordCount };
+};
+
 module.exports = {
   getDashboardStats,
   getViolationTrends,
-  getRadarPerformance
+  getRadarPerformance,
+  getSpeedAnalysis,
+  getViolationsByLocation,
+  getMonthlyReport,
+  getComplianceReport,
+  getReportTypes,
+  createReportType,
+  generateReport,
+  getReports,
+  getReportById,
+  createReportSchedule,
+  getReportSchedules,
+  getSystemMetrics,
+  getAuditLogs
 };
