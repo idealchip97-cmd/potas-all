@@ -58,4 +58,15 @@ Build a React TypeScript dashboard by understanding the backend Node.js code and
 - GET /health - System health check
 
 ## Lessons
-(To be updated with any fixes or corrections during development)
+
+### Material-UI v7 Breaking Changes
+- Grid component API changed: no longer supports `item` prop directly
+- Need to replace Grid layouts with Box-based flex layouts
+- DataGrid API changes:
+  - `pageSize` → `initialState.pagination.paginationModel.pageSize`
+  - `rowsPerPageOptions` → `pageSizeOptions`
+  - `disableSelectionOnClick` → `disableRowSelectionOnClick`
+  - valueGetter parameters need explicit typing: `(params: any)`
+
+### Current Issue
+Multiple TypeScript compilation errors due to Material-UI v7 Grid component changes across all page files. Need systematic replacement of Grid components with Box-based layouts.

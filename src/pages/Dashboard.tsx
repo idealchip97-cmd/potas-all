@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Grid,
   Card,
   CardContent,
   Typography,
   Box,
   CircularProgress,
   Alert,
-  Chip,
 } from '@mui/material';
 import {
   Radar as RadarIcon,
@@ -138,9 +136,9 @@ const Dashboard: React.FC = () => {
       </Typography>
 
       {/* Main Stats Cards */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
+      <Box display="flex" flexWrap="wrap" gap={3} sx={{ mb: 4 }}>
         {statCards.map((card, index) => (
-          <Grid item xs={12} sm={6} md={3} key={index}>
+          <Box key={index} sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', md: '1 1 calc(25% - 18px)' } }}>
             <Card>
               <CardContent>
                 <Box display="flex" alignItems="center" justifyContent="space-between">
@@ -161,14 +159,14 @@ const Dashboard: React.FC = () => {
                 </Box>
               </CardContent>
             </Card>
-          </Grid>
+          </Box>
         ))}
-      </Grid>
+      </Box>
 
       {/* Charts Row */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
+      <Box display="flex" flexWrap="wrap" gap={3} sx={{ mb: 4 }}>
         {/* Violation Trends Chart */}
-        <Grid item xs={12} md={8}>
+        <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 calc(66.67% - 12px)' } }}>
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
@@ -186,10 +184,10 @@ const Dashboard: React.FC = () => {
               </ResponsiveContainer>
             </CardContent>
           </Card>
-        </Grid>
+        </Box>
 
         {/* Fine Status Distribution */}
-        <Grid item xs={12} md={4}>
+        <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 calc(33.33% - 12px)' } }}>
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
@@ -215,13 +213,13 @@ const Dashboard: React.FC = () => {
               </ResponsiveContainer>
             </CardContent>
           </Card>
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
 
       {/* Status Cards */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
+      <Box display="flex" flexWrap="wrap" gap={3} sx={{ mb: 4 }}>
         {statusCards.map((card, index) => (
-          <Grid item xs={12} sm={6} md={3} key={index}>
+          <Box key={index} sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', md: '1 1 calc(25% - 18px)' } }}>
             <Card>
               <CardContent>
                 <Box display="flex" alignItems="center" justifyContent="space-between">
@@ -239,13 +237,13 @@ const Dashboard: React.FC = () => {
                 </Box>
               </CardContent>
             </Card>
-          </Grid>
+          </Box>
         ))}
-      </Grid>
+      </Box>
 
       {/* Radar Performance */}
-      <Grid container spacing={3}>
-        <Grid item xs={12}>
+      <Box sx={{ width: '100%' }}>
+        <Box>
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
@@ -263,8 +261,8 @@ const Dashboard: React.FC = () => {
               </ResponsiveContainer>
             </CardContent>
           </Card>
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
     </Box>
   );
 };

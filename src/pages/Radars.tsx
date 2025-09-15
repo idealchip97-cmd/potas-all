@@ -4,7 +4,6 @@ import {
   Card,
   CardContent,
   Typography,
-  Grid,
   Chip,
   IconButton,
   Button,
@@ -28,21 +27,21 @@ import {
   Refresh,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
-import { Radar, FilterOptions } from '../types';
 import apiService from '../services/api';
+import { Radar } from '../types';
+
+interface RadarFilters {
+  status?: string;
+  location?: string;
+}
 
 const Radars: React.FC = () => {
   const [radars, setRadars] = useState<Radar[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const [selectedRadar, setSelectedRadar] = useState<Radar | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [filters, setFilters] = useState<FilterOptions>({
-    page: 1,
-    limit: 10,
-    status: '',
-    location: '',
-  });
+  const [filters, setFilters] = useState<RadarFilters>({});
 
   useEffect(() => {
     fetchRadars();
@@ -51,62 +50,49 @@ const Radars: React.FC = () => {
   const fetchRadars = async () => {
     try {
       setLoading(true);
-      const response = await apiService.getRadars(filters);
-      if (response.success) {
-        setRadars(response.data);
-      }
+      const response = await apiService.getRadars();
+      setRadars(response.data);
+      setError(null);
     } catch (err) {
-      setError('Failed to load radars');
-      console.error('Radars error:', err);
+      setError('Failed to fetch radars data');
+      console.error('Error fetching radars:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleViewDetails = async (radarId: number) => {
-    try {
-      const response = await apiService.getRadarById(radarId);
-      if (response.success) {
-        setSelectedRadar(response.data);
-        setDialogOpen(true);
-      }
-    } catch (err) {
-      console.error('Error fetching radar details:', err);
+  const handleViewDetails = (radarId: number) => {
+    const radar = radars.find(r => r.id === radarId);
+    if (radar) {
+      setSelectedRadar(radar);
+      setDialogOpen(true);
+    }
+  };
+
+  const handleRefresh = () => {
+    fetchRadars();
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active': return 'success';
+      case 'inactive': return 'error';
+      case 'maintenance': return 'warning';
+      default: return 'default';
     }
   };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'active':
-        return <CheckCircle color="success" />;
-      case 'inactive':
-        return <Error color="error" />;
-      case 'maintenance':
-        return <Build color="warning" />;
-      case 'error':
-        return <Warning color="error" />;
-      default:
-        return <Error color="disabled" />;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active':
-        return 'success';
-      case 'inactive':
-        return 'error';
-      case 'maintenance':
-        return 'warning';
-      case 'error':
-        return 'error';
-      default:
-        return 'default';
+      case 'active': return <CheckCircle />;
+      case 'inactive': return <Error />;
+      case 'maintenance': return <Build />;
+      default: return <Warning />;
     }
   };
 
   const columns: GridColDef[] = [
-    { field: 'id', headerName: 'ID', width: 70 },
+    { field: 'id', headerName: 'ID', width: 100 },
     { field: 'name', headerName: 'Name', width: 150 },
     { field: 'location', headerName: 'Location', width: 200 },
     {
@@ -121,34 +107,38 @@ const Radars: React.FC = () => {
           icon={getStatusIcon(params.value)}
         />
       ),
+      valueGetter: (params: any) => params.row.status,
     },
     {
       field: 'speedLimit',
       headerName: 'Speed Limit',
       width: 120,
-      renderCell: (params) => `${params.value} km/h`,
-    },
-    {
-      field: 'statistics.totalFines',
-      headerName: 'Total Fines',
-      width: 120,
-      valueGetter: (params) => params.row.statistics?.totalFines || 0,
+      type: 'number',
     },
     {
       field: 'statistics.todayFines',
-      headerName: 'Today Fines',
+      headerName: 'Today',
+      width: 100,
+      type: 'number',
+      valueGetter: (params: any) => params.row.statistics?.todayFines || 0,
+    },
+    {
+      field: 'statistics.totalFines',
+      headerName: 'This Month',
       width: 120,
-      valueGetter: (params) => params.row.statistics?.todayFines || 0,
+      type: 'number',
+      valueGetter: (params: any) => params.row.statistics?.totalFines || 0,
     },
     {
       field: 'actions',
       headerName: 'Actions',
-      width: 120,
+      width: 100,
       sortable: false,
       renderCell: (params) => (
         <IconButton
           onClick={() => handleViewDetails(params.row.id)}
           color="primary"
+          size="small"
         >
           <Visibility />
         </IconButton>
@@ -156,28 +146,33 @@ const Radars: React.FC = () => {
     },
   ];
 
-  if (loading) {
+  if (error) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress />
+      <Box sx={{ p: 3 }}>
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+        <Button onClick={handleRefresh} startIcon={<Refresh />}>
+          Retry
+        </Button>
       </Box>
     );
   }
 
   return (
-    <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4">Radar Management</Typography>
+    <Box sx={{ p: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4" component="h1">
+          Radar Management
+        </Typography>
         <Button
-          variant="contained"
+          onClick={handleRefresh}
           startIcon={<Refresh />}
-          onClick={fetchRadars}
+          disabled={loading}
         >
           Refresh
         </Button>
       </Box>
-
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
       {/* Filters */}
       <Card sx={{ mb: 3 }}>
@@ -185,8 +180,8 @@ const Radars: React.FC = () => {
           <Typography variant="h6" gutterBottom>
             Filters
           </Typography>
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6} md={3}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+            <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)', md: '1 1 calc(33.33% - 12px)' } }}>
               <TextField
                 select
                 fullWidth
@@ -198,24 +193,23 @@ const Radars: React.FC = () => {
                 <MenuItem value="active">Active</MenuItem>
                 <MenuItem value="inactive">Inactive</MenuItem>
                 <MenuItem value="maintenance">Maintenance</MenuItem>
-                <MenuItem value="error">Error</MenuItem>
               </TextField>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
+            </Box>
+            <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)', md: '1 1 calc(33.33% - 12px)' } }}>
               <TextField
                 fullWidth
                 label="Location"
                 value={filters.location || ''}
                 onChange={(e) => setFilters({ ...filters, location: e.target.value })}
               />
-            </Grid>
-          </Grid>
+            </Box>
+          </Box>
         </CardContent>
       </Card>
 
       {/* Radar Stats Cards */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={6} md={3}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, mb: 3 }}>
+        <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', md: '1 1 calc(25% - 18px)' } }}>
           <Card>
             <CardContent>
               <Box display="flex" alignItems="center" justifyContent="space-between">
@@ -227,29 +221,29 @@ const Radars: React.FC = () => {
                     {radars.length}
                   </Typography>
                 </Box>
-                <LocationOn color="primary" sx={{ fontSize: '3rem' }} />
+                <LocationOn color="primary" />
               </Box>
             </CardContent>
           </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        </Box>
+        <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', md: '1 1 calc(25% - 18px)' } }}>
           <Card>
             <CardContent>
               <Box display="flex" alignItems="center" justifyContent="space-between">
                 <Box>
                   <Typography color="textSecondary" gutterBottom>
-                    Active Radars
+                    Active
                   </Typography>
                   <Typography variant="h4">
                     {radars.filter(r => r.status === 'active').length}
                   </Typography>
                 </Box>
-                <CheckCircle color="success" sx={{ fontSize: '3rem' }} />
+                <CheckCircle color="success" />
               </Box>
             </CardContent>
           </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        </Box>
+        <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', md: '1 1 calc(25% - 18px)' } }}>
           <Card>
             <CardContent>
               <Box display="flex" alignItems="center" justifyContent="space-between">
@@ -261,29 +255,29 @@ const Radars: React.FC = () => {
                     {radars.filter(r => r.status === 'maintenance').length}
                   </Typography>
                 </Box>
-                <Build color="warning" sx={{ fontSize: '3rem' }} />
+                <Build color="warning" />
               </Box>
             </CardContent>
           </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        </Box>
+        <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', md: '1 1 calc(25% - 18px)' } }}>
           <Card>
             <CardContent>
               <Box display="flex" alignItems="center" justifyContent="space-between">
                 <Box>
                   <Typography color="textSecondary" gutterBottom>
-                    Errors
+                    Inactive
                   </Typography>
                   <Typography variant="h4">
-                    {radars.filter(r => r.status === 'error').length}
+                    {radars.filter(r => r.status === 'inactive').length}
                   </Typography>
                 </Box>
-                <Error color="error" sx={{ fontSize: '3rem' }} />
+                <Error color="error" />
               </Box>
             </CardContent>
           </Card>
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
 
       {/* Radars Data Grid */}
       <Card>
@@ -295,9 +289,13 @@ const Radars: React.FC = () => {
             <DataGrid
               rows={radars}
               columns={columns}
-              pageSize={10}
-              rowsPerPageOptions={[5, 10, 20]}
-              disableSelectionOnClick
+              initialState={{
+                pagination: {
+                  paginationModel: { pageSize: 20 }
+                }
+              }}
+              pageSizeOptions={[10, 20, 50]}
+              disableRowSelectionOnClick
               loading={loading}
             />
           </Box>
@@ -311,16 +309,16 @@ const Radars: React.FC = () => {
         </DialogTitle>
         <DialogContent>
           {selectedRadar && (
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+              <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>
                 <Typography variant="subtitle2" color="textSecondary">
-                  Location
+                  Name
                 </Typography>
                 <Typography variant="body1" gutterBottom>
-                  {selectedRadar.location}
+                  {selectedRadar.name}
                 </Typography>
-              </Grid>
-              <Grid item xs={12} sm={6}>
+              </Box>
+              <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>
                 <Typography variant="subtitle2" color="textSecondary">
                   Status
                 </Typography>
@@ -329,81 +327,80 @@ const Radars: React.FC = () => {
                   color={getStatusColor(selectedRadar.status) as any}
                   icon={getStatusIcon(selectedRadar.status)}
                 />
-              </Grid>
-              <Grid item xs={12} sm={6}>
+              </Box>
+              <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>
+                <Typography variant="subtitle2" color="textSecondary">
+                  Location
+                </Typography>
+                <Typography variant="body1" gutterBottom>
+                  {selectedRadar.location}
+                </Typography>
+              </Box>
+              <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>
                 <Typography variant="subtitle2" color="textSecondary">
                   Speed Limit
                 </Typography>
                 <Typography variant="body1" gutterBottom>
                   {selectedRadar.speedLimit} km/h
                 </Typography>
-              </Grid>
-              <Grid item xs={12} sm={6}>
+              </Box>
+              <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>
                 <Typography variant="subtitle2" color="textSecondary">
                   Coordinates
                 </Typography>
                 <Typography variant="body1" gutterBottom>
                   {selectedRadar.latitude}, {selectedRadar.longitude}
                 </Typography>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <Typography variant="subtitle2" color="textSecondary">
-                  FTP Path
-                </Typography>
-                <Typography variant="body1" gutterBottom>
-                  {selectedRadar.ftpPath}
-                </Typography>
-              </Grid>
-              <Grid item xs={12} sm={6}>
+              </Box>
+              <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>
                 <Typography variant="subtitle2" color="textSecondary">
                   Created At
                 </Typography>
                 <Typography variant="body1" gutterBottom>
                   {new Date(selectedRadar.createdAt).toLocaleDateString()}
                 </Typography>
-              </Grid>
-              {selectedRadar.statistics && (
-                <>
-                  <Grid item xs={12}>
-                    <Typography variant="h6" gutterBottom>
-                      Statistics
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <Typography variant="subtitle2" color="textSecondary">
-                      Total Fines
-                    </Typography>
-                    <Typography variant="body1" gutterBottom>
-                      {selectedRadar.statistics.totalFines}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <Typography variant="subtitle2" color="textSecondary">
-                      Today's Fines
-                    </Typography>
-                    <Typography variant="body1" gutterBottom>
-                      {selectedRadar.statistics.todayFines}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <Typography variant="subtitle2" color="textSecondary">
-                      Average Speed
-                    </Typography>
-                    <Typography variant="body1" gutterBottom>
-                      {selectedRadar.statistics.averageSpeed} km/h
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <Typography variant="subtitle2" color="textSecondary">
-                      Uptime
-                    </Typography>
-                    <Typography variant="body1" gutterBottom>
-                      {selectedRadar.statistics.uptime}%
-                    </Typography>
-                  </Grid>
-                </>
-              )}
-            </Grid>
+              </Box>
+              <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>
+                <Typography variant="subtitle2" color="textSecondary">
+                  Updated At
+                </Typography>
+                <Typography variant="body1" gutterBottom>
+                  {new Date(selectedRadar.updatedAt).toLocaleDateString()}
+                </Typography>
+              </Box>
+              <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>
+                <Typography variant="subtitle2" color="textSecondary">
+                  Today Fines
+                </Typography>
+                <Typography variant="body1" gutterBottom>
+                  {selectedRadar.statistics?.todayFines || 0}
+                </Typography>
+              </Box>
+              <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>
+                <Typography variant="subtitle2" color="textSecondary">
+                  Total Fines
+                </Typography>
+                <Typography variant="body1" gutterBottom>
+                  {selectedRadar.statistics?.totalFines || 0}
+                </Typography>
+              </Box>
+              <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>
+                <Typography variant="subtitle2" color="textSecondary">
+                  Average Speed
+                </Typography>
+                <Typography variant="body1" gutterBottom>
+                  {selectedRadar.statistics?.averageSpeed || 0} km/h
+                </Typography>
+              </Box>
+              <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>
+                <Typography variant="subtitle2" color="textSecondary">
+                  Uptime
+                </Typography>
+                <Typography variant="body1" gutterBottom>
+                  {selectedRadar.statistics?.uptime || 0}%
+                </Typography>
+              </Box>
+            </Box>
           )}
         </DialogContent>
         <DialogActions>
