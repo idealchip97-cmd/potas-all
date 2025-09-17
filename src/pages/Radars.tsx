@@ -51,17 +51,28 @@ const Radars: React.FC = () => {
     try {
       setLoading(true);
       const response = await apiService.getRadars();
-      setRadars(response.data);
+      console.log('Raw API response:', response);
+      
+      // Handle the correct API response structure: response.data.radars
+      const radarData = response.data?.radars || response.data || [];
+      console.log('Extracted radar data:', radarData);
+      
+      const processedRadars = Array.isArray(radarData) ? radarData : [];
+      console.log('Processed radars:', processedRadars);
+      
+      setRadars(processedRadars);
       setError(null);
     } catch (err) {
       setError('Failed to fetch radars data');
       console.error('Error fetching radars:', err);
+      setRadars([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
   };
 
   const handleViewDetails = (radarId: number) => {
+    if (!Array.isArray(radars)) return;
     const radar = radars.find(r => r.id === radarId);
     if (radar) {
       setSelectedRadar(radar);
@@ -99,15 +110,18 @@ const Radars: React.FC = () => {
       field: 'status',
       headerName: 'Status',
       width: 120,
-      renderCell: (params) => (
-        <Chip
-          label={params.value}
-          color={getStatusColor(params.value) as any}
-          size="small"
-          icon={getStatusIcon(params.value)}
-        />
-      ),
-      valueGetter: (params: any) => params.row.status,
+      renderCell: (params) => {
+        const status = params.row?.status || 'unknown';
+        return (
+          <Chip
+            label={status}
+            color={getStatusColor(status) as any}
+            size="small"
+            icon={getStatusIcon(status)}
+          />
+        );
+      },
+      valueGetter: (params: any) => params?.row?.status || 'unknown',
     },
     {
       field: 'speedLimit',
@@ -116,18 +130,18 @@ const Radars: React.FC = () => {
       type: 'number',
     },
     {
-      field: 'statistics.todayFines',
-      headerName: 'Today',
+      field: 'statistics.pendingFines',
+      headerName: 'Pending',
       width: 100,
       type: 'number',
-      valueGetter: (params: any) => params.row.statistics?.todayFines || 0,
+      valueGetter: (params: any) => params?.row?.statistics?.pendingFines || 0,
     },
     {
       field: 'statistics.totalFines',
-      headerName: 'This Month',
+      headerName: 'Total Fines',
       width: 120,
       type: 'number',
-      valueGetter: (params: any) => params.row.statistics?.totalFines || 0,
+      valueGetter: (params: any) => params?.row?.statistics?.totalFines || 0,
     },
     {
       field: 'actions',
@@ -136,9 +150,10 @@ const Radars: React.FC = () => {
       sortable: false,
       renderCell: (params) => (
         <IconButton
-          onClick={() => handleViewDetails(params.row.id)}
+          onClick={() => handleViewDetails(params.row?.id)}
           color="primary"
           size="small"
+          disabled={!params.row?.id}
         >
           <Visibility />
         </IconButton>
@@ -235,7 +250,7 @@ const Radars: React.FC = () => {
                     Active
                   </Typography>
                   <Typography variant="h4">
-                    {radars.filter(r => r.status === 'active').length}
+                    {Array.isArray(radars) ? radars.filter(r => r.status === 'active').length : 0}
                   </Typography>
                 </Box>
                 <CheckCircle color="success" />
@@ -252,7 +267,7 @@ const Radars: React.FC = () => {
                     Maintenance
                   </Typography>
                   <Typography variant="h4">
-                    {radars.filter(r => r.status === 'maintenance').length}
+                    {Array.isArray(radars) ? radars.filter(r => r.status === 'maintenance').length : 0}
                   </Typography>
                 </Box>
                 <Build color="warning" />
@@ -269,7 +284,7 @@ const Radars: React.FC = () => {
                     Inactive
                   </Typography>
                   <Typography variant="h4">
-                    {radars.filter(r => r.status === 'inactive').length}
+                    {Array.isArray(radars) ? radars.filter(r => r.status === 'inactive').length : 0}
                   </Typography>
                 </Box>
                 <Error color="error" />
@@ -287,7 +302,7 @@ const Radars: React.FC = () => {
           </Typography>
           <Box sx={{ height: 400, width: '100%' }}>
             <DataGrid
-              rows={radars}
+              rows={radars || []}
               columns={columns}
               initialState={{
                 pagination: {
@@ -297,6 +312,7 @@ const Radars: React.FC = () => {
               pageSizeOptions={[10, 20, 50]}
               disableRowSelectionOnClick
               loading={loading}
+              getRowId={(row) => row?.id || Math.random()}
             />
           </Box>
         </CardContent>
@@ -370,10 +386,10 @@ const Radars: React.FC = () => {
               </Box>
               <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>
                 <Typography variant="subtitle2" color="textSecondary">
-                  Today Fines
+                  Pending Fines
                 </Typography>
                 <Typography variant="body1" gutterBottom>
-                  {selectedRadar.statistics?.todayFines || 0}
+                  {selectedRadar.statistics?.pendingFines || 0}
                 </Typography>
               </Box>
               <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>
@@ -386,18 +402,18 @@ const Radars: React.FC = () => {
               </Box>
               <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>
                 <Typography variant="subtitle2" color="textSecondary">
-                  Average Speed
+                  Serial Number
                 </Typography>
                 <Typography variant="body1" gutterBottom>
-                  {selectedRadar.statistics?.averageSpeed || 0} km/h
+                  {selectedRadar.serialNumber || 'N/A'}
                 </Typography>
               </Box>
               <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>
                 <Typography variant="subtitle2" color="textSecondary">
-                  Uptime
+                  IP Address
                 </Typography>
                 <Typography variant="body1" gutterBottom>
-                  {selectedRadar.statistics?.uptime || 0}%
+                  {selectedRadar.ipAddress || 'N/A'}
                 </Typography>
               </Box>
             </Box>

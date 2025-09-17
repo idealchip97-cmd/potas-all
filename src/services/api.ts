@@ -10,7 +10,9 @@ import {
   RadarPerformance, 
   SpeedAnalysis, 
   LocationViolation,
-  FilterOptions 
+  FilterOptions,
+  RadarListResponse,
+  FineListResponse
 } from '../types';
 
 class ApiService {
@@ -80,7 +82,7 @@ class ApiService {
   }
 
   // Radar endpoints
-  async getRadars(filters?: FilterOptions): Promise<ApiResponse<Radar[]>> {
+  async getRadars(filters?: FilterOptions): Promise<ApiResponse<RadarListResponse>> {
     const params = new URLSearchParams();
     if (filters) {
       Object.entries(filters).forEach(([key, value]) => {
@@ -90,7 +92,7 @@ class ApiService {
       });
     }
     
-    const response: AxiosResponse<ApiResponse<Radar[]>> = await this.api.get(
+    const response: AxiosResponse<ApiResponse<RadarListResponse>> = await this.api.get(
       `/radars?${params.toString()}`
     );
     return response.data;
@@ -102,7 +104,7 @@ class ApiService {
   }
 
   // Fines endpoints
-  async getFines(filters?: FilterOptions): Promise<ApiResponse<Fine[]>> {
+  async getFines(filters?: FilterOptions): Promise<ApiResponse<FineListResponse>> {
     const params = new URLSearchParams();
     if (filters) {
       Object.entries(filters).forEach(([key, value]) => {
@@ -112,7 +114,7 @@ class ApiService {
       });
     }
     
-    const response: AxiosResponse<ApiResponse<Fine[]>> = await this.api.get(
+    const response: AxiosResponse<ApiResponse<FineListResponse>> = await this.api.get(
       `/fines?${params.toString()}`
     );
     return response.data;

@@ -59,11 +59,14 @@ const Fines: React.FC = () => {
     try {
       setLoading(true);
       const response = await apiService.getFines(filters);
-      setFines(response.data);
+      // Handle the correct API response structure: response.data.fines
+      const finesData = response.data?.fines || response.data || [];
+      setFines(Array.isArray(finesData) ? finesData : []);
       setError(null);
     } catch (err) {
       setError('Failed to fetch fines data');
       console.error('Error fetching fines:', err);
+      setFines([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
@@ -72,9 +75,12 @@ const Fines: React.FC = () => {
   const fetchStats = async () => {
     try {
       const response = await apiService.getFines({});
-      setStats(response.data);
+      // Handle the correct API response structure for stats
+      const finesData = response.data?.fines || response.data || [];
+      setStats(Array.isArray(finesData) ? finesData : []);
     } catch (err) {
       console.error('Error fetching fine stats:', err);
+      setStats([]);
     }
   };
 

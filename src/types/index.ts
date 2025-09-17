@@ -21,18 +21,21 @@ export interface Radar {
   id: number;
   name: string;
   location: string;
-  latitude: number;
-  longitude: number;
+  ipAddress: string;
+  serialNumber: string;
   speedLimit: number;
   status: 'active' | 'inactive' | 'maintenance' | 'error';
+  latitude: number;
+  longitude: number;
+  installationDate: string;
+  lastMaintenance: string | null;
   ftpPath: string;
   createdAt: string;
   updatedAt: string;
+  fines?: Fine[];
   statistics?: {
     totalFines: number;
-    todayFines: number;
-    averageSpeed: number;
-    uptime: number;
+    pendingFines: number;
   };
 }
 
@@ -106,10 +109,30 @@ export interface ApiResponse<T> {
   message: string;
   data: T;
   pagination?: {
-    page: number;
-    limit: number;
-    total: number;
+    currentPage: number;
     totalPages: number;
+    totalItems: number;
+    itemsPerPage: number;
+  };
+}
+
+export interface RadarListResponse {
+  radars: Radar[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    totalItems: number;
+    itemsPerPage: number;
+  };
+}
+
+export interface FineListResponse {
+  fines: Fine[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    totalItems: number;
+    itemsPerPage: number;
   };
 }
 
