@@ -23,6 +23,8 @@ import {
   Speed,
   LocationOn,
   CameraAlt,
+  CloudUpload,
+  Storage,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -44,6 +46,8 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onClose }) => {
     { text: 'Radars', icon: <Radar />, path: '/radars' },
     { text: 'Fines', icon: <Receipt />, path: '/fines' },
     { text: 'Plate Recognition', icon: <CameraAlt />, path: '/plate-recognition' },
+    { text: 'FTP Monitor', icon: <CloudUpload />, path: '/ftp-monitor' },
+    { text: 'UDP Monitor', icon: <Storage />, path: '/udp-monitor' },
     { text: 'Reports', icon: <Assessment />, path: '/reports' },
     { text: 'Speed Analysis', icon: <Speed />, path: '/speed-analysis' },
     { text: 'Locations', icon: <LocationOn />, path: '/locations' },
