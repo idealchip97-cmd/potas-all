@@ -30,6 +30,13 @@ class FTPClientService {
   private isConnecting = false;
   private useMockData = false; // Fallback to mock data when WebSocket fails
   
+  // HTTP static serving configuration for real FTP images
+  // Assumes backend serves /srv/camera_uploads as /static/plate-images
+  // Example full path: http://192.168.1.14:3000/static/plate-images/camera001/192.168.1.54/2025-09-25/Common/<filename>
+  private imageHttpHost = 'http://192.168.1.14:3000';
+  private imageStaticBase = '/static/plate-images';
+  private cameraFolder = 'camera001/192.168.1.54';
+  
   // Event listeners
   private imageListeners: ((images: PlateRecognitionImage[]) => void)[] = [];
   private newImageListeners: ((image: PlateRecognitionImage) => void)[] = [];
@@ -362,15 +369,30 @@ class FTPClientService {
     });
   }
 
-  private buildImageUrl(filename: string): string {
-    // Build URL to access image via HTTP proxy
-    return `http://${this.serverIP}:8080/images/${filename}`;
+  private buildImageUrl(filename: string, date?: string): string {
+    // Build URL to access the real image served statically by backend
+    const dateFolder = date || this.getTodayFolder();
+    return `${this.imageHttpHost}${this.imageStaticBase}/${this.cameraFolder}/${dateFolder}/Common/${filename}`;
   }
 
-  private buildThumbnailUrl(filename: string): string {
-    // Build URL to access thumbnail via HTTP proxy
-    const thumbFilename = filename.replace(/\.(jpg|jpeg|png)$/i, '_thumb.$1');
-    return `http://${this.serverIP}:8080/thumbnails/${thumbFilename}`;
+  private buildThumbnailUrl(filename: string, date?: string): string {
+    // If thumbnailing is not available on server, fallback to original image
+    // If you later add thumbnails, replace this with appropriate path logic
+    return this.buildImageUrl(filename, date);
+  }
+
+  private getTodayFolder(): string {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  private getCameraIpFromFolder(): string {
+    // cameraFolder example: 'camera001/192.168.1.54'
+    const parts = this.cameraFolder.split('/');
+    return parts.length > 1 ? parts[1] : '192.168.1.54';
   }
 
   private generateImageId(): string {
@@ -537,11 +559,49 @@ class FTPClientService {
       }, 100);
       return;
     }
-    
-    this.sendMessage({
-      type: 'request_file_list',
-      timestamp: new Date().toISOString()
-    });
+
+    // If WebSocket is connected, request via WS as before
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.sendMessage({
+        type: 'request_file_list',
+        timestamp: new Date().toISOString()
+      });
+      return;
+    }
+
+    // HTTP fallback: call backend listing API
+    const cameraIp = this.getCameraIpFromFolder();
+    const dateFolder = this.getTodayFolder();
+    const url = `${this.imageHttpHost}/api/plate-images?camera=${encodeURIComponent(cameraIp)}&date=${encodeURIComponent(dateFolder)}`;
+
+    fetch(url)
+      .then(async (resp) => {
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        return resp.json();
+      })
+      .then((payload) => {
+        const files = (payload?.files || []) as Array<{ filename: string; modified?: string; url?: string }>;
+        const images: PlateRecognitionImage[] = files.map((f) => ({
+          id: this.generateImageId(),
+          filename: f.filename,
+          timestamp: f.modified || new Date().toISOString(),
+          imageUrl: f.url || this.buildImageUrl(f.filename, dateFolder),
+          thumbnailUrl: this.buildThumbnailUrl(f.filename, dateFolder),
+          processed: true,
+          processingStatus: 'completed',
+        }));
+
+        // Sort newest first
+        images.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        this.cachedImages = images;
+        this.notifyImageListeners(this.cachedImages);
+        // Consider HTTP fallback as a form of connectivity for UX
+        this.notifyConnectionListeners(true);
+      })
+      .catch((err) => {
+        console.warn('FTP HTTP fallback failed:', err);
+        this.notifyErrorListeners('Failed to fetch images over HTTP');
+      });
   }
 
   public uploadImage(file: File): Promise<PlateRecognitionImage> {

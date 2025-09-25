@@ -296,9 +296,9 @@ class RealTimeDataService {
   }
 
   public requestImageList(): void {
-    if (this.connectionStatus.ftp) {
-      ftpClient.requestFileList();
-    }
+    // Always forward the request to ftpClient. It will decide whether to
+    // request via WebSocket or use the HTTP fallback to /api/plate-images.
+    ftpClient.requestFileList();
   }
 
   public uploadImage(file: File): Promise<PlateRecognitionImage> {

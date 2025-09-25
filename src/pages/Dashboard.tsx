@@ -108,35 +108,56 @@ const Dashboard: React.FC = () => {
   };
 
   const fetchDashboardData = async () => {
-    try {
-      setLoading(true);
-      const [statsResponse, performanceResponse] = await Promise.all([
-        apiService.getDashboardStats(),
-        apiService.getRadarPerformance(),
-      ]);
+    setLoading(true);
+    let localError = '';
 
-      if (statsResponse.success) {
-        // Map backend response structure to frontend expected structure
+    // Fetch stats
+    try {
+      const statsResponse = await apiService.getDashboardStats();
+      if (statsResponse?.success) {
         const backendData = statsResponse.data as any;
         const mappedStats: DashboardStats = {
           totalRadars: backendData.overview?.totalRadars || 0,
           activeRadars: backendData.overview?.activeRadars || 0,
           totalFines: backendData.overview?.totalFines || 0,
-          todayFines: 0, // Not provided by backend
+          todayFines: 0,
           totalRevenue: backendData.overview?.totalFineAmount || 0,
-          todayRevenue: 0, // Not provided by backend
-          averageSpeed: 0, // Not provided by backend
-          complianceRate: 0, // Not provided by backend
+          todayRevenue: 0,
+          averageSpeed: 0,
+          complianceRate: 0,
           pendingFines: backendData.overview?.pendingFines || 0,
-          processedFines: 0, // Calculate from total - pending
-          paidFines: 0, // Not provided by backend
-          cancelledFines: 0, // Not provided by backend
+          processedFines: 0,
+          paidFines: 0,
+          cancelledFines: 0,
         };
         setStats(mappedStats);
+      } else {
+        localError = 'Dashboard stats unavailable';
       }
-      
-      if (performanceResponse.success) {
-        // Map radar performance data
+    } catch (err) {
+      console.warn('Dashboard stats request failed:', err);
+      localError = 'Dashboard stats unavailable';
+      // Keep defaults
+      setStats({
+        totalRadars: 0,
+        activeRadars: 0,
+        totalFines: 0,
+        todayFines: 0,
+        totalRevenue: 0,
+        todayRevenue: 0,
+        averageSpeed: 0,
+        complianceRate: 0,
+        pendingFines: 0,
+        processedFines: 0,
+        paidFines: 0,
+        cancelledFines: 0,
+      });
+    }
+
+    // Fetch radar performance
+    try {
+      const performanceResponse = await apiService.getRadarPerformance();
+      if (performanceResponse?.success) {
         const backendData = performanceResponse.data as any;
         const backendPerformance = backendData.performance || [];
         const mappedPerformance: RadarPerformance[] = backendPerformance.map((radar: any) => ({
@@ -144,34 +165,37 @@ const Dashboard: React.FC = () => {
           radarName: radar.name,
           location: radar.location,
           totalViolations: radar.fines?.[0]?.totalViolations || 0,
-          todayViolations: 0, // Not provided by backend
+          todayViolations: 0,
           averageSpeed: radar.fines?.[0]?.avgSpeed || 0,
-          uptime: 100, // Default value
+          uptime: 100,
           status: radar.status,
           lastActivity: new Date().toISOString(),
         }));
         setRadarPerformance(mappedPerformance);
+      } else {
+        localError = localError || 'Radar performance unavailable';
       }
-      
-      // Create mock trends data since backend trends API has issues
-      const mockTrends: ViolationTrend[] = Array.from({ length: 30 }, (_, i) => {
-        const date = new Date();
-        date.setDate(date.getDate() - (29 - i));
-        return {
-          date: date.toISOString().split('T')[0],
-          violations: Math.floor(Math.random() * 20) + 5,
-          revenue: Math.floor(Math.random() * 2000) + 500,
-          averageSpeed: Math.floor(Math.random() * 20) + 40,
-        };
-      });
-      setTrends(mockTrends);
-      
     } catch (err) {
-      setError('Failed to load dashboard data');
-      console.error('Dashboard error:', err);
-    } finally {
-      setLoading(false);
+      console.warn('Radar performance request failed:', err);
+      localError = localError || 'Radar performance unavailable';
+      setRadarPerformance([]);
     }
+
+    // Mock trends regardless
+    const mockTrends: ViolationTrend[] = Array.from({ length: 30 }, (_, i) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (29 - i));
+      return {
+        date: date.toISOString().split('T')[0],
+        violations: Math.floor(Math.random() * 20) + 5,
+        revenue: Math.floor(Math.random() * 2000) + 500,
+        averageSpeed: Math.floor(Math.random() * 20) + 40,
+      };
+    });
+    setTrends(mockTrends);
+
+    setError(localError);
+    setLoading(false);
   };
 
   if (loading) {
@@ -182,9 +206,7 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  if (error) {
-    return <Alert severity="error">{error}</Alert>;
-  }
+  // Do not hard-stop rendering on errors; show inline alert instead
 
   const statCards = [
     {
@@ -280,6 +302,10 @@ const Dashboard: React.FC = () => {
       <Typography variant="h4" gutterBottom>
         Dashboard Overview
       </Typography>
+
+      {error && (
+        <Alert severity="warning" sx={{ mb: 2 }}>{error}</Alert>
+      )}
 
       {/* Main Stats Cards */}
       <Box display="flex" flexWrap="wrap" gap={3} sx={{ mb: 4 }}>
@@ -530,7 +556,7 @@ const Dashboard: React.FC = () => {
                 color={connectionStatus.udp ? 'success' : 'error'}
               />
               <Chip 
-                label={`Server: 192.186.1.14:17081`}
+                label={`Server: 192.168.1.14:17081`}
                 variant="outlined"
               />
             </Box>
