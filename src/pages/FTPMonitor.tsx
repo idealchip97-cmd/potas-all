@@ -220,9 +220,17 @@ const FTPMonitor: React.FC = () => {
 
   if (loading && images.length === 0) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+      <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center" minHeight="400px">
         <CircularProgress />
-        <Typography variant="h6" sx={{ ml: 2 }}>Loading FTP data...</Typography>
+        <Typography variant="h6" sx={{ ml: 2, mt: 2 }}>
+          {isConnected ? 'Loading FTP data...' : 'Connecting to FTP server...'}
+        </Typography>
+        <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+          Server: 192.168.1.14:21 (WebSocket Proxy: 18081)
+        </Typography>
+        <Typography variant="body2" color="textSecondary" sx={{ mt: 0.5 }}>
+          {isConnected ? 'Connected - Fetching file list' : 'Attempting connection... Will fallback to demo data if unavailable'}
+        </Typography>
       </Box>
     );
   }
@@ -238,7 +246,7 @@ const FTPMonitor: React.FC = () => {
               FTP Server Monitor
             </Typography>
             <Typography variant="subtitle1" color="textSecondary">
-              Server: 192.186.1.14:21
+              Server: 192.168.1.14:21
             </Typography>
           </Box>
           <Chip 

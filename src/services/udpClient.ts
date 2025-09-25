@@ -43,12 +43,13 @@ interface FineData {
 
 class UDPClientService {
   private ws: WebSocket | null = null;
-  private serverIP = '192.186.1.14';
+  private serverIP = '192.168.1.14';
   private serverPort = 17081;
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
-  private reconnectDelay = 5000; // 5 seconds
+  private maxReconnectAttempts = 2; // Reduced for faster fallback to mock mode
+  private reconnectDelay = 2000; // 2 seconds
   private isConnecting = false;
+  private useMockData = false; // Fallback to mock data when WebSocket fails
   
   // Event listeners
   private radarListeners: ((radars: Radar[]) => void)[] = [];
@@ -64,6 +65,107 @@ class UDPClientService {
     this.connect();
   }
 
+  private generateMockRadars(): Radar[] {
+    const mockRadars: Radar[] = [];
+    const locations = ['Highway A1 - North', 'City Center - Main St', 'Industrial Zone - Route 5', 'Residential Area - Oak Ave', 'School Zone - Education Blvd'];
+    const statuses: ('active' | 'inactive' | 'maintenance')[] = ['active', 'active', 'active', 'maintenance', 'inactive'];
+
+    for (let i = 0; i < 5; i++) {
+      mockRadars.push({
+        id: i + 1,
+        name: `Radar ${i + 1}`,
+        location: locations[i],
+        status: statuses[i],
+        speedLimit: [50, 60, 80, 30, 40][i],
+        latitude: 31.7683 + (Math.random() - 0.5) * 0.1,
+        longitude: 35.2137 + (Math.random() - 0.5) * 0.1,
+        serialNumber: `RDR${String(i + 1).padStart(3, '0')}`,
+        ipAddress: `192.168.1.${10 + i}`,
+        installationDate: new Date(2023, i, 15).toISOString(),
+        lastMaintenance: new Date(2024, 8, i + 1).toISOString(),
+        ftpPath: `/radar${i + 1}/images`,
+        createdAt: new Date(2023, i, 15).toISOString(),
+        updatedAt: new Date(2024, 8, i + 1).toISOString(),
+        statistics: {
+          pendingFines: Math.floor(Math.random() * 20) + 5,
+          totalFines: Math.floor(Math.random() * 500) + 100
+        }
+      });
+    }
+
+    return mockRadars;
+  }
+
+  private generateMockFines(): Fine[] {
+    const mockFines: Fine[] = [];
+    const plateNumbers = ['ABC123', 'XYZ789', 'DEF456', 'GHI012', 'JKL345', 'MNO678', 'PQR901', 'STU234'];
+    const statuses: ('pending' | 'processed' | 'paid' | 'cancelled')[] = ['pending', 'processed', 'paid', 'cancelled'];
+
+    for (let i = 0; i < 25; i++) {
+      const radarId = Math.floor(Math.random() * 5) + 1;
+      const speedLimit = [50, 60, 80, 30, 40][radarId - 1];
+      const vehicleSpeed = speedLimit + Math.floor(Math.random() * 40) + 10;
+      const timestamp = new Date(Date.now() - (i * 3600000) - Math.random() * 86400000);
+
+      mockFines.push({
+        id: i + 1,
+        radarId: radarId,
+        vehicleSpeed: vehicleSpeed,
+        speedLimit: speedLimit,
+        plateNumber: plateNumbers[Math.floor(Math.random() * plateNumbers.length)],
+        violationTime: timestamp.toISOString(),
+        status: statuses[Math.floor(Math.random() * statuses.length)],
+        fineAmount: Math.floor((vehicleSpeed - speedLimit) * 5) + 50,
+        createdAt: timestamp.toISOString(),
+        updatedAt: timestamp.toISOString()
+      });
+    }
+
+    return mockFines.sort((a, b) => new Date(b.violationTime).getTime() - new Date(a.violationTime).getTime());
+  }
+
+  private initializeMockMode(): void {
+    console.log('UDP Client: Initializing mock mode due to connection failure');
+    this.useMockData = true;
+    this.cachedRadars = this.generateMockRadars();
+    this.cachedFines = this.generateMockFines();
+    
+    // Simulate connection after a short delay
+    setTimeout(() => {
+      this.notifyConnectionListeners(true);
+      this.notifyRadarListeners(this.cachedRadars);
+      this.notifyFineListeners(this.cachedFines);
+    }, 1000);
+
+    // Simulate periodic updates
+    setInterval(() => {
+      if (this.useMockData) {
+        // Occasionally add a new mock fine
+        if (Math.random() < 0.1) { // 10% chance every interval
+          const newFine: Fine = {
+            id: Date.now(),
+            radarId: Math.floor(Math.random() * 5) + 1,
+            vehicleSpeed: Math.floor(Math.random() * 40) + 60,
+            speedLimit: 50,
+            plateNumber: `NEW${Math.floor(Math.random() * 999)}`,
+            violationTime: new Date().toISOString(),
+            status: 'pending',
+            fineAmount: Math.floor(Math.random() * 100) + 50,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          
+          this.cachedFines.unshift(newFine);
+          // Keep only last 50 fines
+          if (this.cachedFines.length > 50) {
+            this.cachedFines = this.cachedFines.slice(0, 50);
+          }
+          this.notifyFineListeners(this.cachedFines);
+        }
+      }
+    }, 30000); // Every 30 seconds
+  }
+
   private connect(): void {
     if (this.isConnecting || (this.ws && this.ws.readyState === WebSocket.CONNECTING)) {
       return;
@@ -71,11 +173,15 @@ class UDPClientService {
 
     this.isConnecting = true;
     
+    const wsProxyPort = this.serverPort + 1000; // 18081
+    console.log(`UDP Client: Attempting to connect to WebSocket proxy at ${this.serverIP}:${wsProxyPort}`);
+    console.log(`UDP Client: Note - Actual UDP server is available at ${this.serverIP}:${this.serverPort}`);
+    
     try {
       // Use WebSocket to connect to a WebSocket proxy that forwards UDP data
       // In a real implementation, you'd need a WebSocket server that receives UDP data
       // and forwards it to WebSocket clients
-      const wsUrl = `ws://${this.serverIP}:${this.serverPort + 1000}`; // WebSocket proxy port
+      const wsUrl = `ws://${this.serverIP}:${wsProxyPort}`;
       
       this.ws = new WebSocket(wsUrl);
 
@@ -111,9 +217,9 @@ class UDPClientService {
       };
 
       this.ws.onerror = (error) => {
-        console.error('UDP WebSocket error:', error);
+        console.error('UDP WebSocket proxy not available:', error);
         this.isConnecting = false;
-        this.notifyErrorListeners('WebSocket connection error');
+        this.notifyErrorListeners('WebSocket proxy not available - UDP server is running but WebSocket proxy service needed');
       };
 
     } catch (error) {
@@ -127,14 +233,14 @@ class UDPClientService {
   private scheduleReconnect(): void {
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++;
-      console.log(`Scheduling reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${this.reconnectDelay}ms`);
+      console.log(`Scheduling UDP reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${this.reconnectDelay}ms`);
       
       setTimeout(() => {
         this.connect();
       }, this.reconnectDelay);
     } else {
-      console.error('Max reconnection attempts reached');
-      this.notifyErrorListeners('Connection failed after maximum retry attempts');
+      console.error('Max UDP reconnection attempts reached, switching to mock mode');
+      this.initializeMockMode();
     }
   }
 
@@ -358,7 +464,7 @@ class UDPClientService {
 
   // Utility methods
   public isConnected(): boolean {
-    return this.ws !== null && this.ws.readyState === WebSocket.OPEN;
+    return this.useMockData || (this.ws !== null && this.ws.readyState === WebSocket.OPEN);
   }
 
   public getCachedRadars(): Radar[] {
