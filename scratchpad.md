@@ -245,6 +245,21 @@ Replace demo data with real data from external servers:
 - **Tested**: Added unit tests to verify functionality
 - **Deployed**: All changes pushed to GitHub main branch (commit 09ee516)
 
+## ✅ CONFIRMED - Linux Server Configuration Working
+### Server Details Confirmed
+- **FTP Images Path**: `/srv/camera_uploads/camera001/192.168.1.54/2025-09-25/Common`
+- **UDP Port**: 17081 (confirmed working with `nc -u -l -p 17081`)
+- **Server User**: idealchip@idealchip-ThinkPad-E15
+- **JWT Fix**: Successfully resolved authentication issues
+
+### Next Steps
+- [x] Update .env configuration to match server paths
+- [x] Verify FTP service can access the confirmed image directory
+- [x] Test UDP data reception with real server setup
+- [x] Update FTP service to use correct IMAGE_BASE_DIR path
+- [x] Create server configuration tests
+- [x] Update deployment guide with confirmed Linux server settings
+
 ## Lessons Learned
 - **Database Design**: Proper indexing is crucial for performance with large datasets
 - **Report Generation**: Async processing is essential for complex report generation

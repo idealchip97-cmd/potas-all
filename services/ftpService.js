@@ -17,7 +17,9 @@ class FTPService extends EventEmitter {
             pasvTimeout: 60000,
             keepalive: 60000
         };
-        this.downloadDir = path.join(__dirname, '../uploads/ftp-images');
+        // Use IMAGE_BASE_DIR from environment or default to /srv/camera_uploads
+        const imageBaseDir = process.env.IMAGE_BASE_DIR || '/srv/camera_uploads';
+        this.downloadDir = imageBaseDir;
         this.setupEventHandlers();
         this.ensureDownloadDirectory();
     }

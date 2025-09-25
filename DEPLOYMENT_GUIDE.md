@@ -220,6 +220,47 @@ Consider setting up monitoring for:
 - API response times
 - System resources (CPU, memory, disk)
 
+## Linux Server Configuration (Confirmed Working)
+
+Based on successful deployment testing, here are the confirmed working configurations:
+
+### Confirmed Paths
+- **FTP Images Directory**: `/srv/camera_uploads/camera001/192.168.1.54/2025-09-25/Common`
+- **UDP Port**: 17081 (tested with `nc -u -l -p 17081`)
+- **Server Environment**: idealchip@idealchip-ThinkPad-E15
+
+### Recommended .env for Linux Server
+```bash
+# Confirmed working configuration
+IMAGE_BASE_DIR=/srv/camera_uploads
+UDP_LOCAL_PORT=17081
+FTP_HOST=192.186.1.14
+FTP_PORT=21
+
+# Generate a secure JWT secret
+JWT_SECRET=your_generated_64_character_secret_here
+```
+
+### Directory Structure Verification
+Ensure your Linux server has the following directory structure:
+```
+/srv/camera_uploads/
+├── camera001/
+│   └── 192.168.1.54/
+│       └── 2025-09-25/
+│           └── Common/
+│               └── [image files]
+```
+
+### Testing UDP Connection
+```bash
+# Test UDP port is listening (run this on your server)
+nc -u -l -p 17081
+
+# Test from another terminal or machine
+echo "test message" | nc -u your-server-ip 17081
+```
+
 ## Support
 
 If you encounter issues during deployment:
@@ -227,5 +268,7 @@ If you encounter issues during deployment:
 2. Verify all environment variables are correctly set
 3. Ensure all dependencies are installed
 4. Check database connectivity and permissions
+5. Verify directory permissions for `/srv/camera_uploads`
+6. Test UDP port availability with `netstat -ulnp | grep 17081`
 
 For additional support, refer to the project documentation or contact the development team.
