@@ -42,7 +42,7 @@ const PlateRecognition = sequelize.define('PlateRecognition', {
       type: DataTypes.INTEGER,
       allowNull: false,
       references: {
-        model: 'Users',
+        model: 'users',
         key: 'id'
       },
       comment: 'ID of the user who processed this image'

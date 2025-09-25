@@ -103,7 +103,7 @@ const Car = sequelize.define('Car', {
     type: DataTypes.INTEGER,
     allowNull: true,
     references: {
-      model: 'PlateRecognitions',
+      model: 'plate_recognitions',
       key: 'id'
     },
     comment: 'ID of the associated plate recognition record'

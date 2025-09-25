@@ -112,7 +112,7 @@ const Violation = sequelize.define('Violation', {
     type: DataTypes.INTEGER,
     allowNull: true,
     references: {
-      model: 'Users',
+      model: 'users',
       key: 'id'
     },
     comment: 'ID of the user who reviewed this violation'
@@ -126,7 +126,7 @@ const Violation = sequelize.define('Violation', {
     type: DataTypes.INTEGER,
     allowNull: true,
     references: {
-      model: 'Radars',
+      model: 'radars',
       key: 'id'
     },
     comment: 'ID of the radar that detected this violation'
@@ -135,7 +135,7 @@ const Violation = sequelize.define('Violation', {
     type: DataTypes.INTEGER,
     allowNull: true,
     references: {
-      model: 'Cars',
+      model: 'cars',
       key: 'id'
     },
     comment: 'ID of the associated car record'
