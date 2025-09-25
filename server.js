@@ -78,9 +78,13 @@ app.use(express.urlencoded({ extended: true }));
 // Static file serving for uploads
 app.use('/uploads', express.static('uploads'));
 
+// Static file serving for dashboard
+app.use('/dashboard', express.static('public/dashboard'));
+
 // Static file serving for FTP images (read-only)
 // Example URL:
 //   /static/plate-images/camera001/192.168.1.54/2025-09-25/Common/<filename>.jpg
+console.log(`📁 Serving FTP images from: ${IMAGE_BASE_DIR} at /static/plate-images`);
 app.use(
   '/static/plate-images',
   express.static(IMAGE_BASE_DIR, {
@@ -88,7 +92,13 @@ app.use(
     dotfiles: 'ignore',
     etag: true,
     maxAge: '1h',
-    extensions: ['jpg', 'jpeg', 'png', 'bmp', 'gif', 'webp']
+    extensions: ['jpg', 'jpeg', 'png', 'bmp', 'gif', 'webp'],
+    setHeaders: (res, path) => {
+      // Add CORS headers for image serving
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    }
   })
 );
 
@@ -97,8 +107,48 @@ app.get('/health', (req, res) => {
   res.json({
     success: true,
     message: 'Radar Speed Detection API is running',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    imageBasePath: IMAGE_BASE_DIR
   });
+});
+
+// Debug endpoint to test image directory access
+app.get('/debug/images', async (req, res) => {
+  try {
+    const testPath = path.join(IMAGE_BASE_DIR, 'camera001', '192.168.1.54', '2025-09-25', 'Common');
+    console.log(`🔍 Checking directory: ${testPath}`);
+    
+    const fs = require('fs').promises;
+    const exists = await fs.access(testPath).then(() => true).catch(() => false);
+    
+    if (!exists) {
+      return res.json({
+        success: false,
+        message: 'Image directory not found',
+        path: testPath,
+        baseDir: IMAGE_BASE_DIR
+      });
+    }
+    
+    const files = await fs.readdir(testPath);
+    const imageFiles = files.filter(f => /\.(jpg|jpeg|png|bmp|gif|webp)$/i.test(f));
+    
+    res.json({
+      success: true,
+      message: 'Image directory accessible',
+      path: testPath,
+      totalFiles: files.length,
+      imageFiles: imageFiles.slice(0, 5), // Show first 5 images
+      sampleUrl: imageFiles.length > 0 ? `/static/plate-images/camera001/192.168.1.54/2025-09-25/Common/${imageFiles[0]}` : null
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error checking image directory',
+      error: error.message,
+      baseDir: IMAGE_BASE_DIR
+    });
+  }
 });
 
 // Image listing endpoint for FTP images
@@ -150,6 +200,11 @@ app.use('/api/cars', carRoutes);
 app.use('/api/violations', violationRoutes);
 app.use('/api/external-data', externalDataRoutes);
 
+// Root route - redirect to dashboard
+app.get('/', (req, res) => {
+  res.redirect('/dashboard');
+});
+
 // 404 handler
 app.use('*', (req, res) => {
   res.status(404).json({
@@ -182,6 +237,7 @@ const startServer = async () => {
     // Start server
     app.listen(PORT, async () => {
       console.log(`🚀 Radar Speed Detection API server running on port ${PORT}`);
+      console.log(`📊 Dashboard: http://localhost:${PORT}/dashboard`);
       console.log(`📊 Health check: http://localhost:${PORT}/health`);
       console.log(`🔐 Environment: ${process.env.NODE_ENV}`);
       
