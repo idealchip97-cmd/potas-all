@@ -4,6 +4,7 @@ const { Op } = require('sequelize');
 const getDashboardStats = async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
+    console.log('Dashboard stats requested with params:', { startDate, endDate });
     
     let dateFilter = {};
     if (startDate && endDate) {
@@ -44,16 +45,39 @@ const getDashboardStats = async (req, res) => {
       order: [[sequelize.fn('COUNT', sequelize.col('Fine.id')), 'DESC']]
     });
 
-    // Get violations by hour (for traffic pattern analysis) - MySQL compatible
-    const violationsByHour = await sequelize.query(`
-      SELECT 
-        HOUR(violationDateTime) as hour,
-        COUNT(*) as violationCount
-      FROM fines 
-      ${startDate && endDate ? `WHERE violationDateTime BETWEEN '${startDate}' AND '${endDate}'` : ''}
-      GROUP BY HOUR(violationDateTime)
-      ORDER BY hour
-    `, { type: sequelize.QueryTypes.SELECT });
+    // Get violations by hour (for traffic pattern analysis) - Using Sequelize to avoid MySQL version issues
+    let violationsByHour = [];
+    try {
+      // Use Sequelize ORM instead of raw SQL to avoid MySQL system table issues
+      const fines = await Fine.findAll({
+        attributes: [
+          'violationDateTime'
+        ],
+        where: dateFilter,
+        raw: true
+      });
+      
+      // Process the data in JavaScript to create hourly distribution
+      const hourlyData = {};
+      fines.forEach(fine => {
+        const hour = new Date(fine.violationDateTime).getHours();
+        hourlyData[hour] = (hourlyData[hour] || 0) + 1;
+      });
+      
+      // Create array with all 24 hours
+      violationsByHour = Array.from({length: 24}, (_, i) => ({
+        hour: i,
+        violationCount: hourlyData[i] || 0
+      }));
+      
+    } catch (error) {
+      console.warn('Hour-based query failed, using empty data:', error.message);
+      // Fallback: Return empty hourly data
+      violationsByHour = Array.from({length: 24}, (_, i) => ({
+        hour: i,
+        violationCount: 0
+      }));
+    }
 
     res.json({
       success: true,
@@ -71,10 +95,18 @@ const getDashboardStats = async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('Dashboard stats error:', error);
+    console.error('Error stack:', error.stack);
+    
+    // Return a more user-friendly error response
     res.status(500).json({
       success: false,
-      message: 'Internal server error',
-      error: error.message
+      message: 'Failed to load dashboard data',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
+      details: process.env.NODE_ENV === 'development' ? {
+        stack: error.stack,
+        sql: error.sql || 'No SQL query available'
+      } : undefined
     });
   }
 };
