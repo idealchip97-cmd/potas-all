@@ -3,7 +3,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
 const { PlateRecognition, User, Car } = require('../models');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
 const EnhancedVisionService = require('../services/enhancedVisionService');
 const ChatGPTVisionService = require('../services/chatgptVisionService');
 const TesseractService = require('../services/tesseractService');
@@ -47,7 +47,15 @@ const upload = multer({
 
 // Initialize AI services
 const enhancedVisionService = new EnhancedVisionService();
-const chatgptVisionService = new ChatGPTVisionService();
+
+// Initialize ChatGPT service only if API key is available
+let chatgptVisionService = null;
+try {
+  chatgptVisionService = new ChatGPTVisionService();
+} catch (error) {
+  console.warn('ChatGPT Vision Service not available in routes:', error.message);
+}
+
 const tesseractService = new TesseractService();
 
 // Enhanced OCR function using multiple AI engines
@@ -64,7 +72,11 @@ const performEnhancedOCR = async (imagePath, options = {}) => {
 
     switch (engine) {
       case 'chatgpt':
-        result = await chatgptVisionService.extractLicensePlate(imagePath);
+        if (chatgptVisionService) {
+          result = await chatgptVisionService.extractLicensePlate(imagePath);
+        } else {
+          throw new Error('ChatGPT Vision Service not available - API key required');
+        }
         break;
       case 'tesseract':
         result = await tesseractService.extractLicensePlate(imagePath);
@@ -72,7 +84,7 @@ const performEnhancedOCR = async (imagePath, options = {}) => {
       case 'enhanced':
       default:
         result = await enhancedVisionService.extractLicensePlate(imagePath, {
-          useChatGPT,
+          useChatGPT: useChatGPT && chatgptVisionService !== null,
           useTesseract,
           preferHighConfidence: true
         });
@@ -136,7 +148,7 @@ const performMockOCR = async () => {
 };
 
 // POST /api/plate-recognition/process - Process uploaded images
-router.post('/process', authenticateToken, upload.array('images', 10), async (req, res) => {
+router.post('/process', authenticate, upload.array('images', 10), async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({
@@ -221,7 +233,7 @@ router.post('/process', authenticateToken, upload.array('images', 10), async (re
 });
 
 // GET /api/plate-recognition/results - Get all plate recognition results
-router.get('/results', authenticateToken, async (req, res) => {
+router.get('/results', authenticate, async (req, res) => {
   try {
     const { page = 1, limit = 20, status } = req.query;
     const offset = (page - 1) * limit;
@@ -268,7 +280,7 @@ router.get('/results', authenticateToken, async (req, res) => {
 });
 
 // GET /api/plate-recognition/results/:id - Get specific result
-router.get('/results/:id', authenticateToken, async (req, res) => {
+router.get('/results/:id', authenticate, async (req, res) => {
   try {
     const result = await PlateRecognition.findByPk(req.params.id, {
       include: [
@@ -302,7 +314,7 @@ router.get('/results/:id', authenticateToken, async (req, res) => {
 });
 
 // DELETE /api/plate-recognition/results/:id - Delete result
-router.delete('/results/:id', authenticateToken, async (req, res) => {
+router.delete('/results/:id', authenticate, async (req, res) => {
   try {
     const result = await PlateRecognition.findByPk(req.params.id);
 
@@ -337,7 +349,7 @@ router.delete('/results/:id', authenticateToken, async (req, res) => {
 });
 
 // GET /api/plate-recognition/statistics - Get statistics
-router.get('/statistics', authenticateToken, async (req, res) => {
+router.get('/statistics', authenticate, async (req, res) => {
   try {
     const totalProcessed = await PlateRecognition.count();
     const successfulRecognitions = await PlateRecognition.count({

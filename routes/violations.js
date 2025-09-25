@@ -1,16 +1,16 @@
 const express = require('express');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
 const violationController = require('../controllers/violationController');
 
 const router = express.Router();
 
 // Violation management routes
-router.post('/', authenticateToken, violationController.createViolation);
-router.get('/', authenticateToken, violationController.getAllViolations);
-router.get('/statistics', authenticateToken, violationController.getStatistics);
-router.post('/bulk-confirm', authenticateToken, violationController.bulkConfirmViolations);
-router.get('/:id', authenticateToken, violationController.getViolationById);
-router.put('/:id', authenticateToken, violationController.updateViolation);
-router.delete('/:id', authenticateToken, violationController.deleteViolation);
+router.post('/', authenticate, violationController.createViolation);
+router.get('/', authenticate, violationController.getAllViolations);
+router.get('/statistics', authenticate, violationController.getStatistics);
+router.post('/bulk-confirm', authenticate, violationController.bulkConfirmViolations);
+router.get('/:id', authenticate, violationController.getViolationById);
+router.put('/:id', authenticate, violationController.updateViolation);
+router.delete('/:id', authenticate, violationController.deleteViolation);
 
 module.exports = router;

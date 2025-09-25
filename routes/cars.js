@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
-const { authenticateToken } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
 const optimizedCarController = require('../controllers/optimizedCarController');
 
 const router = express.Router();
@@ -43,10 +43,10 @@ const upload = multer({
 });
 
 // Car recognition routes
-router.post('/recognize', authenticateToken, upload.array('images', 10), optimizedCarController.recognizeCars);
-router.get('/', authenticateToken, optimizedCarController.getAllCars);
-router.get('/statistics', authenticateToken, optimizedCarController.getStatistics);
-router.get('/:id', authenticateToken, optimizedCarController.getCarById);
-router.delete('/:id', authenticateToken, optimizedCarController.deleteCar);
+router.post('/recognize', authenticate, upload.array('images', 10), optimizedCarController.recognizeCars);
+router.get('/', authenticate, optimizedCarController.getAllCars);
+router.get('/statistics', authenticate, optimizedCarController.getStatistics);
+router.get('/:id', authenticate, optimizedCarController.getCarById);
+router.delete('/:id', authenticate, optimizedCarController.deleteCar);
 
 module.exports = router;

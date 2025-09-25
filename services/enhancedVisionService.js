@@ -3,7 +3,16 @@ const TesseractService = require('./tesseractService');
 
 class EnhancedVisionService {
   constructor() {
-    this.chatgptService = new ChatGPTVisionService();
+    // Initialize ChatGPT service only if API key is available
+    try {
+      this.chatgptService = new ChatGPTVisionService();
+      this.hasChatGPT = true;
+    } catch (error) {
+      console.warn('ChatGPT Vision Service not available:', error.message);
+      this.chatgptService = null;
+      this.hasChatGPT = false;
+    }
+    
     this.tesseractService = new TesseractService();
   }
 
@@ -25,7 +34,7 @@ class EnhancedVisionService {
       // Run both services in parallel if both are enabled
       const promises = [];
 
-      if (useChatGPT) {
+      if (useChatGPT && this.hasChatGPT) {
         promises.push(
           this.runWithTimeout(
             this.chatgptService.extractLicensePlate(imagePath),
@@ -215,6 +224,26 @@ class EnhancedVisionService {
     stats.successRate = results.length > 0 ? (stats.successful / results.length) * 100 : 0;
 
     return stats;
+  }
+
+  /**
+   * Recognize plate - alias for extractLicensePlate for compatibility
+   */
+  async recognizePlate(imagePath, options = {}) {
+    const result = await this.extractLicensePlate(imagePath, options);
+    
+    // Transform result to match expected format
+    return {
+      plateNumber: result.plateNumber,
+      confidence: result.confidence,
+      engine: result.engine,
+      metadata: {
+        processingTime: result.processingTime,
+        engines: result.engines,
+        allResults: result.allResults
+      },
+      carDetails: null // Can be enhanced later with car detection
+    };
   }
 
   /**

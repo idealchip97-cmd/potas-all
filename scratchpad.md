@@ -182,6 +182,38 @@ curl -X GET http://localhost:3000/api/reports/violations-by-location -H "Authori
 - **Authentication**: All role-based access working properly
 - **Data Relationships**: Proper foreign key relationships and joins functioning
 
+## NEW TASK: FTP & UDP Server Integration for Real Data
+### Task Overview
+Replace demo data with real data from external servers:
+- **FTP Server**: Receive images for plate number detection
+- **UDP Server**: Receive radar info and fines data
+- **Server IP**: 192.186.1.14
+- **FTP Port**: 21
+- **UDP Port**: 17081
+
+### Implementation Plan - ✅ COMPLETED
+- [x] Create FTP client service to connect and download images
+- [x] Create UDP server to listen for radar/fines data
+- [x] Integrate FTP image processing with existing plate recognition
+- [x] Process UDP data and update radar/fines in database
+- [x] Add error handling and reconnection logic
+- [x] Create monitoring for both connections
+- [x] Create API endpoints for service management
+- [x] Add comprehensive testing suite
+- [x] Update server configuration and environment variables
+- [x] Add graceful shutdown handling
+- [x] Fix authentication middleware issues
+- [x] Handle missing OpenAI API key gracefully
+- [x] Test server startup and API endpoints
+- [x] Verify UDP service functionality
+
+### Technical Requirements
+- FTP client for image downloads
+- UDP server for real-time data reception
+- Background services for continuous monitoring
+- Data parsing and validation
+- Integration with existing AI vision services
+
 ## Lessons Learned
 - **Database Design**: Proper indexing is crucial for performance with large datasets
 - **Report Generation**: Async processing is essential for complex report generation
