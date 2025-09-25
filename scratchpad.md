@@ -1,5 +1,20 @@
 # Scratchpad
 
+## Current Task (2025-09-25): Start All Systems (Backend + Frontend + Plate Recognition)
+
+Goal: Install dependencies if needed, start all services using `start-all-systems.sh`, and verify ports 3000/3001/3002 are running.
+
+Plan:
+- [x] Backend: `npm install` in `potassium-backend-/`
+- [ ] Frontend: `npm install` in `potassium-frontend-/`
+- [ ] Run all: From `potassium-frontend-/` execute `npm run start:all`
+- [ ] Verify: Check ports 3000 (API), 3001 (Dashboard), 3002 (Plate Recognition)
+- [ ] Document results and URLs
+
+Notes:
+- Scripts referenced: `start-all-systems.sh`, `stop-all-systems.sh` in `potassium-frontend-/`
+- Ports: 3000 (Backend API), 3001 (Frontend Dashboard), 3002 (Plate Recognition)
+
 ## Current Task
 Integrate real-time data from FTP and UDP servers instead of using demo data.
 
