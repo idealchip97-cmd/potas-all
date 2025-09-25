@@ -1,14 +1,15 @@
 # Scratchpad
-## Current Task (2025-09-25): Start All Systems (Backend + Frontend + Plate Recognition)
+## Current Task (2025-09-25): Fix FTP Image Display from Server Directory
 
-Goal: Install dependencies if needed, start all services using `start-all-systems.sh`, and verify ports 3000/3001/3002 are running.
+Goal: Configure the system to display real images from server directory `/srv/camera_uploads/camera001/192.168.1.54/2025-09-25/Common` instead of showing white spaces.
 
 Plan:
- - [x] Backend: `npm install` in `potassium-backend-/`
- - [x] Frontend: `npm install` in `potassium-frontend-/`
- - [x] Run all: From `potassium-frontend-/` execute `npm run start:all`
- - [x] Verify: Check ports 3000 (API), 3001 (Dashboard), 3002 (Plate Recognition)
- - [x] Document results and URLs
+ - [x] Analyze current image serving configuration
+ - [ ] Update backend IMAGE_BASE_DIR to point to server directory
+ - [ ] Update FTP client configuration for server deployment
+ - [ ] Test image serving from server directory
+ - [ ] Verify images display correctly in Plate Recognition interface
+ - [ ] Document server deployment configuration
 
 Notes:
 - Scripts referenced: `start-all-systems.sh`, `stop-all-systems.sh` in `potassium-frontend-/`

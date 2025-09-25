@@ -33,7 +33,8 @@ class FTPClientService {
   // HTTP static serving configuration for real FTP images
   // Assumes backend serves /srv/camera_uploads as /static/plate-images
   // Example full path: http://localhost:3000/static/plate-images/camera001/192.168.1.54/2025-09-25/Common/<filename>
-  private imageHttpHost = 'http://localhost:3000';
+  // For server deployment, change imageHttpHost to the server's IP/domain
+  private imageHttpHost = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3000';
   private imageStaticBase = '/static/plate-images';
   private cameraFolder = 'camera001/192.168.1.54';
   
