@@ -10,6 +10,7 @@ import Dashboard from './pages/Dashboard';
 import Radars from './pages/Radars';
 import Fines from './pages/Fines';
 import Reports from './pages/Reports';
+import PlateRecognition from './pages/PlateRecognition';
 
 function App() {
   return (
@@ -56,6 +57,16 @@ function App() {
                 <ProtectedRoute>
                   <Layout>
                     <Reports />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/plate-recognition"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <PlateRecognition />
                   </Layout>
                 </ProtectedRoute>
               }
