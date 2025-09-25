@@ -16,12 +16,15 @@ import {
   Warning,
   Error,
   AttachMoney,
+  CameraAlt,
 } from '@mui/icons-material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
+import { useNavigate } from 'react-router-dom';
 import { DashboardStats, ViolationTrend, RadarPerformance } from '../types';
 import apiService from '../services/api';
 
 const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [trends, setTrends] = useState<ViolationTrend[]>([]);
   const [radarPerformance, setRadarPerformance] = useState<RadarPerformance[]>([]);
@@ -140,6 +143,14 @@ const Dashboard: React.FC = () => {
       color: '#ff9800',
       subtitle: `${stats?.complianceRate || 0}% Compliance`,
     },
+    {
+      title: 'Plate Recognition',
+      value: 'Open System',
+      icon: <CameraAlt />,
+      color: '#9c27b0',
+      subtitle: 'License Plate OCR',
+      action: () => navigate('/plate-recognition'),
+    },
   ];
 
   const statusCards = [
@@ -185,8 +196,18 @@ const Dashboard: React.FC = () => {
       {/* Main Stats Cards */}
       <Box display="flex" flexWrap="wrap" gap={3} sx={{ mb: 4 }}>
         {statCards.map((card, index) => (
-          <Box key={index} sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', md: '1 1 calc(25% - 18px)' } }}>
-            <Card>
+          <Box key={index} sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', md: '1 1 calc(20% - 15px)' } }}>
+            <Card 
+              sx={{ 
+                cursor: (card as any).action ? 'pointer' : 'default',
+                '&:hover': (card as any).action ? { 
+                  transform: 'translateY(-2px)',
+                  boxShadow: 3,
+                  transition: 'all 0.2s ease-in-out'
+                } : {}
+              }}
+              onClick={(card as any).action}
+            >
               <CardContent>
                 <Box display="flex" alignItems="center" justifyContent="space-between">
                   <Box>
@@ -310,6 +331,7 @@ const Dashboard: React.FC = () => {
           </Card>
         </Box>
       </Box>
+
     </Box>
   );
 };

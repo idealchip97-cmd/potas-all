@@ -22,6 +22,7 @@ import {
   Person,
   Speed,
   LocationOn,
+  CameraAlt,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -42,6 +43,7 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onClose }) => {
     { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard' },
     { text: 'Radars', icon: <Radar />, path: '/radars' },
     { text: 'Fines', icon: <Receipt />, path: '/fines' },
+    { text: 'Plate Recognition', icon: <CameraAlt />, path: '/plate-recognition' },
     { text: 'Reports', icon: <Assessment />, path: '/reports' },
     { text: 'Speed Analysis', icon: <Speed />, path: '/speed-analysis' },
     { text: 'Locations', icon: <LocationOn />, path: '/locations' },
