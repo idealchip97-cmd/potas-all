@@ -6,6 +6,20 @@ import {
   Box,
   CircularProgress,
   Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Chip,
+  IconButton,
 } from '@mui/material';
 import {
   Radar as RadarIcon,
@@ -17,11 +31,19 @@ import {
   Error,
   AttachMoney,
   CameraAlt,
+  Wifi,
+  WifiOff,
+  Storage,
+  CloudUpload,
+  Refresh,
+  Close,
 } from '@mui/icons-material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import { DashboardStats, ViolationTrend, RadarPerformance } from '../types';
 import apiService from '../services/api';
+import realTimeDataService, { ConnectionStatus, DataSyncStatus } from '../services/realTimeDataService';
+import { PlateRecognitionImage } from '../services/ftpClient';
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -30,10 +52,60 @@ const Dashboard: React.FC = () => {
   const [radarPerformance, setRadarPerformance] = useState<RadarPerformance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  // Real-time data state
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
+    udp: false,
+    ftp: false,
+    overall: false
+  });
+  const [syncStatus, setSyncStatus] = useState<DataSyncStatus>({
+    lastRadarUpdate: null,
+    lastFineUpdate: null,
+    lastImageUpdate: null,
+    totalRadars: 0,
+    totalFines: 0,
+    totalImages: 0
+  });
+  const [recentImages, setRecentImages] = useState<PlateRecognitionImage[]>([]);
+  
+  // Dialog states
+  const [ftpDialogOpen, setFtpDialogOpen] = useState(false);
+  const [udpDialogOpen, setUdpDialogOpen] = useState(false);
 
   useEffect(() => {
     fetchDashboardData();
+    setupRealTimeMonitoring();
+    
+    return () => {
+      // Cleanup subscriptions when component unmounts
+    };
   }, []);
+
+  const setupRealTimeMonitoring = () => {
+    // Subscribe to connection status
+    const unsubscribeConnection = realTimeDataService.onConnectionChange((status) => {
+      setConnectionStatus(status);
+    });
+
+    // Subscribe to sync status
+    const unsubscribeSync = realTimeDataService.onSyncStatusChange((status) => {
+      setSyncStatus(status);
+    });
+
+    // Subscribe to image updates
+    const unsubscribeImages = realTimeDataService.onImageUpdate((images) => {
+      // Keep only the 10 most recent images
+      setRecentImages(images.slice(0, 10));
+    });
+
+    // Return cleanup function (not used in this scope but good practice)
+    return () => {
+      unsubscribeConnection();
+      unsubscribeSync();
+      unsubscribeImages();
+    };
+  };
 
   const fetchDashboardData = async () => {
     try {
@@ -151,6 +223,22 @@ const Dashboard: React.FC = () => {
       subtitle: 'License Plate OCR',
       action: () => navigate('/plate-recognition'),
     },
+    {
+      title: 'FTP Monitor',
+      value: connectionStatus.ftp ? 'Connected' : 'Disconnected',
+      icon: connectionStatus.ftp ? <CloudUpload /> : <WifiOff />,
+      color: connectionStatus.ftp ? '#4caf50' : '#f44336',
+      subtitle: `${syncStatus.totalImages} Images`,
+      action: () => setFtpDialogOpen(true),
+    },
+    {
+      title: 'UDP Monitor',
+      value: connectionStatus.udp ? 'Connected' : 'Disconnected',
+      icon: connectionStatus.udp ? <Wifi /> : <WifiOff />,
+      color: connectionStatus.udp ? '#4caf50' : '#f44336',
+      subtitle: `${syncStatus.totalRadars} Radars, ${syncStatus.totalFines} Fines`,
+      action: () => setUdpDialogOpen(true),
+    },
   ];
 
   const statusCards = [
@@ -196,7 +284,7 @@ const Dashboard: React.FC = () => {
       {/* Main Stats Cards */}
       <Box display="flex" flexWrap="wrap" gap={3} sx={{ mb: 4 }}>
         {statCards.map((card, index) => (
-          <Box key={index} sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', md: '1 1 calc(20% - 15px)' } }}>
+          <Box key={index} sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', md: '1 1 calc(33.33% - 16px)', lg: '1 1 calc(14.28% - 18px)' } }}>
             <Card 
               sx={{ 
                 cursor: (card as any).action ? 'pointer' : 'default',
@@ -331,6 +419,194 @@ const Dashboard: React.FC = () => {
           </Card>
         </Box>
       </Box>
+
+      {/* FTP Monitor Dialog */}
+      <Dialog open={ftpDialogOpen} onClose={() => setFtpDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>
+          <Box display="flex" alignItems="center" justifyContent="space-between">
+            <Box display="flex" alignItems="center" gap={1}>
+              <CloudUpload color={connectionStatus.ftp ? 'success' : 'error'} />
+              <Typography variant="h6">FTP Server Monitor</Typography>
+              <Chip 
+                label={connectionStatus.ftp ? 'Connected' : 'Disconnected'} 
+                color={connectionStatus.ftp ? 'success' : 'error'} 
+                size="small" 
+              />
+            </Box>
+            <IconButton onClick={() => setFtpDialogOpen(false)}>
+              <Close />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h6" gutterBottom>Connection Status</Typography>
+            <Box display="flex" gap={2} sx={{ mb: 2 }}>
+              <Chip 
+                icon={connectionStatus.ftp ? <Wifi /> : <WifiOff />}
+                label={`FTP: ${connectionStatus.ftp ? 'Connected' : 'Disconnected'}`}
+                color={connectionStatus.ftp ? 'success' : 'error'}
+              />
+              <Chip 
+                label={`Last Update: ${syncStatus.lastImageUpdate ? new Date(syncStatus.lastImageUpdate).toLocaleString() : 'Never'}`}
+                variant="outlined"
+              />
+            </Box>
+          </Box>
+
+          <Typography variant="h6" gutterBottom>Recent Images ({recentImages.length})</Typography>
+          {recentImages.length > 0 ? (
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Filename</TableCell>
+                    <TableCell>Plate Number</TableCell>
+                    <TableCell>Confidence</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Timestamp</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {recentImages.map((image) => (
+                    <TableRow key={image.id}>
+                      <TableCell>{image.filename}</TableCell>
+                      <TableCell>{image.plateNumber || 'Processing...'}</TableCell>
+                      <TableCell>{image.confidence ? `${image.confidence}%` : '-'}</TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={image.processingStatus} 
+                          color={
+                            image.processingStatus === 'completed' ? 'success' : 
+                            image.processingStatus === 'failed' ? 'error' : 
+                            'warning'
+                          }
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>{new Date(image.timestamp).toLocaleString()}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          ) : (
+            <Alert severity="info">No images received yet</Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => realTimeDataService.requestImageList()} startIcon={<Refresh />}>
+            Refresh
+          </Button>
+          <Button onClick={() => setFtpDialogOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* UDP Monitor Dialog */}
+      <Dialog open={udpDialogOpen} onClose={() => setUdpDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>
+          <Box display="flex" alignItems="center" justifyContent="space-between">
+            <Box display="flex" alignItems="center" gap={1}>
+              <Storage color={connectionStatus.udp ? 'success' : 'error'} />
+              <Typography variant="h6">UDP Server Monitor</Typography>
+              <Chip 
+                label={connectionStatus.udp ? 'Connected' : 'Disconnected'} 
+                color={connectionStatus.udp ? 'success' : 'error'} 
+                size="small" 
+              />
+            </Box>
+            <IconButton onClick={() => setUdpDialogOpen(false)}>
+              <Close />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h6" gutterBottom>Connection Status</Typography>
+            <Box display="flex" gap={2} sx={{ mb: 2 }}>
+              <Chip 
+                icon={connectionStatus.udp ? <Wifi /> : <WifiOff />}
+                label={`UDP: ${connectionStatus.udp ? 'Connected' : 'Disconnected'}`}
+                color={connectionStatus.udp ? 'success' : 'error'}
+              />
+              <Chip 
+                label={`Server: 192.186.1.14:17081`}
+                variant="outlined"
+              />
+            </Box>
+          </Box>
+
+          <Box display="flex" flexWrap="wrap" gap={2} sx={{ mb: 3 }}>
+            <Card sx={{ flex: '1 1 calc(50% - 8px)' }}>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom>Total Radars</Typography>
+                <Typography variant="h4">{syncStatus.totalRadars}</Typography>
+                <Typography variant="body2" color="textSecondary">
+                  Last Update: {syncStatus.lastRadarUpdate ? new Date(syncStatus.lastRadarUpdate).toLocaleString() : 'Never'}
+                </Typography>
+              </CardContent>
+            </Card>
+            <Card sx={{ flex: '1 1 calc(50% - 8px)' }}>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom>Total Fines</Typography>
+                <Typography variant="h4">{syncStatus.totalFines}</Typography>
+                <Typography variant="body2" color="textSecondary">
+                  Last Update: {syncStatus.lastFineUpdate ? new Date(syncStatus.lastFineUpdate).toLocaleString() : 'Never'}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Box>
+
+          <Typography variant="h6" gutterBottom>Data Stream Information</Typography>
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Data Type</TableCell>
+                  <TableCell>Count</TableCell>
+                  <TableCell>Last Update</TableCell>
+                  <TableCell>Status</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                <TableRow>
+                  <TableCell>Radar Data</TableCell>
+                  <TableCell>{syncStatus.totalRadars}</TableCell>
+                  <TableCell>{syncStatus.lastRadarUpdate ? new Date(syncStatus.lastRadarUpdate).toLocaleString() : 'Never'}</TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={connectionStatus.udp ? 'Active' : 'Inactive'} 
+                      color={connectionStatus.udp ? 'success' : 'error'} 
+                      size="small" 
+                    />
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell>Fine Data</TableCell>
+                  <TableCell>{syncStatus.totalFines}</TableCell>
+                  <TableCell>{syncStatus.lastFineUpdate ? new Date(syncStatus.lastFineUpdate).toLocaleString() : 'Never'}</TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={connectionStatus.udp ? 'Active' : 'Inactive'} 
+                      color={connectionStatus.udp ? 'success' : 'error'} 
+                      size="small" 
+                    />
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => realTimeDataService.requestRadarData()} startIcon={<Refresh />}>
+            Refresh Radars
+          </Button>
+          <Button onClick={() => realTimeDataService.requestFineData()} startIcon={<Refresh />}>
+            Refresh Fines
+          </Button>
+          <Button onClick={() => setUdpDialogOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
 
     </Box>
   );

@@ -51,6 +51,39 @@ Successfully integrated real-time data from FTP and UDP servers:
 - Upload images directly to FTP server for processing
 - Live processing status updates and results
 
+## Dashboard Monitoring Integration - COMPLETED
+
+Added comprehensive FTP and UDP monitoring to the main dashboard:
+
+**New Dashboard Cards**:
+- **FTP Monitor Card**: Shows connection status, image count, and opens detailed FTP monitoring dialog
+- **UDP Monitor Card**: Shows connection status, radar/fine counts, and opens detailed UDP monitoring dialog
+
+**FTP Monitor Dialog Features**:
+- Real-time connection status with visual indicators
+- Recent images table showing filename, plate number, confidence, status, and timestamp
+- Processing status tracking (pending, processing, completed, failed)
+- Refresh functionality to request latest image list
+- Image count and last update timestamps
+
+**UDP Monitor Dialog Features**:
+- Real-time connection status with server IP and port display
+- Summary cards showing total radars and fines with last update times
+- Data stream information table with counts, timestamps, and status
+- Separate refresh buttons for radar and fine data
+- Connection health monitoring
+
+**Dashboard Layout Updates**:
+- Responsive card layout supporting 7 cards (5 original + 2 monitoring)
+- Improved flex layout for different screen sizes
+- Hover effects and click interactions for monitoring cards
+
+**Real-time Integration**:
+- Live connection status updates
+- Automatic data synchronization tracking
+- Error handling and status notifications
+- Recent data caching for quick access
+
 ## UI Update Summary - COMPLETED
 
 Successfully updated the PlateRecognition.tsx UI to match the external dashboard design:
