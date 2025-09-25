@@ -84,6 +84,41 @@ Added comprehensive FTP and UDP monitoring to the main dashboard:
 - Error handling and status notifications
 - Recent data caching for quick access
 
+## Dedicated Monitor Pages - COMPLETED
+
+Created comprehensive dedicated monitoring pages accessible from sidebar navigation:
+
+**FTP Monitor Page** (`/ftp-monitor`):
+- **Real-time Connection Status**: Live monitoring of FTP server connection with visual indicators
+- **Statistics Dashboard**: Cards showing total files, today's count, completed, processing, pending, and failed
+- **Advanced Filtering**: Filter by processing status, date range (today, week, month), and search functionality
+- **Comprehensive File Table**: Shows image preview, filename, plate number, confidence, vehicle type, status, timestamp
+- **Image Details Dialog**: Full image preview with complete processing results and metadata
+- **File Management**: View, reprocess, and delete image files with confirmation dialogs
+- **Real-time Updates**: Live synchronization with FTP server data
+
+**UDP Monitor Page** (`/udp-monitor`):
+- **Connection Monitoring**: Real-time UDP server connection status with server details (192.186.1.14:17081)
+- **Statistics Overview**: Cards for total radars, total fines, last update time, and connection status
+- **Tabbed Data View**: Separate tabs for Radars and Fines data with individual filtering
+- **Radar Data Table**: Complete radar information including ID, name, location, status, speed limit, IP, serial number, statistics
+- **Fines Data Table**: Detailed fine records with radar ID, plate number, speeds, amounts, status, violation time
+- **Status Filtering**: Filter radars by status (active, inactive, maintenance) and fines by status (pending, processed, paid, cancelled)
+- **Real-time Synchronization**: Live updates from UDP data stream
+
+**Navigation Integration**:
+- Added "FTP Monitor" and "UDP Monitor" items to sidebar navigation
+- Icons: CloudUpload for FTP, Storage for UDP
+- Accessible from main navigation menu alongside other system pages
+
+**Features**:
+- Responsive design for all screen sizes
+- Real-time data updates without page refresh
+- Error handling and connection status indicators
+- Comprehensive data filtering and search capabilities
+- Professional table layouts with sorting and pagination
+- Action buttons for data management and refresh
+
 ## UI Update Summary - COMPLETED
 
 Successfully updated the PlateRecognition.tsx UI to match the external dashboard design:
