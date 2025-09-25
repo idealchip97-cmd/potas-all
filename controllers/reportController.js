@@ -44,14 +44,14 @@ const getDashboardStats = async (req, res) => {
       order: [[sequelize.fn('COUNT', sequelize.col('Fine.id')), 'DESC']]
     });
 
-    // Get violations by hour (for traffic pattern analysis)
+    // Get violations by hour (for traffic pattern analysis) - SQLite compatible
     const violationsByHour = await sequelize.query(`
       SELECT 
-        HOUR(violationDateTime) as hour,
+        CAST(strftime('%H', violationDateTime) AS INTEGER) as hour,
         COUNT(*) as violationCount
       FROM fines 
       ${startDate && endDate ? `WHERE violationDateTime BETWEEN '${startDate}' AND '${endDate}'` : ''}
-      GROUP BY HOUR(violationDateTime)
+      GROUP BY CAST(strftime('%H', violationDateTime) AS INTEGER)
       ORDER BY hour
     `, { type: sequelize.QueryTypes.SELECT });
 

@@ -8,6 +8,9 @@ const ReportSchedule = require('./ReportSchedule');
 const ReportData = require('./ReportData');
 const AuditLog = require('./AuditLog');
 const SystemMetric = require('./SystemMetric');
+const PlateRecognition = require('./PlateRecognition');
+const Car = require('./Car');
+const Violation = require('./Violation');
 
 // Define associations
 
@@ -43,6 +46,24 @@ Report.hasMany(ReportData, { foreignKey: 'reportId', as: 'data' });
 AuditLog.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 User.hasMany(AuditLog, { foreignKey: 'userId', as: 'auditLogs' });
 
+// Plate Recognition associations
+PlateRecognition.belongsTo(User, { foreignKey: 'processedBy', as: 'processor' });
+User.hasMany(PlateRecognition, { foreignKey: 'processedBy', as: 'plateRecognitions' });
+
+// Car associations
+Car.belongsTo(PlateRecognition, { foreignKey: 'plateRecognitionId', as: 'plateRecognition' });
+PlateRecognition.hasOne(Car, { foreignKey: 'plateRecognitionId', as: 'car' });
+
+// Violation associations
+Violation.belongsTo(User, { foreignKey: 'reviewedBy', as: 'reviewer' });
+User.hasMany(Violation, { foreignKey: 'reviewedBy', as: 'reviewedViolations' });
+
+Violation.belongsTo(Radar, { foreignKey: 'radarId', as: 'radar' });
+Radar.hasMany(Violation, { foreignKey: 'radarId', as: 'violations' });
+
+Violation.belongsTo(Car, { foreignKey: 'carId', as: 'car' });
+Car.hasMany(Violation, { foreignKey: 'carId', as: 'violations' });
+
 module.exports = {
   sequelize,
   User,
@@ -53,5 +74,8 @@ module.exports = {
   ReportSchedule,
   ReportData,
   AuditLog,
-  SystemMetric
+  SystemMetric,
+  PlateRecognition,
+  Car,
+  Violation
 };

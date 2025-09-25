@@ -11,6 +11,9 @@ const authRoutes = require('./routes/auth');
 const radarRoutes = require('./routes/radars');
 const fineRoutes = require('./routes/fines');
 const reportRoutes = require('./routes/reports');
+const plateRecognitionRoutes = require('./routes/plateRecognition');
+const carRoutes = require('./routes/cars');
+const violationRoutes = require('./routes/violations');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -30,6 +33,9 @@ app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// Static file serving for uploads
+app.use('/uploads', express.static('uploads'));
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({
@@ -44,6 +50,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api/radars', radarRoutes);
 app.use('/api/fines', fineRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/plate-recognition', plateRecognitionRoutes);
+app.use('/api/cars', carRoutes);
+app.use('/api/violations', violationRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

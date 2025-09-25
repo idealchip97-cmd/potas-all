@@ -1,5 +1,6 @@
 const comprehensiveSeeder = require('./comprehensive_seeder');
 const reportSeeder = require('./report_seeder');
+const advancedPlateRecognitionSeeder = require('./advanced_plate_recognition_seeder');
 
 const seedDatabase = async () => {
   try {
@@ -10,6 +11,9 @@ const seedDatabase = async () => {
     
     // Then run report seeder (creates reporting data)
     await reportSeeder();
+    
+    // Finally run advanced plate recognition seeder (creates AI-enhanced data)
+    await advancedPlateRecognitionSeeder();
     
     console.log('All seeding completed successfully!');
     
