@@ -212,6 +212,8 @@ Replace demo data with real data from external servers:
 - [x] Switch from SQLite to MySQL database
 - [x] Configure phpMyAdmin integration
 - [x] Populate database with comprehensive test data
+- [x] Fix dashboard data loading error (MySQL compatibility issue)
+- [x] Implement Sequelize ORM-based data processing for better compatibility
 
 ### Technical Requirements
 - FTP client for image downloads
