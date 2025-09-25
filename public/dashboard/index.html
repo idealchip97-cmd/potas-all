@@ -179,6 +179,7 @@
             <p>Real-time monitoring and management system</p>
             <div style="margin-top: 10px;">
                 <span id="serverStatus" class="status-indicator status-offline">Server Offline</span>
+                <span id="loginStatus" class="status-indicator status-offline" style="margin-left: 15px;">Not Logged In</span>
                 <span id="lastUpdate" style="margin-left: 15px; color: #7f8c8d;"></span>
             </div>
         </div>
@@ -241,6 +242,13 @@
 
         // Initialize dashboard
         document.addEventListener('DOMContentLoaded', function() {
+            // Check if user is already logged in
+            if (authToken) {
+                const loginStatus = document.getElementById('loginStatus');
+                loginStatus.className = 'status-indicator status-online';
+                loginStatus.textContent = 'Logged In';
+            }
+            
             checkServerHealth();
             loadDashboardData();
             setInterval(checkServerHealth, 30000); // Check every 30 seconds
@@ -427,23 +435,42 @@
 
         async function login(email, password) {
             try {
+                console.log('Attempting login with:', email);
+                console.log('API Base URL:', API_BASE);
+                
                 const response = await fetch(`${API_BASE}/api/auth/signin`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
                     body: JSON.stringify({ email, password })
                 });
                 
-                const data = await response.json();
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
                 
-                if (response.ok) {
+                const data = await response.json();
+                console.log('Response data:', data);
+                
+                if (response.ok && data.success) {
                     authToken = data.data.token;
                     localStorage.setItem('authToken', authToken);
+                    console.log('Login successful, token stored');
+                    
+                    // Update login status indicator
+                    const loginStatus = document.getElementById('loginStatus');
+                    loginStatus.className = 'status-indicator status-online';
+                    loginStatus.textContent = `Logged in as ${data.data.user.firstName}`;
+                    
                     alert('Login successful!');
                     loadDashboardData(); // Refresh data after login
                 } else {
-                    alert(`Login failed: ${data.message}`);
+                    console.error('Login failed:', data);
+                    alert(`Login failed: ${data.message || 'Unknown error'}`);
                 }
             } catch (error) {
+                console.error('Login error:', error);
                 alert(`Login error: ${error.message}`);
             }
         }

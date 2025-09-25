@@ -291,6 +291,22 @@ Replace demo data with real data from external servers:
 - **Root redirect**: `http://localhost:3000/` → automatically redirects to dashboard
 - **Login**: Use admin@potasfactory.com / admin123 for full functionality
 
+## 🚨 NEW ISSUE - Login Not Working
+### Problem
+- User reports login functionality not working in dashboard
+- Need to investigate authentication system and user seeding
+
+### Investigation Results ✅
+- **API Test**: Login endpoint works perfectly - returns JWT token
+- **Credentials Confirmed**: admin@potasfactory.com / admin123 ✅ Working
+- **Database**: User seeded correctly with ID 6
+- **Issue**: Likely frontend JavaScript or CORS problem in dashboard
+
+### Solution
+- Dashboard JavaScript may need debugging
+- Check browser console for errors
+- Verify CORS headers for dashboard requests
+
 ## Lessons Learned
 - **Database Design**: Proper indexing is crucial for performance with large datasets
 - **Report Generation**: Async processing is essential for complex report generation
