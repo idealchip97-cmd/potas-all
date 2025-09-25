@@ -260,6 +260,37 @@ Replace demo data with real data from external servers:
 - [x] Create server configuration tests
 - [x] Update deployment guide with confirmed Linux server settings
 
+## 🚨 NEW ISSUE - Dashboard Not Accessible on Linux Server
+### Problem
+- User reports dashboard not opening at `http://localhost:3001/dashboard` on Linux server
+- Need to investigate server configuration and routing
+
+### Investigation Plan
+- [x] Check if server is running on correct port (3001 vs 3000)
+- [x] Verify dashboard route exists in server configuration
+- [x] Check if frontend dashboard files are included in backend
+- [x] Investigate if dashboard is separate frontend application
+
+### Solution Implemented ✅
+- **Root Cause**: Backend was pure API without dashboard frontend
+- **Port Issue**: Server runs on port 3000, not 3001
+- **Solution**: Created complete web dashboard with API integration
+
+### Dashboard Features Created
+- [x] Real-time server status monitoring
+- [x] System statistics display
+- [x] Radar status overview
+- [x] Recent fines display
+- [x] External services management (FTP/UDP)
+- [x] API endpoint testing interface
+- [x] User authentication integration
+- [x] Responsive modern UI design
+
+### Access Instructions
+- **Correct URL**: `http://localhost:3000/dashboard` (NOT 3001)
+- **Root redirect**: `http://localhost:3000/` → automatically redirects to dashboard
+- **Login**: Use admin@potasfactory.com / admin123 for full functionality
+
 ## Lessons Learned
 - **Database Design**: Proper indexing is crucial for performance with large datasets
 - **Report Generation**: Async processing is essential for complex report generation
