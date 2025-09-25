@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Card,
@@ -27,9 +27,12 @@ import {
   AttachMoney,
   TrendingUp,
   TrendingDown,
+  Wifi,
+  WifiOff,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import apiService from '../services/api';
+import realTimeDataService from '../services/realTimeDataService';
 import { Fine } from '../types';
 
 
@@ -49,11 +52,104 @@ const Fines: React.FC = () => {
   const [selectedFine, setSelectedFine] = useState<Fine | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [filters, setFilters] = useState<FineFilters>({});
+  const [isRealTimeConnected, setIsRealTimeConnected] = useState(false);
+  const [useRealTimeData, setUseRealTimeData] = useState(true);
+
+  const calculateStats = useCallback((finesData: Fine[]) => {
+    const totalFines = finesData.length;
+    const pendingFines = finesData.filter(f => f.status === 'pending').length;
+    const processedFines = finesData.filter(f => f.status === 'processed').length;
+    const paidFines = finesData.filter(f => f.status === 'paid').length;
+    const totalRevenue = finesData.reduce((sum, fine) => sum + fine.fineAmount, 0);
+    
+    setStats({
+      totalFines,
+      pendingFines,
+      processedFines,
+      paidFines,
+      totalRevenue
+    });
+  }, []);
+
+  const setupRealTimeData = useCallback(() => {
+    setLoading(true);
+    
+    // Subscribe to connection status
+    const unsubscribeConnection = realTimeDataService.onConnectionChange((status) => {
+      setIsRealTimeConnected(status.udp);
+      if (!status.udp) {
+        setError('Real-time connection lost. Switching to API data.');
+        setUseRealTimeData(false);
+      }
+    });
+
+    // Subscribe to fine updates
+    const unsubscribeFines = realTimeDataService.onFineUpdate((updatedFines) => {
+      // Apply filters if any
+      let filteredFines = updatedFines;
+      
+      if (filters.status) {
+        filteredFines = filteredFines.filter(fine => fine.status === filters.status);
+      }
+      
+      if (filters.minSpeed) {
+        filteredFines = filteredFines.filter(fine => fine.vehicleSpeed >= filters.minSpeed!);
+      }
+      
+      if (filters.maxSpeed) {
+        filteredFines = filteredFines.filter(fine => fine.vehicleSpeed <= filters.maxSpeed!);
+      }
+      
+      if (filters.startDate) {
+        filteredFines = filteredFines.filter(fine => 
+          new Date(fine.violationTime) >= new Date(filters.startDate!)
+        );
+      }
+      
+      if (filters.endDate) {
+        filteredFines = filteredFines.filter(fine => 
+          new Date(fine.violationTime) <= new Date(filters.endDate!)
+        );
+      }
+      
+      setFines(filteredFines);
+      setLoading(false);
+      setError(null);
+      
+      // Calculate stats from filtered fines
+      calculateStats(filteredFines);
+    });
+
+    // Subscribe to errors
+    const unsubscribeErrors = realTimeDataService.onError((error, source) => {
+      if (source === 'udp') {
+        setError(`Real-time data error: ${error}`);
+      }
+    });
+
+    // Request initial data
+    realTimeDataService.requestFineData(filters);
+
+    // Return cleanup function
+    return () => {
+      unsubscribeConnection();
+      unsubscribeFines();
+      unsubscribeErrors();
+    };
+  }, [filters, calculateStats]);
 
   useEffect(() => {
-    fetchFines();
-    fetchStats();
-  }, [filters]);
+    if (useRealTimeData) {
+      setupRealTimeData();
+    } else {
+      fetchFines();
+      fetchStats();
+    }
+    
+    return () => {
+      // Cleanup subscriptions when component unmounts
+    };
+  }, [filters, useRealTimeData, setupRealTimeData]);
 
   const fetchFines = async () => {
     try {
@@ -92,9 +188,19 @@ const Fines: React.FC = () => {
     }
   };
 
+
   const handleRefresh = () => {
-    fetchFines();
-    fetchStats();
+    if (useRealTimeData) {
+      realTimeDataService.requestFineData(filters);
+    } else {
+      fetchFines();
+      fetchStats();
+    }
+  };
+
+  const toggleDataSource = () => {
+    setUseRealTimeData(!useRealTimeData);
+    setError(null);
   };
 
   const getStatusColor = (status: string) => {

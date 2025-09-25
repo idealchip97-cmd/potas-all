@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Card,
@@ -25,9 +25,12 @@ import {
   Warning,
   Build,
   Refresh,
+  Wifi,
+  WifiOff,
 } from '@mui/icons-material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import apiService from '../services/api';
+import realTimeDataService from '../services/realTimeDataService';
 import { Radar } from '../types';
 
 interface RadarFilters {
@@ -42,10 +45,70 @@ const Radars: React.FC = () => {
   const [selectedRadar, setSelectedRadar] = useState<Radar | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [filters, setFilters] = useState<RadarFilters>({});
+  const [isRealTimeConnected, setIsRealTimeConnected] = useState(false);
+  const [useRealTimeData, setUseRealTimeData] = useState(true);
+
+  const setupRealTimeData = useCallback(() => {
+    setLoading(true);
+    
+    // Subscribe to connection status
+    const unsubscribeConnection = realTimeDataService.onConnectionChange((status) => {
+      setIsRealTimeConnected(status.udp);
+      if (!status.udp) {
+        setError('Real-time connection lost. Switching to API data.');
+        setUseRealTimeData(false);
+      }
+    });
+
+    // Subscribe to radar updates
+    const unsubscribeRadars = realTimeDataService.onRadarUpdate((updatedRadars) => {
+      // Apply filters if any
+      let filteredRadars = updatedRadars;
+      
+      if (filters.status) {
+        filteredRadars = filteredRadars.filter(radar => radar.status === filters.status);
+      }
+      
+      if (filters.location) {
+        filteredRadars = filteredRadars.filter(radar => 
+          radar.location.toLowerCase().includes(filters.location!.toLowerCase())
+        );
+      }
+      
+      setRadars(filteredRadars);
+      setLoading(false);
+      setError(null);
+    });
+
+    // Subscribe to errors
+    const unsubscribeErrors = realTimeDataService.onError((error, source) => {
+      if (source === 'udp') {
+        setError(`Real-time data error: ${error}`);
+      }
+    });
+
+    // Request initial data
+    realTimeDataService.requestRadarData();
+
+    // Return cleanup function
+    return () => {
+      unsubscribeConnection();
+      unsubscribeRadars();
+      unsubscribeErrors();
+    };
+  }, [filters]);
 
   useEffect(() => {
-    fetchRadars();
-  }, [filters]);
+    if (useRealTimeData) {
+      setupRealTimeData();
+    } else {
+      fetchRadars();
+    }
+    
+    return () => {
+      // Cleanup subscriptions when component unmounts
+    };
+  }, [filters, useRealTimeData, setupRealTimeData]);
 
   const fetchRadars = async () => {
     try {
@@ -81,7 +144,16 @@ const Radars: React.FC = () => {
   };
 
   const handleRefresh = () => {
-    fetchRadars();
+    if (useRealTimeData) {
+      realTimeDataService.requestRadarData();
+    } else {
+      fetchRadars();
+    }
+  };
+
+  const toggleDataSource = () => {
+    setUseRealTimeData(!useRealTimeData);
+    setError(null);
   };
 
   const getStatusColor = (status: string) => {
@@ -177,16 +249,34 @@ const Radars: React.FC = () => {
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" component="h1">
-          Radar Management
-        </Typography>
-        <Button
-          onClick={handleRefresh}
-          startIcon={<Refresh />}
-          disabled={loading}
-        >
-          Refresh
-        </Button>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Typography variant="h4" component="h1">
+            Radar Management
+          </Typography>
+          <Chip
+            icon={isRealTimeConnected ? <Wifi /> : <WifiOff />}
+            label={useRealTimeData ? (isRealTimeConnected ? 'Real-time' : 'Connecting...') : 'API Mode'}
+            color={isRealTimeConnected && useRealTimeData ? 'success' : 'default'}
+            size="small"
+          />
+        </Box>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            onClick={toggleDataSource}
+            variant="outlined"
+            size="small"
+            startIcon={useRealTimeData ? <WifiOff /> : <Wifi />}
+          >
+            {useRealTimeData ? 'Use API' : 'Use Real-time'}
+          </Button>
+          <Button
+            onClick={handleRefresh}
+            startIcon={<Refresh />}
+            disabled={loading}
+          >
+            Refresh
+          </Button>
+        </Box>
       </Box>
 
       {/* Filters */}

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -27,8 +27,13 @@ import {
   Info,
   Refresh,
   CameraAlt,
+  Wifi,
+  WifiOff,
+  CloudUpload,
 } from '@mui/icons-material';
 import { useDropzone } from 'react-dropzone';
+import realTimeDataService from '../services/realTimeDataService';
+import { PlateRecognitionImage } from '../services/ftpClient';
 
 interface UploadedFile {
   file: File;
@@ -63,12 +68,112 @@ const PlateRecognition: React.FC = () => {
   const [selectedResult, setSelectedResult] = useState<RecognitionResult | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [processingProgress, setProcessingProgress] = useState(0);
+  const [isRealTimeConnected, setIsRealTimeConnected] = useState(false);
+  const [useRealTimeData, setUseRealTimeData] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [statistics, setStatistics] = useState<Statistics>({
     totalInDatabase: 0,
     totalCars: 0,
     last24Hours: 0,
     aiModel: 'gpt-4o-mini'
   });
+
+  const setupRealTimeData = useCallback(() => {
+    // Subscribe to connection status
+    const unsubscribeConnection = realTimeDataService.onConnectionChange((status) => {
+      setIsRealTimeConnected(status.ftp);
+      if (!status.ftp) {
+        setError('FTP connection lost. Real-time image updates disabled.');
+      } else {
+        setError(null);
+      }
+    });
+
+    // Subscribe to image updates
+    const unsubscribeImages = realTimeDataService.onImageUpdate((images) => {
+      // Convert FTP images to RecognitionResult format
+      const convertedResults: RecognitionResult[] = images.map(img => ({
+        id: img.id,
+        filename: img.filename,
+        plateNumber: img.plateNumber || 'Processing...',
+        confidence: img.confidence || 0,
+        timestamp: img.timestamp,
+        imageUrl: img.imageUrl,
+        status: img.processed ? (img.plateNumber ? 'success' : 'failed') : 'processing',
+        error: img.processingStatus === 'failed' ? 'Processing failed' : undefined,
+        color: 'Unknown',
+        type: img.vehicleType || 'Unknown'
+      }));
+
+      setResults(convertedResults);
+      
+      // Update statistics
+      const totalCars = convertedResults.length;
+      const last24Hours = convertedResults.filter(r => {
+        const imgDate = new Date(r.timestamp);
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        return imgDate >= yesterday;
+      }).length;
+
+      setStatistics(prev => ({
+        ...prev,
+        totalCars,
+        last24Hours,
+        totalInDatabase: totalCars
+      }));
+    });
+
+    // Subscribe to new image notifications
+    const unsubscribeNewImages = realTimeDataService.onNewImage((image) => {
+      // Show notification or update UI for new image
+      console.log('New image received:', image.filename);
+    });
+
+    // Subscribe to image processing completion
+    const unsubscribeProcessed = realTimeDataService.onImageProcessed((imageId, result) => {
+      setResults(prev => prev.map(r => 
+        r.id === imageId 
+          ? {
+              ...r,
+              plateNumber: result.plateNumber || 'Failed',
+              confidence: result.confidence || 0,
+              status: result.success ? 'success' : 'failed',
+              error: result.success ? undefined : 'Processing failed'
+            }
+          : r
+      ));
+    });
+
+    // Subscribe to errors
+    const unsubscribeErrors = realTimeDataService.onError((error, source) => {
+      if (source === 'ftp') {
+        setError(`FTP error: ${error}`);
+      }
+    });
+
+    // Request initial image list
+    realTimeDataService.requestImageList();
+
+    // Return cleanup function
+    return () => {
+      unsubscribeConnection();
+      unsubscribeImages();
+      unsubscribeNewImages();
+      unsubscribeProcessed();
+      unsubscribeErrors();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (useRealTimeData) {
+      setupRealTimeData();
+    }
+    
+    return () => {
+      // Cleanup subscriptions when component unmounts
+    };
+  }, [useRealTimeData, setupRealTimeData]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const newFiles = acceptedFiles.map(file => ({
@@ -107,62 +212,97 @@ const PlateRecognition: React.FC = () => {
 
     setIsProcessing(true);
     setProcessingProgress(0);
-    const newResults: RecognitionResult[] = [];
+    setError(null);
 
     try {
-      for (let i = 0; i < uploadedFiles.length; i++) {
-        const file = uploadedFiles[i];
-        setProcessingProgress((i / uploadedFiles.length) * 100);
+      if (useRealTimeData && isRealTimeConnected) {
+        // Upload to FTP server for real-time processing
+        for (let i = 0; i < uploadedFiles.length; i++) {
+          const file = uploadedFiles[i];
+          setProcessingProgress((i / uploadedFiles.length) * 100);
 
-        try {
-          // Simulate OCR processing (replace with actual API call)
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          
-          // Mock plate recognition result
-          const mockPlateNumber = `ABC${Math.floor(Math.random() * 9000) + 1000}`;
-          const confidence = Math.floor(Math.random() * 30) + 70; // 70-100%
-          const colors = ['white', 'black', 'silver', 'blue', 'red', 'green'];
-          const types = ['sedan', 'suv', 'truck', 'hatchback', 'coupe'];
+          try {
+            // Upload image to FTP server
+            const uploadedImage = await realTimeDataService.uploadImage(file.file);
+            
+            // Add to results with processing status
+            const result: RecognitionResult = {
+              id: uploadedImage.id,
+              filename: uploadedImage.filename,
+              plateNumber: 'Processing...',
+              confidence: 0,
+              timestamp: uploadedImage.timestamp,
+              imageUrl: uploadedImage.imageUrl,
+              status: 'processing',
+              color: 'Unknown',
+              type: 'Unknown',
+            };
 
-          const result: RecognitionResult = {
-            id: file.id,
-            filename: file.file.name,
-            plateNumber: mockPlateNumber,
-            confidence,
-            timestamp: new Date().toISOString(),
-            imageUrl: file.preview,
-            status: confidence > 80 ? 'success' : 'failed',
-            error: confidence <= 80 ? 'Low confidence detection' : undefined,
-            color: colors[Math.floor(Math.random() * colors.length)],
-            type: types[Math.floor(Math.random() * types.length)],
-          };
-
-          newResults.push(result);
-        } catch (error) {
-          const result: RecognitionResult = {
-            id: file.id,
-            filename: file.file.name,
-            plateNumber: '',
-            confidence: 0,
-            timestamp: new Date().toISOString(),
-            imageUrl: file.preview,
-            status: 'failed',
-            error: 'Processing failed',
-          };
-          newResults.push(result);
+            setResults(prev => [result, ...prev]);
+          } catch (error) {
+            console.error('FTP upload error:', error);
+            setError(`Failed to upload ${file.file.name}: ${error}`);
+          }
         }
+      } else {
+        // Fallback to local processing
+        const newResults: RecognitionResult[] = [];
+
+        for (let i = 0; i < uploadedFiles.length; i++) {
+          const file = uploadedFiles[i];
+          setProcessingProgress((i / uploadedFiles.length) * 100);
+
+          try {
+            // Simulate OCR processing (replace with actual API call)
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // Mock plate recognition result
+            const mockPlateNumber = `ABC${Math.floor(Math.random() * 9000) + 1000}`;
+            const confidence = Math.floor(Math.random() * 30) + 70; // 70-100%
+            const colors = ['white', 'black', 'silver', 'blue', 'red', 'green'];
+            const types = ['sedan', 'suv', 'truck', 'hatchback', 'coupe'];
+
+            const result: RecognitionResult = {
+              id: file.id,
+              filename: file.file.name,
+              plateNumber: mockPlateNumber,
+              confidence,
+              timestamp: new Date().toISOString(),
+              imageUrl: file.preview,
+              status: confidence > 80 ? 'success' : 'failed',
+              error: confidence <= 80 ? 'Low confidence detection' : undefined,
+              color: colors[Math.floor(Math.random() * colors.length)],
+              type: types[Math.floor(Math.random() * types.length)],
+            };
+
+            newResults.push(result);
+          } catch (error) {
+            const result: RecognitionResult = {
+              id: file.id,
+              filename: file.file.name,
+              plateNumber: '',
+              confidence: 0,
+              timestamp: new Date().toISOString(),
+              imageUrl: file.preview,
+              status: 'failed',
+              error: 'Processing failed',
+            };
+            newResults.push(result);
+          }
+        }
+
+        setResults(prev => [...newResults, ...prev]);
+        
+        // Update statistics for local processing
+        setStatistics(prev => ({
+          ...prev,
+          totalInDatabase: prev.totalInDatabase + newResults.filter(r => r.status === 'success').length,
+          totalCars: newResults.filter(r => r.status === 'success').length,
+          last24Hours: prev.last24Hours + newResults.filter(r => r.status === 'success').length,
+        }));
       }
 
-      setResults(prev => [...newResults, ...prev]);
       setProcessingProgress(100);
-      
-      // Update statistics
-      setStatistics(prev => ({
-        ...prev,
-        totalInDatabase: prev.totalInDatabase + newResults.filter(r => r.status === 'success').length,
-        totalCars: newResults.filter(r => r.status === 'success').length,
-        last24Hours: prev.last24Hours + newResults.filter(r => r.status === 'success').length,
-      }));
       
       // Clear uploaded files after processing
       setTimeout(() => {
@@ -172,6 +312,7 @@ const PlateRecognition: React.FC = () => {
 
     } catch (error) {
       console.error('Processing error:', error);
+      setError(`Processing error: ${error}`);
     } finally {
       setIsProcessing(false);
     }
