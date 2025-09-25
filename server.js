@@ -6,6 +6,43 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
 
+// Environment validation and warnings
+const validateEnvironment = () => {
+  const warnings = [];
+  const errors = [];
+
+  // Check critical environment variables
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET.trim() === '') {
+    warnings.push('JWT_SECRET is not set. A random secret will be generated (not recommended for production).');
+  }
+
+  if (!process.env.DB_HOST) {
+    warnings.push('DB_HOST is not set. Using default: localhost');
+  }
+
+  if (!process.env.DB_NAME) {
+    warnings.push('DB_NAME is not set. Using default: radar_speed_detection');
+  }
+
+  // Log warnings
+  if (warnings.length > 0) {
+    console.log('\n⚠️  Environment Configuration Warnings:');
+    warnings.forEach(warning => console.log(`   • ${warning}`));
+    console.log('   • Please check your .env file and compare with .env.example\n');
+  }
+
+  // Log errors (if any critical ones are added later)
+  if (errors.length > 0) {
+    console.error('\n❌ Environment Configuration Errors:');
+    errors.forEach(error => console.error(`   • ${error}`));
+    console.error('   • Server cannot start with these errors.\n');
+    process.exit(1);
+  }
+};
+
+// Validate environment on startup
+validateEnvironment();
+
 const { sequelize } = require('./models');
 const externalDataService = require('./services/externalDataService');
 

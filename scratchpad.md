@@ -222,6 +222,20 @@ Replace demo data with real data from external servers:
 - Data parsing and validation
 - Integration with existing AI vision services
 
+## Current Issue - JWT Authentication Error on Linux Server
+### Problem
+- User reports 500 Internal Server Error when testing Sign In endpoint on Linux server
+- Error message: "secretOrPrivateKey must have a value"
+- This indicates JWT_SECRET environment variable is missing
+
+### Solution Plan
+- [x] Create fallback JWT secret generation in jwt.js utility
+- [x] Add environment variable validation on server startup
+- [x] Update documentation for proper .env setup
+- [x] Create comprehensive deployment guide
+- [x] Add JWT unit tests to verify fix works
+- [x] Test fix with automated tests
+
 ## Lessons Learned
 - **Database Design**: Proper indexing is crucial for performance with large datasets
 - **Report Generation**: Async processing is essential for complex report generation
@@ -229,3 +243,4 @@ Replace demo data with real data from external servers:
 - **Demo Data**: Realistic test data significantly improves testing quality
 - **API Documentation**: Detailed documentation with examples improves developer experience
 - **Database Compatibility**: When switching from MySQL to SQLite, need to update SQL functions (HOUR() → strftime('%H'))
+- **Environment Variables**: Always provide fallbacks for critical environment variables like JWT_SECRET
