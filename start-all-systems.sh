@@ -52,7 +52,7 @@ start_service() {
 
 # Start Backend Server (Node.js)
 echo "1️⃣ Starting Backend Server..."
-BACKEND_DIR="/Users/macbookair/Desktop/projects/potassium-backend-"
+BACKEND_DIR="/home/silos/Desktop/radar_system/potassium-backend-"
 if [ -d "$BACKEND_DIR" ]; then
     start_service "Backend Server" "$BACKEND_DIR" "npm start" 3000
 else
@@ -61,37 +61,8 @@ fi
 
 # Start Frontend Dashboard (React)
 echo "2️⃣ Starting Frontend Dashboard..."
-FRONTEND_DIR="/Users/macbookair/Desktop/projects/potassium-frontend-"
+FRONTEND_DIR="/home/silos/Desktop/radar_system/potassium-frontend"
 start_service "Frontend Dashboard" "$FRONTEND_DIR" "npm start" 3001
-
-# Start Plate Recognition System
-echo "3️⃣ Starting Plate Recognition System..."
-PLATE_DIR="/Users/macbookair/Desktop/projects/imagesPlateRecognitions/plate-recognition-dashboard"
-if [ -d "$PLATE_DIR" ]; then
-    # Check if build directory exists
-    if [ -d "$PLATE_DIR/build" ]; then
-        # Use serve to host the built application
-        if command -v serve &> /dev/null; then
-            cd "$PLATE_DIR"
-            start_service "Plate Recognition System" "$PLATE_DIR" "serve -s build -l 3002" 3002
-        else
-            echo "⚠️  'serve' command not found. Installing serve globally..."
-            npm install -g serve
-            if [ $? -eq 0 ]; then
-                cd "$PLATE_DIR"
-                start_service "Plate Recognition System" "$PLATE_DIR" "serve -s build -l 3002" 3002
-            else
-                echo "❌ Failed to install serve. Starting development server instead..."
-                start_service "Plate Recognition System" "$PLATE_DIR" "npm start" 3002
-            fi
-        fi
-    else
-        echo "⚠️  Build directory not found. Starting development server..."
-        start_service "Plate Recognition System" "$PLATE_DIR" "npm start" 3002
-    fi
-else
-    echo "❌ Plate Recognition directory not found: $PLATE_DIR"
-fi
 
 echo "=================================================="
 echo "🎯 System Status Summary:"
@@ -100,8 +71,7 @@ echo "=================================================="
 # Check all services
 services=(
     "Backend Server:3000"
-    "Frontend Dashboard:3001" 
-    "Plate Recognition:3002"
+    "Frontend Dashboard:3001"
 )
 
 for service in "${services[@]}"; do
@@ -117,12 +87,10 @@ echo ""
 echo "🌐 Access URLs:"
 echo "   • Main Dashboard: http://localhost:3001"
 echo "   • Backend API: http://localhost:3000"
-echo "   • Plate Recognition: http://localhost:3002"
 echo ""
 echo "📝 Logs are saved in the respective directories:"
-echo "   • backend server.log"
-echo "   • frontend dashboard.log" 
-echo "   • plate recognition system.log"
+echo "   • backend_server.log"
+echo "   • frontend_dashboard.log"
 echo ""
 echo "🛑 To stop all services, run: ./stop-all-systems.sh"
 echo "=================================================="

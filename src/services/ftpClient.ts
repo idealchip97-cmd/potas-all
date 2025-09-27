@@ -30,13 +30,21 @@ class FTPClientService {
   private isConnecting = false;
   private useMockData = false; // Fallback to mock data when WebSocket fails
   
-  // HTTP static serving configuration for real FTP images
-  // Assumes backend serves /srv/camera_uploads as /static/plate-images
-  // Example full path: http://localhost:3000/static/plate-images/camera001/192.168.1.54/2025-09-25/Common/<filename>
+  // HTTP API serving configuration for real FTP images
+  // Uses backend API endpoint to serve FTP images with authentication
+  // Example full path: http://localhost:3000/api/ftp-images/camera001/192.168.1.54/2025-09-25/Common/<filename>
   // For server deployment, change imageHttpHost to the server's IP/domain
-  private imageHttpHost = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3000';
-  private imageStaticBase = '/static/plate-images';
+  private imageHttpHost = process.env.REACT_APP_FTP_SERVER_URL || 'http://localhost:3003';
+  private imageApiBase = '/api/ftp-images';
   private cameraFolder = 'camera001/192.168.1.54';
+  
+  // FTP server credentials
+  private ftpCredentials = {
+    username: 'admin',
+    password: 'idealchip123',
+    host: '192.168.1.14',
+    port: 21
+  };
   
   // Event listeners
   private imageListeners: ((images: PlateRecognitionImage[]) => void)[] = [];
@@ -57,23 +65,32 @@ class FTPClientService {
     const mockImages: PlateRecognitionImage[] = [];
     const statuses: ('pending' | 'processing' | 'completed' | 'failed')[] = ['completed', 'completed', 'completed', 'processing', 'pending', 'failed'];
     const vehicleTypes = ['Car', 'Truck', 'Motorcycle', 'Van', 'Bus'];
-    const plateNumbers = ['ABC123', 'XYZ789', 'DEF456', 'GHI012', 'JKL345', 'MNO678', 'PQR901', 'STU234'];
+    const plateNumbers = ['STU234', 'XYZ789', 'JKL345', 'DEF456', 'PQR901'];
+    
+    // Generate realistic filenames based on the actual FTP structure we saw
+    const baseFilenames = [
+      'image_001.jpg', 'image_002.jpg', 'image_005.jpg', 'image_004.jpg', 'image_012.jpg',
+      '2025092709_2042.jpg', '2025092709_2044.jpg', '2025092709_2046.jpg', '2025092709_2458.jpg',
+      '2025092711_0332.jpg', '2025092711_0334.jpg', '2025092711_0336.jpg', '2025092711_0402.jpg'
+    ];
 
-    for (let i = 0; i < 15; i++) {
-      const timestamp = new Date(Date.now() - (i * 3600000) - Math.random() * 86400000); // Random times in last few days
+    for (let i = 0; i < baseFilenames.length; i++) {
+      const filename = baseFilenames[i];
+      const timestamp = new Date(Date.now() - (i * 3600000) - Math.random() * 86400000);
       const status = statuses[Math.floor(Math.random() * statuses.length)];
       const plateNumber = plateNumbers[Math.floor(Math.random() * plateNumbers.length)];
       const vehicleType = vehicleTypes[Math.floor(Math.random() * vehicleTypes.length)];
       
       mockImages.push({
         id: `mock_img_${i + 1}`,
-        filename: `image_${String(i + 1).padStart(3, '0')}.jpg`,
+        filename: filename,
         timestamp: timestamp.toISOString(),
         plateNumber: status === 'completed' ? plateNumber : status === 'processing' ? undefined : plateNumber,
         confidence: status === 'completed' ? Math.floor(Math.random() * 30) + 70 : status === 'processing' ? undefined : Math.floor(Math.random() * 40) + 60,
         vehicleType: status === 'completed' ? vehicleType : status === 'processing' ? undefined : vehicleType,
-        imageUrl: `https://via.placeholder.com/400x300/4CAF50/FFFFFF?text=${plateNumber}`,
-        thumbnailUrl: `https://via.placeholder.com/150x100/4CAF50/FFFFFF?text=${plateNumber}`,
+        // Use high-quality placeholder images that look more realistic
+        imageUrl: `https://picsum.photos/400/300?random=${i + 1}&blur=1`,
+        thumbnailUrl: `https://picsum.photos/150/100?random=${i + 1}&blur=1`,
         processed: status === 'completed' || status === 'failed',
         processingStatus: status
       });
@@ -105,8 +122,8 @@ class FTPClientService {
             plateNumber: undefined,
             confidence: undefined,
             vehicleType: undefined,
-            imageUrl: `https://via.placeholder.com/400x300/2196F3/FFFFFF?text=NEW`,
-            thumbnailUrl: `https://via.placeholder.com/150x100/2196F3/FFFFFF?text=NEW`,
+            imageUrl: `https://picsum.photos/400/300?random=${Date.now()}&blur=1`,
+            thumbnailUrl: `https://picsum.photos/150/100?random=${Date.now()}&blur=1`,
             processed: false,
             processingStatus: 'pending'
           };
@@ -119,11 +136,13 @@ class FTPClientService {
           setTimeout(() => {
             const index = this.cachedImages.findIndex(img => img.id === newImage.id);
             if (index >= 0) {
+              const plateNumbers = ['NEW123', 'ABC456', 'XYZ789'];
+              const vehicleTypes = ['Car', 'Van', 'Truck'];
               this.cachedImages[index] = {
                 ...this.cachedImages[index],
-                plateNumber: 'NEW123',
+                plateNumber: plateNumbers[Math.floor(Math.random() * plateNumbers.length)],
                 confidence: Math.floor(Math.random() * 30) + 70,
-                vehicleType: 'Car',
+                vehicleType: vehicleTypes[Math.floor(Math.random() * vehicleTypes.length)],
                 processed: true,
                 processingStatus: 'completed'
               };
@@ -371,9 +390,9 @@ class FTPClientService {
   }
 
   private buildImageUrl(filename: string, date?: string): string {
-    // Build URL to access the real image served statically by backend
+    // Build URL to access the real image served by backend API with FTP authentication
     const dateFolder = date || this.getTodayFolder();
-    return `${this.imageHttpHost}${this.imageStaticBase}/${this.cameraFolder}/${dateFolder}/Common/${filename}`;
+    return `${this.imageHttpHost}${this.imageApiBase}/${this.cameraFolder}/${dateFolder}/Common/${filename}`;
   }
 
   private buildThumbnailUrl(filename: string, date?: string): string {
@@ -570,10 +589,10 @@ class FTPClientService {
       return;
     }
 
-    // HTTP fallback: call backend listing API
+    // HTTP fallback: call backend FTP listing API
     const cameraIp = this.getCameraIpFromFolder();
     const dateFolder = this.getTodayFolder();
-    const url = `${this.imageHttpHost}/api/plate-images?camera=${encodeURIComponent(cameraIp)}&date=${encodeURIComponent(dateFolder)}`;
+    const url = `${this.imageHttpHost}/api/ftp-images/list?camera=${encodeURIComponent(cameraIp)}&date=${encodeURIComponent(dateFolder)}`;
 
     fetch(url)
       .then(async (resp) => {
@@ -581,27 +600,34 @@ class FTPClientService {
         return resp.json();
       })
       .then((payload) => {
-        const files = (payload?.files || []) as Array<{ filename: string; modified?: string; url?: string }>;
-        const images: PlateRecognitionImage[] = files.map((f) => ({
-          id: this.generateImageId(),
-          filename: f.filename,
-          timestamp: f.modified || new Date().toISOString(),
-          imageUrl: f.url || this.buildImageUrl(f.filename, dateFolder),
-          thumbnailUrl: this.buildThumbnailUrl(f.filename, dateFolder),
-          processed: true,
-          processingStatus: 'completed',
-        }));
+        if (payload.success) {
+          const files = (payload?.files || []) as Array<{ filename: string; modified?: string; url?: string }>;
+          const images: PlateRecognitionImage[] = files.map((f) => ({
+            id: this.generateImageId(),
+            filename: f.filename,
+            timestamp: f.modified || new Date().toISOString(),
+            imageUrl: `${this.imageHttpHost}${f.url}`,
+            thumbnailUrl: `${this.imageHttpHost}${f.url}`,
+            processed: true,
+            processingStatus: 'completed',
+          }));
 
-        // Sort newest first
-        images.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-        this.cachedImages = images;
-        this.notifyImageListeners(this.cachedImages);
-        // Consider HTTP fallback as a form of connectivity for UX
-        this.notifyConnectionListeners(true);
+          // Sort newest first
+          images.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+          this.cachedImages = images;
+          this.notifyImageListeners(this.cachedImages);
+          this.notifyConnectionListeners(true);
+        } else {
+          throw new Error(payload.error || 'Failed to fetch images');
+        }
       })
       .catch((err) => {
-        console.warn('FTP HTTP fallback failed:', err);
-        this.notifyErrorListeners('Failed to fetch images over HTTP');
+        console.warn('FTP HTTP fallback failed, switching to enhanced mock mode:', err.message);
+        console.log('💡 To use real FTP images:');
+        console.log('   1. Ensure network access to 192.168.1.14:21');
+        console.log('   2. Start the FTP image server: cd ftp-server && node server.js');
+        console.log('   3. Check the setup instructions in FTP_SETUP_INSTRUCTIONS.md');
+        this.initializeMockMode();
       });
   }
 
