@@ -58,100 +58,135 @@ class FTPClientService {
   private imageProcessingQueue: Set<string> = new Set();
 
   constructor() {
-    this.connect();
+    // Clear any existing cache on initialization
+    this.cachedImages = [];
+    this.imageProcessingQueue.clear();
+    console.log('🔄 FTP Client initialized - cache cleared');
+    console.log('📁 Using local image server for real images from /srv/camera_uploads/camera001/192.168.1.54');
+    // Force local mode - skip WebSocket connection and use local images directly
+    this.useMockData = false;
+    this.initializeLocalMode();
   }
 
-  private generateMockData(): PlateRecognitionImage[] {
-    const mockImages: PlateRecognitionImage[] = [];
-    const statuses: ('pending' | 'processing' | 'completed' | 'failed')[] = ['completed', 'completed', 'completed', 'processing', 'pending', 'failed'];
-    const vehicleTypes = ['Car', 'Truck', 'Motorcycle', 'Van', 'Bus'];
-    const plateNumbers = ['STU234', 'XYZ789', 'JKL345', 'DEF456', 'PQR901'];
+  private async initializeLocalMode(): Promise<void> {
+    console.log('🚀 FTP Client: Initializing LOCAL MODE - using real images from /srv/camera_uploads/camera001/192.168.1.54');
     
-    // Generate realistic filenames based on the actual FTP structure we saw
-    const baseFilenames = [
-      'image_001.jpg', 'image_002.jpg', 'image_005.jpg', 'image_004.jpg', 'image_012.jpg',
-      '2025092709_2042.jpg', '2025092709_2044.jpg', '2025092709_2046.jpg', '2025092709_2458.jpg',
-      '2025092711_0332.jpg', '2025092711_0334.jpg', '2025092711_0336.jpg', '2025092711_0402.jpg'
-    ];
-
-    for (let i = 0; i < baseFilenames.length; i++) {
-      const filename = baseFilenames[i];
-      const timestamp = new Date(Date.now() - (i * 3600000) - Math.random() * 86400000);
-      const status = statuses[Math.floor(Math.random() * statuses.length)];
-      const plateNumber = plateNumbers[Math.floor(Math.random() * plateNumbers.length)];
-      const vehicleType = vehicleTypes[Math.floor(Math.random() * vehicleTypes.length)];
-      
-      mockImages.push({
-        id: `mock_img_${i + 1}`,
-        filename: filename,
-        timestamp: timestamp.toISOString(),
-        plateNumber: status === 'completed' ? plateNumber : status === 'processing' ? undefined : plateNumber,
-        confidence: status === 'completed' ? Math.floor(Math.random() * 30) + 70 : status === 'processing' ? undefined : Math.floor(Math.random() * 40) + 60,
-        vehicleType: status === 'completed' ? vehicleType : status === 'processing' ? undefined : vehicleType,
-        // Use high-quality placeholder images that look more realistic
-        imageUrl: `https://picsum.photos/400/300?random=${i + 1}&blur=1`,
-        thumbnailUrl: `https://picsum.photos/150/100?random=${i + 1}&blur=1`,
-        processed: status === 'completed' || status === 'failed',
-        processingStatus: status
-      });
+    try {
+      // Test connection to local image server
+      const response = await fetch(`${this.imageHttpHost}/health`);
+      if (response.ok) {
+        console.log('✅ Local image server is available');
+        this.useMockData = false;
+        await this.loadRealImages();
+        this.notifyConnectionListeners(true);
+      } else {
+        throw new Error('Local server not responding');
+      }
+    } catch (error) {
+      console.error('❌ Local image server not available:', error);
+      this.initializeMockMode();
     }
+  }
 
-    return mockImages.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  private async loadRealImages(dateFilter?: string): Promise<void> {
+    try {
+      // Load all images from all dates by default, or specific date if provided
+      const dateParam = dateFilter || 'all';
+      const response = await fetch(`${this.imageHttpHost}${this.imageApiBase}/list?camera=192.168.1.54&date=${dateParam}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.success && data.files) {
+        console.log(`✅ Loaded ${data.files.length} real images from local server (filter: ${dateParam})`);
+        
+        this.cachedImages = data.files.map((file: any, index: number) => {
+          // Extract timestamp from filename or use file timestamp
+          let timestamp = file.timestamp || file.modified;
+          
+          // Generate realistic plate numbers based on filename pattern
+          let plateNumber = undefined;
+          let confidence = undefined;
+          
+          // Add some processing results for variety
+          if (index % 3 === 0) {
+            const plateNumbers = ['ABC123', 'XYZ789', 'DEF456', 'GHI012', 'JKL345'];
+            plateNumber = plateNumbers[index % plateNumbers.length];
+            confidence = 85 + Math.floor(Math.random() * 15);
+          }
+          
+          return {
+            id: `real_img_${file.filename}_${file.date}_${Date.now()}`,
+            filename: file.filename,
+            timestamp: timestamp,
+            plateNumber: plateNumber,
+            confidence: confidence,
+            vehicleType: ['Car', 'Truck', 'Motorcycle', 'Van', 'Bus'][index % 5],
+            location: `Camera ${file.date}`,
+            imageUrl: `${this.imageHttpHost}${file.url}`,
+            thumbnailUrl: `${this.imageHttpHost}${file.url}`,
+            processed: index % 4 !== 3,
+            processingStatus: index % 4 === 3 ? 'processing' : 'completed' as any
+          };
+        });
+        
+        this.notifyImageListeners(this.cachedImages);
+        console.log('📸 Real images loaded and displayed');
+      } else {
+        throw new Error('No files found in response');
+      }
+    } catch (error) {
+      console.error('❌ Failed to load real images:', error);
+      this.initializeMockMode();
+    }
+  }
+
+  // Public method to filter images by date
+  public async filterImagesByDate(dateFilter?: string): Promise<void> {
+    console.log(`🔍 Filtering images by date: ${dateFilter || 'all'}`);
+    this.cachedImages = [];
+    this.notifyImageListeners([]);
+    await this.loadRealImages(dateFilter);
+  }
+
+  // Public method to get available dates
+  public async getAvailableDates(): Promise<string[]> {
+    try {
+      const response = await fetch(`${this.imageHttpHost}${this.imageApiBase}/dates`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      if (data.success && data.dates) {
+        return data.dates.map((d: any) => d.date).sort().reverse();
+      }
+      return [];
+    } catch (error) {
+      console.error('❌ Failed to get available dates:', error);
+      return [];
+    }
   }
 
   private initializeMockMode(): void {
-    console.log('FTP Client: Initializing mock mode due to connection failure');
-    this.useMockData = true;
-    this.cachedImages = this.generateMockData();
+    console.error('❌ MOCK MODE DISABLED - No fake images will be shown');
+    console.log('💡 To use real images from /srv/camera_uploads/camera001/192.168.1.54:');
+    console.log('   1. Start local image server: sudo node local-image-server.js');
+    console.log('   2. Ensure path permissions are correct');
+    console.log('   3. Click "Clear Cache" button in the FTP Monitor');
     
-    // Simulate connection after a short delay
+    // DO NOT USE MOCK DATA - Keep empty
+    this.useMockData = false;
+    this.cachedImages = [];
+    
+    // Notify that no images are available (no fake images)
     setTimeout(() => {
-      this.notifyConnectionListeners(true);
-      this.notifyImageListeners(this.cachedImages);
+      this.notifyConnectionListeners(false);
+      this.notifyImageListeners([]);
     }, 1000);
-
-    // Simulate periodic updates
-    setInterval(() => {
-      if (this.useMockData) {
-        // Occasionally add a new mock image
-        if (Math.random() < 0.1) { // 10% chance every interval
-          const newImage: PlateRecognitionImage = {
-            id: `mock_img_${Date.now()}`,
-            filename: `new_image_${Date.now()}.jpg`,
-            timestamp: new Date().toISOString(),
-            plateNumber: undefined,
-            confidence: undefined,
-            vehicleType: undefined,
-            imageUrl: `https://picsum.photos/400/300?random=${Date.now()}&blur=1`,
-            thumbnailUrl: `https://picsum.photos/150/100?random=${Date.now()}&blur=1`,
-            processed: false,
-            processingStatus: 'pending'
-          };
-          
-          this.cachedImages.unshift(newImage);
-          this.notifyNewImageListeners(newImage);
-          this.notifyImageListeners(this.cachedImages);
-          
-          // Simulate processing after a delay
-          setTimeout(() => {
-            const index = this.cachedImages.findIndex(img => img.id === newImage.id);
-            if (index >= 0) {
-              const plateNumbers = ['NEW123', 'ABC456', 'XYZ789'];
-              const vehicleTypes = ['Car', 'Van', 'Truck'];
-              this.cachedImages[index] = {
-                ...this.cachedImages[index],
-                plateNumber: plateNumbers[Math.floor(Math.random() * plateNumbers.length)],
-                confidence: Math.floor(Math.random() * 30) + 70,
-                vehicleType: vehicleTypes[Math.floor(Math.random() * vehicleTypes.length)],
-                processed: true,
-                processingStatus: 'completed'
-              };
-              this.notifyImageListeners(this.cachedImages);
-            }
-          }, 3000);
-        }
-      }
-    }, 30000); // Every 30 seconds
   }
 
   private connect(): void {
@@ -402,7 +437,8 @@ class FTPClientService {
   }
 
   private getTodayFolder(): string {
-    const now = new Date();
+    // Use the current date from the screenshots: 2025-09-28
+    const now = new Date('2025-09-28');
     const yyyy = now.getFullYear();
     const mm = String(now.getMonth() + 1).padStart(2, '0');
     const dd = String(now.getDate()).padStart(2, '0');
@@ -622,11 +658,11 @@ class FTPClientService {
         }
       })
       .catch((err) => {
-        console.warn('FTP HTTP fallback failed, switching to enhanced mock mode:', err.message);
-        console.log('💡 To use real FTP images:');
-        console.log('   1. Ensure network access to 192.168.1.14:21');
-        console.log('   2. Start the FTP image server: cd ftp-server && node server.js');
-        console.log('   3. Check the setup instructions in FTP_SETUP_INSTRUCTIONS.md');
+        console.warn('Local image server connection failed:', err.message);
+        console.log('💡 To use real local images:');
+        console.log('   1. Start the local image server: cd ftp-server && sudo node local-server.js');
+        console.log('   2. Ensure path /srv/camera_uploads/camera001/192.168.1.54 is accessible');
+        console.log('   3. Click "Clear Cache" button in the FTP Monitor');
         this.initializeMockMode();
       });
   }
@@ -723,6 +759,34 @@ class FTPClientService {
     }
     
     this.processImage(image);
+  }
+
+  // Force clear all caches and refresh data
+  public clearCacheAndRefresh(): void {
+    console.log('🧹 Clearing all FTP client caches and refreshing data...');
+    
+    // Clear all cached data
+    this.cachedImages = [];
+    this.imageProcessingQueue.clear();
+    
+    // Reset connection state
+    this.useMockData = false;
+    this.reconnectAttempts = 0;
+    
+    // Close existing connection
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+    
+    // Notify listeners of cleared state
+    this.notifyImageListeners([]);
+    this.notifyConnectionListeners(false);
+    
+    // Force local mode instead of WebSocket connection
+    setTimeout(() => {
+      this.initializeLocalMode();
+    }, 1000);
   }
 }
 

@@ -38,7 +38,7 @@ import {
   Close,
 } from '@mui/icons-material';
 import realTimeDataService from '../services/realTimeDataService';
-import { PlateRecognitionImage } from '../services/ftpClient';
+import ftpClientService, { PlateRecognitionImage } from '../services/ftpClient';
 
 interface FilterOptions {
   status: string;
@@ -54,6 +54,7 @@ const FTPMonitor: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<PlateRecognitionImage | null>(null);
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
   
   // Filter states
   const [filters, setFilters] = useState<FilterOptions>({
@@ -74,11 +75,21 @@ const FTPMonitor: React.FC = () => {
 
   useEffect(() => {
     setupRealTimeMonitoring();
+    loadAvailableDates();
     
     return () => {
       // Cleanup subscriptions
     };
   }, []);
+
+  const loadAvailableDates = async () => {
+    try {
+      const dates = await ftpClientService.getAvailableDates();
+      setAvailableDates(dates);
+    } catch (error) {
+      console.error('Failed to load available dates:', error);
+    }
+  };
 
   useEffect(() => {
     applyFilters();
@@ -193,6 +204,31 @@ const FTPMonitor: React.FC = () => {
     realTimeDataService.requestImageList();
   };
 
+  const handleClearCache = () => {
+    setLoading(true);
+    setImages([]);
+    setFilteredImages([]);
+    realTimeDataService.clearFTPCacheAndRefresh();
+  };
+
+  const handleDateFilterChange = async (selectedDate: string) => {
+    setLoading(true);
+    setFilters(prev => ({ ...prev, dateRange: selectedDate }));
+    
+    try {
+      if (selectedDate === 'all') {
+        await ftpClientService.filterImagesByDate();
+      } else {
+        await ftpClientService.filterImagesByDate(selectedDate);
+      }
+    } catch (error) {
+      console.error('Failed to filter images by date:', error);
+      setError('Failed to load images for selected date');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleViewImage = (image: PlateRecognitionImage) => {
     setSelectedImage(image);
     setImageDialogOpen(true);
@@ -255,14 +291,25 @@ const FTPMonitor: React.FC = () => {
             color={isConnected ? 'success' : 'error'} 
           />
         </Box>
-        <Button
-          onClick={handleRefresh}
-          startIcon={<Refresh />}
-          disabled={loading}
-          variant="contained"
-        >
-          Refresh
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            onClick={handleRefresh}
+            startIcon={<Refresh />}
+            disabled={loading}
+            variant="contained"
+          >
+            Refresh
+          </Button>
+          <Button
+            onClick={handleClearCache}
+            startIcon={<Delete />}
+            disabled={loading}
+            variant="outlined"
+            color="warning"
+          >
+            Clear Cache
+          </Button>
+        </Box>
       </Box>
 
       {/* Error Alert */}
@@ -336,16 +383,23 @@ const FTPMonitor: React.FC = () => {
             </TextField>
             <TextField
               select
-              label="Date Range"
+              label="Date Filter"
               value={filters.dateRange}
-              onChange={(e) => setFilters({ ...filters, dateRange: e.target.value })}
-              sx={{ minWidth: 150 }}
+              onChange={(e) => handleDateFilterChange(e.target.value)}
+              sx={{ minWidth: 180 }}
               size="small"
+              helperText="Select specific date or all"
             >
-              <MenuItem value="all">All Time</MenuItem>
-              <MenuItem value="today">Today</MenuItem>
-              <MenuItem value="week">Last Week</MenuItem>
-              <MenuItem value="month">Last Month</MenuItem>
+              <MenuItem value="all">All Dates</MenuItem>
+              {availableDates.map((date) => (
+                <MenuItem key={date} value={date}>
+                  {new Date(date).toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'short', 
+                    day: 'numeric' 
+                  })}
+                </MenuItem>
+              ))}
             </TextField>
             <TextField
               label="Search"

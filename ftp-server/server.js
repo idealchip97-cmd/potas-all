@@ -22,6 +22,9 @@ const FTP_CONFIG = {
   secure: false
 };
 
+// FTP path configuration
+const FTP_BASE_PATH = '/srv/camera_uploads/camera001/192.168.1.54';
+
 // Cache for FTP connections to avoid reconnecting for each request
 let ftpClient = null;
 let ftpConnected = false;
@@ -49,12 +52,30 @@ async function initializeFTP() {
     
     // Test directory access
     try {
-      const testPath = '/srv/camera_uploads/camera001/192.168.1.54/2025-09-27/Common/';
-      const files = await ftpClient.list(testPath);
-      console.log(`✅ Successfully listed ${files.length} files in ${testPath}`);
-      console.log('Sample files:', files.slice(0, 3).map(f => f.name));
+      console.log(`🔍 Testing base path: ${FTP_BASE_PATH}`);
+      const baseDirs = await ftpClient.list(FTP_BASE_PATH);
+      console.log(`✅ Found ${baseDirs.length} date directories in base path`);
+      
+      // Test the most recent date directory
+      const dateDirs = baseDirs.filter(d => d.isDirectory && /\d{4}-\d{2}-\d{2}/.test(d.name));
+      if (dateDirs.length > 0) {
+        const latestDate = dateDirs.sort((a, b) => b.name.localeCompare(a.name))[0];
+        const testPath = `${FTP_BASE_PATH}/${latestDate.name}/Common/`;
+        console.log(`🔍 Testing latest date directory: ${testPath}`);
+        
+        try {
+          const files = await ftpClient.list(testPath);
+          const imageFiles = files.filter(f => f.isFile && /\.(jpg|jpeg|png|gif|bmp)$/i.test(f.name));
+          console.log(`✅ Found ${imageFiles.length} image files in ${testPath}`);
+          if (imageFiles.length > 0) {
+            console.log('Sample files:', imageFiles.slice(0, 3).map(f => f.name));
+          }
+        } catch (commonError) {
+          console.warn(`⚠️ Common directory test failed: ${commonError.message}`);
+        }
+      }
     } catch (testError) {
-      console.warn('⚠️ Directory test failed:', testError.message);
+      console.warn('⚠️ Base directory test failed:', testError.message);
     }
     
     // Handle connection errors
@@ -100,6 +121,40 @@ async function ensureFTPConnection() {
   }
 }
 
+// API endpoint to list available dates
+app.get('/api/ftp-images/dates', async (req, res) => {
+  try {
+    console.log('📅 Listing available dates...');
+    
+    await ensureFTPConnection();
+    
+    const baseDirs = await ftpClient.list(FTP_BASE_PATH);
+    const dateDirs = baseDirs
+      .filter(d => d.isDirectory && /\d{4}-\d{2}-\d{2}/.test(d.name))
+      .map(d => ({
+        date: d.name,
+        modified: d.modifiedAt ? d.modifiedAt.toISOString() : null
+      }))
+      .sort((a, b) => b.date.localeCompare(a.date));
+    
+    console.log(`✅ Found ${dateDirs.length} date directories`);
+    
+    res.json({
+      success: true,
+      dates: dateDirs,
+      total: dateDirs.length
+    });
+    
+  } catch (error) {
+    console.error('❌ Error listing dates:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      dates: []
+    });
+  }
+});
+
 // API endpoint to list FTP images
 app.get('/api/ftp-images/list', async (req, res) => {
   try {
@@ -109,7 +164,7 @@ app.get('/api/ftp-images/list', async (req, res) => {
     
     await ensureFTPConnection();
     
-    const ftpPath = `/srv/camera_uploads/camera001/${camera}/${date}/Common/`;
+    const ftpPath = `${FTP_BASE_PATH}/${date}/Common/`;
     console.log(`📁 Accessing FTP directory: ${ftpPath}`);
     
     const files = await ftpClient.list(ftpPath);
@@ -181,7 +236,7 @@ app.get('/api/ftp-images/camera001/:camera/:date/Common/:filename', async (req, 
     
     await ensureFTPConnection();
     
-    const ftpPath = `/srv/camera_uploads/camera001/${camera}/${date}/Common/${filename}`;
+    const ftpPath = `${FTP_BASE_PATH}/${date}/Common/${filename}`;
     console.log(`📥 FTP path: ${ftpPath}`);
     
     // Create a temporary buffer to store the image

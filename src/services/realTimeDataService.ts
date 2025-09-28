@@ -320,6 +320,11 @@ class RealTimeDataService {
     }
   }
 
+  public clearFTPCacheAndRefresh(): void {
+    console.log('🧹 Clearing FTP cache and refreshing data...');
+    ftpClient.clearCacheAndRefresh();
+  }
+
   // Health check method
   public async performHealthCheck(): Promise<{
     udp: { connected: boolean; lastUpdate: string | null };
