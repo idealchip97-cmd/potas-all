@@ -184,8 +184,9 @@ const FinesImagesMonitor: React.FC = () => {
       filtered = filtered.filter(img => img.processingStatus === filters.status);
     }
 
-    // Date range filter
-    if (filters.dateRange !== 'all') {
+    // Date range filter - only apply for relative date ranges, not specific dates
+    // Specific dates (like "2025-09-30") are handled by the API call
+    if (filters.dateRange !== 'all' && !filters.dateRange.match(/^\d{4}-\d{2}-\d{2}$/)) {
       const now = new Date();
       let cutoffDate = new Date();
       
