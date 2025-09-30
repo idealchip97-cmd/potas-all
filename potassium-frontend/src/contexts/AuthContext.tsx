@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import * as React from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, AuthContextType } from '../types';
-import apiService from '../services/api';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -51,47 +51,57 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
+    console.log('🔐 Login attempt for:', email);
+    
     try {
       setIsLoading(true);
       
-      // Mock authentication - no backend API call
-      console.log('Auth: Mock login attempt for', email);
-      
-      // Check demo accounts
-      const demoAccounts = [
-        { email: 'admin@potasfactory.com', password: 'admin123', role: 'Admin' },
-        { email: 'operator@potasfactory.com', password: 'operator123', role: 'Operator' },
-        { email: 'viewer@potasfactory.com', password: 'viewer123', role: 'Viewer' },
+      // Simple demo accounts - always works
+      const validCredentials = [
+        { email: 'admin@potasfactory.com', password: 'admin123', role: 'admin' },
+        { email: 'operator@potasfactory.com', password: 'operator123', role: 'operator' },
+        { email: 'viewer@potasfactory.com', password: 'viewer123', role: 'viewer' },
       ];
       
-      const account = demoAccounts.find(acc => acc.email === email && acc.password === password);
+      // Find matching credentials
+      const account = validCredentials.find(acc => 
+        acc.email.toLowerCase() === email.toLowerCase() && 
+        acc.password === password
+      );
       
       if (account) {
-        const mockToken = `mock_token_${Date.now()}`;
-        const mockUser: User = {
+        // Create user session
+        const authToken = `token_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const userData: User = {
           id: 1,
           email: account.email,
-          firstName: account.role,
+          firstName: account.role.charAt(0).toUpperCase() + account.role.slice(1),
           lastName: 'User',
-          role: account.role.toLowerCase() as 'admin' | 'operator' | 'viewer',
+          role: account.role as 'admin' | 'operator' | 'viewer',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
         
-        setToken(mockToken);
-        setUser(mockUser);
+        // Set state immediately
+        setToken(authToken);
+        setUser(userData);
         
-        localStorage.setItem('authToken', mockToken);
-        localStorage.setItem('user', JSON.stringify(mockUser));
+        // Save to localStorage
+        try {
+          localStorage.setItem('authToken', authToken);
+          localStorage.setItem('user', JSON.stringify(userData));
+          console.log('✅ Login successful - Session saved');
+        } catch (storageError) {
+          console.warn('⚠️ Could not save to localStorage:', storageError);
+        }
         
-        console.log('Auth: Mock login successful for', account.role);
         return true;
+      } else {
+        console.log('❌ Invalid credentials');
+        return false;
       }
-      
-      console.log('Auth: Mock login failed - invalid credentials');
-      return false;
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('❌ Login error:', error);
       return false;
     } finally {
       setIsLoading(false);

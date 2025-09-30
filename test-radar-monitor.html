@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Radar Info Monitor</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .result { margin: 10px 0; padding: 10px; background: #f8f9fa; border: 1px solid #dee2e6; }
+        .error { background: #f8d7da; border-color: #f5c6cb; }
+        .success { background: #d4edda; border-color: #c3e6cb; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Radar Info Monitor Test</h1>
+    
+    <div id="results"></div>
+    
+    <script>
+        function log(message, type = 'info') {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `result ${type}`;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${message}`;
+            results.appendChild(div);
+            console.log(message);
+        }
+        
+        async function testRadarMonitor() {
+            log('🧪 Testing Radar Info Monitor APIs...', 'info');
+            
+            try {
+                // Test 1: Backend health
+                log('1. Testing backend health...', 'info');
+                const healthResponse = await fetch('http://localhost:3000/health');
+                if (healthResponse.ok) {
+                    log('✅ Backend health check passed', 'success');
+                } else {
+                    log('❌ Backend health check failed: ' + healthResponse.status, 'error');
+                }
+                
+                // Test 2: UDP status
+                log('2. Testing UDP status...', 'info');
+                const udpResponse = await fetch('http://localhost:3000/api/udp/status');
+                if (udpResponse.ok) {
+                    const udpData = await udpResponse.json();
+                    log('✅ UDP status check passed: ' + JSON.stringify(udpData, null, 2), 'success');
+                } else {
+                    log('❌ UDP status check failed: ' + udpResponse.status, 'error');
+                }
+                
+                // Test 3: Frontend accessibility
+                log('3. Testing frontend accessibility...', 'info');
+                const frontendResponse = await fetch('http://localhost:3001');
+                if (frontendResponse.ok) {
+                    log('✅ Frontend is accessible', 'success');
+                } else {
+                    log('❌ Frontend not accessible: ' + frontendResponse.status, 'error');
+                }
+                
+                // Test 4: Direct page test
+                log('4. Testing radar-info-monitor page...', 'info');
+                const pageResponse = await fetch('http://localhost:3001/radar-info-monitor');
+                if (pageResponse.ok) {
+                    log('✅ Radar Info Monitor page is accessible', 'success');
+                } else {
+                    log('❌ Radar Info Monitor page failed: ' + pageResponse.status, 'error');
+                }
+                
+            } catch (error) {
+                log('❌ Test error: ' + error.message, 'error');
+            }
+        }
+        
+        // Run tests
+        testRadarMonitor();
+        
+        // Test every 10 seconds
+        setInterval(testRadarMonitor, 10000);
+    </script>
+</body>
+</html>

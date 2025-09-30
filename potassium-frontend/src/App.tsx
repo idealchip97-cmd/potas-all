@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { CssBaseline } from '@mui/material';
-import { AuthProvider } from './contexts/AuthContext';
+import { SimpleAuthProvider } from './contexts/SimpleAuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import Layout from './components/Layout/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -19,7 +19,7 @@ function App() {
   return (
     <ThemeProvider>
       <CssBaseline />
-      <AuthProvider>
+      <SimpleAuthProvider>
         <Router>
           <Routes>
             <Route path="/login" element={<Login />} />
@@ -126,7 +126,7 @@ function App() {
             />
           </Routes>
         </Router>
-      </AuthProvider>
+      </SimpleAuthProvider>
     </ThemeProvider>
   );
 }

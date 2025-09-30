@@ -44,7 +44,7 @@ const validateEnvironment = () => {
 validateEnvironment();
 
 const { sequelize } = require('./models');
-const externalDataService = require('./services/externalDataService');
+// const externalDataService = require('./services/externalDataService'); // Disabled FTP service
 const websocketService = require('./services/websocketService');
 const PersistentUdpListener = require('./services/persistentUdpListener');
 
@@ -56,7 +56,7 @@ const reportRoutes = require('./routes/reports');
 const plateRecognitionRoutes = require('./routes/plateRecognition');
 const carRoutes = require('./routes/cars');
 const violationRoutes = require('./routes/violations');
-const externalDataRoutes = require('./routes/externalData');
+// const externalDataRoutes = require('./routes/externalData'); // Disabled FTP routes
 const udpReadingsRoutes = require('./routes/udpReadings');
 
 const app = express();
@@ -256,7 +256,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/plate-recognition', plateRecognitionRoutes);
 app.use('/api/cars', carRoutes);
 app.use('/api/violations', violationRoutes);
-app.use('/api/external-data', externalDataRoutes);
+// app.use('/api/external-data', externalDataRoutes); // Disabled FTP routes
 app.use('/api/udp-readings', udpReadingsRoutes);
 
 // Root route - redirect to dashboard
@@ -355,9 +355,7 @@ process.on('SIGTERM', async () => {
     if (udpListener.isListening) {
       await udpListener.stop();
     }
-    if (externalDataService.isRunning) {
-      await externalDataService.stop();
-    }
+    // FTP service disabled
     if (websocketService.isRunning) {
       await websocketService.stop();
     }
@@ -374,9 +372,7 @@ process.on('SIGINT', async () => {
     if (udpListener.isListening) {
       await udpListener.stop();
     }
-    if (externalDataService.isRunning) {
-      await externalDataService.stop();
-    }
+    // FTP service disabled
     if (websocketService.isRunning) {
       await websocketService.stop();
     }

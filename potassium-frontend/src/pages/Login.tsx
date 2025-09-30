@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import * as React from 'react';
+import { useState, useEffect } from 'react';
 import {
   Container,
   Paper,
@@ -12,7 +13,7 @@ import {
   CardContent,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/SimpleAuthContext';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -36,21 +37,23 @@ const Login: React.FC = () => {
     setError('');
     setLoading(true);
 
-    console.log('Login: Attempting login with email:', email);
+    console.log('🔐 Attempting login with:', email);
 
     try {
       const success = await login(email, password);
-      console.log('Login: Login result:', success);
       
       if (success) {
-        console.log('Login: Login successful, navigating to dashboard');
-        navigate('/dashboard');
+        console.log('✅ Login successful - Redirecting to dashboard');
+        // Force navigation after a short delay to ensure state is set
+        setTimeout(() => {
+          navigate('/dashboard', { replace: true });
+        }, 100);
       } else {
-        console.log('Login: Login failed - invalid credentials');
-        setError('Invalid email or password');
+        console.log('❌ Login failed - Invalid credentials');
+        setError('Invalid email or password. Try: admin@potasfactory.com / admin123');
       }
     } catch (err) {
-      console.error('Login: Login error:', err);
+      console.error('❌ Login error:', err);
       setError('Login failed. Please try again.');
     } finally {
       setLoading(false);

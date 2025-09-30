@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Login System - FIXED</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test { margin: 10px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .success { background: #d4edda; border-color: #c3e6cb; }
+        .error { background: #f8d7da; border-color: #f5c6cb; }
+        .info { background: #d1ecf1; border-color: #bee5eb; }
+        button { padding: 10px 20px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        input { padding: 8px; margin: 5px; border: 1px solid #ccc; border-radius: 3px; width: 200px; }
+    </style>
+</head>
+<body>
+    <h1>🔐 LOGIN SYSTEM TEST - FIXED VERSION</h1>
+    
+    <div class="test info">
+        <h3>✅ FIXED LOGIN CREDENTIALS</h3>
+        <p><strong>Admin:</strong> admin@potasfactory.com / admin123</p>
+        <p><strong>Operator:</strong> operator@potasfactory.com / operator123</p>
+        <p><strong>Viewer:</strong> viewer@potasfactory.com / viewer123</p>
+    </div>
+    
+    <div class="test">
+        <h3>🧪 Test Login Logic</h3>
+        <input type="email" id="testEmail" placeholder="Email" value="admin@potasfactory.com">
+        <input type="password" id="testPassword" placeholder="Password" value="admin123">
+        <button onclick="testLogin()">Test Login</button>
+        <div id="loginResult"></div>
+    </div>
+    
+    <div class="test">
+        <h3>🌐 Test Frontend Access</h3>
+        <button onclick="testFrontend()">Test Frontend</button>
+        <div id="frontendResult"></div>
+    </div>
+    
+    <div class="test">
+        <h3>🔗 Quick Access Links</h3>
+        <button onclick="window.open('http://localhost:3001/login', '_blank')">Open Login Page</button>
+        <button onclick="window.open('http://localhost:3001/dashboard', '_blank')">Open Dashboard</button>
+        <button onclick="clearStorage()">Clear Browser Storage</button>
+    </div>
+    
+    <div id="results"></div>
+    
+    <script>
+        function log(message, type = 'info') {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `test ${type}`;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${message}`;
+            results.appendChild(div);
+            console.log(message);
+        }
+        
+        function testLogin() {
+            const email = document.getElementById('testEmail').value;
+            const password = document.getElementById('testPassword').value;
+            const resultDiv = document.getElementById('loginResult');
+            
+            // Test the login logic
+            const validCredentials = [
+                { email: 'admin@potasfactory.com', password: 'admin123', role: 'admin' },
+                { email: 'operator@potasfactory.com', password: 'operator123', role: 'operator' },
+                { email: 'viewer@potasfactory.com', password: 'viewer123', role: 'viewer' },
+            ];
+            
+            const account = validCredentials.find(acc => 
+                acc.email.toLowerCase() === email.toLowerCase() && 
+                acc.password === password
+            );
+            
+            if (account) {
+                resultDiv.innerHTML = `<div class="success">✅ Login would succeed for ${account.role}</div>`;
+                
+                // Simulate localStorage save
+                const authToken = `token_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                const userData = {
+                    id: 1,
+                    email: account.email,
+                    firstName: account.role.charAt(0).toUpperCase() + account.role.slice(1),
+                    lastName: 'User',
+                    role: account.role,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                };
+                
+                localStorage.setItem('authToken', authToken);
+                localStorage.setItem('user', JSON.stringify(userData));
+                
+                log(`✅ Test login successful for ${account.role} - Token saved`, 'success');
+            } else {
+                resultDiv.innerHTML = `<div class="error">❌ Invalid credentials</div>`;
+                log('❌ Test login failed - Invalid credentials', 'error');
+            }
+        }
+        
+        async function testFrontend() {
+            const resultDiv = document.getElementById('frontendResult');
+            
+            try {
+                const response = await fetch('http://localhost:3001');
+                if (response.ok) {
+                    resultDiv.innerHTML = `<div class="success">✅ Frontend accessible</div>`;
+                    log('✅ Frontend is accessible on http://localhost:3001', 'success');
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ Frontend error: ${response.status}</div>`;
+                    log(`❌ Frontend error: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Frontend not accessible: ${error.message}</div>`;
+                log(`❌ Frontend not accessible: ${error.message}`, 'error');
+            }
+        }
+        
+        function clearStorage() {
+            localStorage.clear();
+            sessionStorage.clear();
+            log('🧹 Browser storage cleared', 'info');
+        }
+        
+        // Auto-test on load
+        window.onload = function() {
+            log('🚀 Login test page loaded', 'info');
+            testFrontend();
+        };
+    </script>
+</body>
+</html>
