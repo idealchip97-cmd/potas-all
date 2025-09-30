@@ -1,0 +1,35 @@
+[Unit]
+Description=Potassium Radar System - Persistent UDP Listener
+Documentation=https://github.com/your-repo/potassium-radar-system
+After=network.target mysql.service
+Wants=mysql.service
+
+[Service]
+Type=simple
+User=rnd2
+Group=rnd2
+WorkingDirectory=/home/rnd2/Desktop/radar_sys/potassium-backend-
+Environment=NODE_ENV=production
+Environment=UDP_PORT=17081
+Environment=SPEED_LIMIT=30
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=potassium-udp
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/home/rnd2/Desktop/radar_sys/potassium-backend-
+ReadWritePaths=/srv/camera_uploads
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=512M
+
+[Install]
+WantedBy=multi-user.target

@@ -258,19 +258,36 @@ class UDPService extends EventEmitter {
     async start() {
         return new Promise((resolve, reject) => {
             if (this.isListening) {
+                console.log('✅ UDP server already listening');
                 resolve();
                 return;
             }
 
             console.log(`🚀 Starting UDP server on port ${this.config.localPort}`);
+            console.log(`📡 Binding to address: 0.0.0.0:${this.config.localPort}`);
             
-            this.server.bind(this.config.localPort, (err) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve();
-                }
-            });
+            // Set up one-time listeners for this start attempt
+            const onListening = () => {
+                console.log('✅ UDP server successfully started and listening');
+                this.server.removeListener('error', onError);
+                resolve();
+            };
+            
+            const onError = (err) => {
+                console.error('❌ UDP server failed to start:', err.message);
+                this.server.removeListener('listening', onListening);
+                reject(err);
+            };
+            
+            this.server.once('listening', onListening);
+            this.server.once('error', onError);
+            
+            try {
+                this.server.bind(this.config.localPort, '0.0.0.0');
+            } catch (bindError) {
+                console.error('❌ UDP bind error:', bindError.message);
+                reject(bindError);
+            }
         });
     }
 

@@ -46,6 +46,7 @@ validateEnvironment();
 const { sequelize } = require('./models');
 const externalDataService = require('./services/externalDataService');
 const websocketService = require('./services/websocketService');
+const PersistentUdpListener = require('./services/persistentUdpListener');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -56,10 +57,14 @@ const plateRecognitionRoutes = require('./routes/plateRecognition');
 const carRoutes = require('./routes/cars');
 const violationRoutes = require('./routes/violations');
 const externalDataRoutes = require('./routes/externalData');
+const udpReadingsRoutes = require('./routes/udpReadings');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const IMAGE_BASE_DIR = process.env.IMAGE_BASE_DIR || '/srv/camera_uploads';
+
+// Initialize persistent UDP listener
+const udpListener = new PersistentUdpListener();
 
 // Security middleware
 app.use(helmet());
@@ -104,13 +109,65 @@ app.use(
 );
 
 // Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Radar Speed Detection API is running',
-    timestamp: new Date().toISOString(),
-    imageBasePath: IMAGE_BASE_DIR
-  });
+app.get('/health', async (req, res) => {
+  try {
+    const udpHealth = await udpListener.healthCheck();
+    res.json({
+      success: true,
+      message: 'Radar Speed Detection API is running',
+      timestamp: new Date().toISOString(),
+      imageBasePath: IMAGE_BASE_DIR,
+      udpListener: udpHealth
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Health check failed',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// UDP Listener status endpoint
+app.get('/api/udp/status', async (req, res) => {
+  try {
+    const health = await udpListener.healthCheck();
+    const stats = udpListener.getStats();
+    
+    res.json({
+      success: true,
+      status: health.status,
+      listening: health.listening,
+      address: health.address,
+      stats: stats,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get UDP status',
+      error: error.message
+    });
+  }
+});
+
+// Reset UDP statistics endpoint
+app.post('/api/udp/reset-stats', (req, res) => {
+  try {
+    udpListener.resetStats();
+    res.json({
+      success: true,
+      message: 'UDP statistics reset successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to reset UDP statistics',
+      error: error.message
+    });
+  }
 });
 
 // Debug endpoint to test image directory access
@@ -200,6 +257,7 @@ app.use('/api/plate-recognition', plateRecognitionRoutes);
 app.use('/api/cars', carRoutes);
 app.use('/api/violations', violationRoutes);
 app.use('/api/external-data', externalDataRoutes);
+app.use('/api/udp-readings', udpReadingsRoutes);
 
 // Root route - redirect to dashboard
 app.get('/', (req, res) => {
@@ -250,21 +308,34 @@ const startServer = async () => {
         console.warn('⚠️ Failed to start WebSocket service:', error.message);
       }
 
-      // Always auto-start external data service (UDP listener)
+      // Always auto-start persistent UDP listener
       try {
-        console.log('🔄 Auto-starting external data service (UDP listener)...');
-        await externalDataService.start();
-        console.log('✅ External data service started - UDP listening on port 17081');
-        console.log('📡 Ready to receive binary radar packets: FE AF 05 01 0A [SPEED] 16 EF');
+        console.log('🔄 Auto-starting persistent UDP listener...');
+        await udpListener.start();
+        console.log('✅ Persistent UDP listener started - Ready to save radar data to MySQL');
+        
+        // Setup event handlers for real-time updates
+        udpListener.on('radarReading', (data) => {
+          console.log(`📊 Real-time: Radar reading saved, Speed: ${data.reading.speedDetected} km/h, Violation: ${data.violation}`);
+          // Broadcast to WebSocket clients if needed
+          if (websocketService.isRunning) {
+            websocketService.broadcast('radarReading', data);
+          }
+        });
+        
+        udpListener.on('error', (error) => {
+          console.error('❌ UDP Listener error:', error.message);
+        });
+        
       } catch (error) {
-        console.error('❌ CRITICAL: Failed to start UDP service:', error.message);
-        console.log('🔧 Retrying UDP service startup in 5 seconds...');
+        console.error('❌ CRITICAL: Failed to start persistent UDP listener:', error.message);
+        console.log('🔧 Retrying UDP listener startup in 5 seconds...');
         setTimeout(async () => {
           try {
-            await externalDataService.start();
-            console.log('✅ UDP service started on retry');
+            await udpListener.start();
+            console.log('✅ UDP listener started on retry');
           } catch (retryError) {
-            console.error('❌ UDP service failed on retry:', retryError.message);
+            console.error('❌ UDP listener failed on retry:', retryError.message);
           }
         }, 5000);
       }
@@ -281,6 +352,9 @@ startServer();
 process.on('SIGTERM', async () => {
   console.log('🛑 SIGTERM received, shutting down gracefully...');
   try {
+    if (udpListener.isListening) {
+      await udpListener.stop();
+    }
     if (externalDataService.isRunning) {
       await externalDataService.stop();
     }
@@ -297,6 +371,9 @@ process.on('SIGTERM', async () => {
 process.on('SIGINT', async () => {
   console.log('🛑 SIGINT received, shutting down gracefully...');
   try {
+    if (udpListener.isListening) {
+      await udpListener.stop();
+    }
     if (externalDataService.isRunning) {
       await externalDataService.stop();
     }

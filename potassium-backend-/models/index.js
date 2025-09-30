@@ -12,6 +12,7 @@ const PlateRecognition = require('./PlateRecognition');
 const Car = require('./Car');
 const Violation = require('./Violation');
 const RadarReading = require('./RadarReading');
+const UdpReading = require('./UdpReading');
 
 // Define associations
 
@@ -72,6 +73,13 @@ Radar.hasMany(RadarReading, { foreignKey: 'radarId', as: 'readings' });
 RadarReading.belongsTo(Fine, { foreignKey: 'fineId', as: 'fine' });
 Fine.hasOne(RadarReading, { foreignKey: 'fineId', as: 'reading' });
 
+// UdpReading associations
+UdpReading.belongsTo(Radar, { foreignKey: 'radarId', as: 'radar' });
+Radar.hasMany(UdpReading, { foreignKey: 'radarId', as: 'udpReadings' });
+
+UdpReading.belongsTo(Fine, { foreignKey: 'fineId', as: 'fine' });
+Fine.hasOne(UdpReading, { foreignKey: 'fineId', as: 'udpReading' });
+
 module.exports = {
   sequelize,
   User,
@@ -86,5 +94,6 @@ module.exports = {
   PlateRecognition,
   Car,
   Violation,
-  RadarReading
+  RadarReading,
+  UdpReading
 };
