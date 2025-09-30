@@ -17,7 +17,7 @@ import {
   AccountCircle,
 } from '@mui/icons-material';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../contexts/SimpleAuthContext';
 
 interface HeaderProps {
   onMenuClick: () => void;
