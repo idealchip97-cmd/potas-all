@@ -345,12 +345,144 @@ class DataProcessorService {
     }
 
     /**
+     * Process correlated violation (radar data + image)
+     */
+    async processCorrelatedViolation(violation) {
+    try {
+        console.log(`🎯 Processing correlated violation: ${violation.id}`);
+        
+        // Create or find radar record
+        let radar = await Radar.findOne({ where: { id: violation.radarId } });
+        if (!radar) {
+            radar = await Radar.create({
+                id: violation.radarId,
+                name: `Radar ${violation.radarId}`,
+                location: `Location ${violation.radarId}`,
+                ipAddress: '192.168.1.55',
+                status: 'active',
+                speedLimit: 50
+            });
+            console.log(`📡 Created new radar record: ${violation.radarId}`);
+        }
+        
+        let plateNumber = null;
+        let confidence = null;
+        let plateRecognitionId = null;
+        
+        // Process image if available
+        if (violation.hasImage && violation.images.length > 0) {
+            const primaryImage = violation.images[0]; // Use the first/closest image
+            
+            try {
+                // Use enhanced vision service for plate recognition
+                const recognitionResult = await enhancedVisionService.recognizePlate(primaryImage.path);
+                
+                if (recognitionResult && recognitionResult.plateNumber) {
+                    plateNumber = recognitionResult.plateNumber;
+                    confidence = recognitionResult.confidence || 0.8;
+                    
+                    // Create plate recognition record
+                    const plateRecord = await PlateRecognition.create({
+                        plateNumber: plateNumber,
+                        confidence: confidence,
+                        imagePath: primaryImage.path,
+                        fileName: path.basename(primaryImage.path),
+                        fileSize: 0, // Will be updated if needed
+                        processedAt: new Date(),
+                        processingMethod: 'correlation_enhanced',
+                        correlationId: violation.id
+                    });
+                    
+                    plateRecognitionId = plateRecord.id;
+                    console.log(`🔍 Plate recognized: ${plateNumber} (confidence: ${confidence})`);
+                }
+            } catch (imageError) {
+                console.warn(`⚠️ Failed to process image for violation ${violation.id}:`, imageError.message);
+            }
+        }
+        
+        // Calculate fine amount based on speed
+        const speedLimit = radar.speedLimit || 50;
+        const speedExcess = violation.speed - speedLimit;
+        let fineAmount = 0;
+        
+        if (speedExcess > 0) {
+            // Progressive fine calculation
+            if (speedExcess <= 10) {
+                fineAmount = 50;
+            } else if (speedExcess <= 20) {
+                fineAmount = 100;
+            } else if (speedExcess <= 30) {
+                fineAmount = 200;
+            } else {
+                fineAmount = 500;
+            }
+        }
+        
+        // Create fine record
+        const fine = await Fine.create({
+            radarId: violation.radarId,
+            licensePlate: plateNumber || 'UNKNOWN',
+            speedDetected: violation.speed,
+            speedLimit: speedLimit,
+            fineAmount: fineAmount,
+            imagePath: violation.hasImage ? violation.images[0].path : null,
+            status: plateNumber ? 'processed' : 'pending',
+            detectedAt: new Date(violation.timestamp),
+            correlationId: violation.id,
+            rawRadarData: violation.rawRadarMessage
+        });
+        
+        console.log(`💰 Fine created: ${fine.id} - ${plateNumber || 'UNKNOWN'} - ${violation.speed}km/h - $${fineAmount}`);
+        
+        // Create violation record for tracking
+        const violationRecord = await Violation.create({
+            type: 'speed',
+            description: `Speed violation: ${violation.speed}km/h in ${speedLimit}km/h zone`,
+            location: radar.location,
+            timestamp: new Date(violation.timestamp),
+            radarId: violation.radarId,
+            fineId: fine.id,
+            plateRecognitionId: plateRecognitionId,
+            status: 'detected',
+            correlationId: violation.id,
+            metadata: {
+                radarData: {
+                    speed: violation.speed,
+                    timeString: violation.timeString,
+                    rawMessage: violation.rawRadarMessage
+                },
+                images: violation.images,
+                correlatedAt: violation.correlatedAt
+            }
+        });
+        
+        const result = {
+            violation: violationRecord,
+            fine: fine,
+            radar: radar,
+            plateRecognition: plateRecognitionId ? await PlateRecognition.findByPk(plateRecognitionId) : null,
+            correlationId: violation.id,
+            hasImage: violation.hasImage,
+            imageCount: violation.images.length
+        };
+        
+        console.log(`✅ Correlated violation processed successfully: ${violation.id}`);
+        return result;
+        
+    } catch (error) {
+        console.error(`❌ Error processing correlated violation ${violation.id}:`, error);
+        throw error;
+    }
+}
+
+    /**
      * Reset processed tracking (for testing)
      */
     reset() {
         this.processedImages.clear();
         this.processedMessages.clear();
-        console.log('🔄 Data processor reset completed');
+        console.log('🔄 Data processor reset - cleared processed items cache');
     }
 }
 

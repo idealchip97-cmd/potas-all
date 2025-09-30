@@ -34,6 +34,8 @@ class UDPService extends EventEmitter {
                     // Emit different events based on data type
                     if (data.type === 'radar') {
                         this.emit('radarData', data);
+                    } else if (data.type === 'radar_violation') {
+                        this.emit('radarViolation', data);
                     } else if (data.type === 'fine') {
                         this.emit('fineData', data);
                     } else if (data.type === 'violation') {
@@ -112,7 +114,35 @@ class UDPService extends EventEmitter {
     }
 
     parseDelimitedMessage(message) {
-        // Parse comma-separated or pipe-separated values
+        // Handle radar data format: "ID: 1,Speed: 55, Time: 15:49:09."
+        const radarPattern = /ID:\s*(\d+),\s*Speed:\s*(\d+),\s*Time:\s*([\d:]+)/i;
+        const match = message.match(radarPattern);
+        
+        if (match) {
+            const [, radarId, speed, timeStr] = match;
+            
+            // Parse time and create full timestamp
+            let timestamp;
+            try {
+                const today = new Date();
+                const [hours, minutes, seconds] = timeStr.split(':').map(Number);
+                timestamp = new Date(today.getFullYear(), today.getMonth(), today.getDate(), hours, minutes, seconds);
+            } catch (error) {
+                timestamp = new Date();
+            }
+            
+            return {
+                type: 'radar_violation',
+                radarId: parseInt(radarId),
+                speed: parseInt(speed),
+                timestamp: timestamp.toISOString(),
+                timeString: timeStr,
+                rawMessage: message.trim(),
+                needsImageCorrelation: true
+            };
+        }
+        
+        // Fallback to original parsing for other formats
         const parts = message.split(/[,|;]/);
         
         if (parts.length < 3) {

@@ -247,6 +247,59 @@ router.get('/activity', authenticate, async (req, res) => {
     }
 });
 
+// Get correlation statistics (admin only)
+router.get('/correlation/stats', authenticate, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied. Admin role required.'
+            });
+        }
+
+        const stats = externalDataService.getCorrelationStats();
+        
+        res.json({
+            success: true,
+            data: stats
+        });
+    } catch (error) {
+        console.error('Error getting correlation stats:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to get correlation statistics',
+            error: error.message
+        });
+    }
+});
+
+// Trigger manual correlation (admin only)
+router.post('/correlation/trigger', authenticate, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied. Admin role required.'
+            });
+        }
+
+        const result = await externalDataService.triggerManualCorrelation();
+        
+        res.json({
+            success: true,
+            message: 'Manual correlation triggered',
+            data: result
+        });
+    } catch (error) {
+        console.error('Error triggering manual correlation:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to trigger manual correlation',
+            error: error.message
+        });
+    }
+});
+
 // Health check endpoint (public)
 router.get('/health', async (req, res) => {
     try {

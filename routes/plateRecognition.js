@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
-const { PlateRecognition, User, Car } = require('../models');
+const { PlateRecognition, User, Car, Fine, Radar, Violation } = require('../models');
 const { authenticate } = require('../middleware/auth');
 const EnhancedVisionService = require('../services/enhancedVisionService');
 const ChatGPTVisionService = require('../services/chatgptVisionService');
@@ -232,8 +232,110 @@ router.post('/process', authenticate, upload.array('images', 10), async (req, re
   }
 });
 
-// GET /api/plate-recognition/results - Get all plate recognition results
-router.get('/results', authenticate, async (req, res) => {
+// Get correlated violations with plate recognition data (complete cycle)
+router.get('/violations-cycle', authenticate, async (req, res) => {
+    try {
+        const { page = 1, limit = 50 } = req.query;
+        const offset = (page - 1) * limit;
+
+        // Get violations with all related data (UDP + FTP + Plate Recognition)
+        const violations = await Violation.findAndCountAll({
+            include: [
+                {
+                    model: Fine,
+                    as: 'fine',
+                    include: [
+                        {
+                            model: Radar,
+                            as: 'radar'
+                        }
+                    ]
+                },
+                {
+                    model: PlateRecognition,
+                    as: 'plateRecognition'
+                }
+            ],
+            order: [['timestamp', 'DESC']],
+            limit: parseInt(limit),
+            offset: parseInt(offset)
+        });
+
+        // Format the data to show the complete cycle
+        const formattedViolations = violations.rows.map(violation => {
+            const fine = violation.fine;
+            const radar = fine?.radar;
+            const plateRec = violation.plateRecognition;
+            
+            return {
+                id: violation.id,
+                // From UDP (Radar Data)
+                radarId: violation.radarId,
+                radarName: radar?.name || `Radar ${violation.radarId}`,
+                location: radar?.location || violation.location,
+                
+                // From FTP + Plate Recognition
+                plateNumber: plateRec?.plateNumber || fine?.licensePlate || 'UNKNOWN',
+                confidence: plateRec?.confidence || 0,
+                
+                // Speed Data (from UDP)
+                speed: fine?.speedDetected || 0,
+                speedLimit: fine?.speedLimit || radar?.speedLimit || 50,
+                
+                // Fine Calculation
+                fineAmount: fine?.fineAmount || 0,
+                status: fine?.status || 'pending',
+                
+                // Timestamps
+                violationTime: violation.timestamp,
+                processedAt: plateRec?.processedAt,
+                
+                // Image Data (from FTP)
+                imagePath: fine?.imagePath,
+                hasImage: !!fine?.imagePath,
+                
+                // Correlation Data
+                correlationId: violation.correlationId,
+                
+                // Metadata
+                rawRadarData: violation.metadata?.radarData,
+                correlatedAt: violation.metadata?.correlatedAt
+            };
+        });
+
+        res.json({
+            success: true,
+            message: 'Complete violation cycle data retrieved',
+            data: formattedViolations,
+            pagination: {
+                total: violations.count,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                totalPages: Math.ceil(violations.count / limit)
+            },
+            cycle: {
+                description: 'UDP (Radar) → FTP (Images) → Correlation → Plate Recognition → Fines',
+                dataFlow: {
+                    udp: 'Radar speed violations',
+                    ftp: 'Camera images with timestamps', 
+                    correlation: 'Match UDP data with FTP images by timestamp',
+                    plateRecognition: 'Extract plate numbers from images',
+                    fines: 'Generate violation records with calculated fines'
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error retrieving violation cycle data:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to retrieve violation cycle data',
+            error: error.message
+        });
+    }
+});
+
+// Get all plate recognitions with pagination
+router.get('/', authenticate, async (req, res) => {
   try {
     const { page = 1, limit = 20, status } = req.query;
     const offset = (page - 1) * limit;

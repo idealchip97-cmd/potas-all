@@ -1,5 +1,6 @@
 const FTPService = require('./ftpService');
 const UDPService = require('./udpService');
+const CorrelationService = require('./correlationService');
 const dataProcessor = require('./dataProcessorService');
 const cron = require('node-cron');
 const EventEmitter = require('events');
@@ -9,6 +10,7 @@ class ExternalDataService extends EventEmitter {
         super();
         this.ftpService = new FTPService();
         this.udpService = new UDPService();
+        this.correlationService = new CorrelationService();
         this.isRunning = false;
         this.cronJobs = [];
         this.stats = {
@@ -44,6 +46,14 @@ class ExternalDataService extends EventEmitter {
         this.ftpService.on('imageDownloaded', async (imagePath) => {
             try {
                 console.log(`📸 New image downloaded: ${imagePath}`);
+                
+                // Extract timestamp from image filename or use current time
+                const imageTimestamp = this.extractImageTimestamp(imagePath);
+                
+                // Send to correlation service
+                this.correlationService.processNewImage(imagePath, imageTimestamp);
+                
+                // Also process normally
                 const result = await dataProcessor.processImage(imagePath);
                 if (result) {
                     this.stats.imagesProcessed++;
@@ -110,6 +120,32 @@ class ExternalDataService extends EventEmitter {
                 }
             } catch (error) {
                 console.error('❌ Error processing violation data:', error);
+                this.stats.errors++;
+            }
+        });
+
+        // Handle radar violations for correlation
+        this.udpService.on('radarViolation', async (data) => {
+            try {
+                console.log('🚨 Radar violation received for correlation:', data);
+                this.correlationService.processRadarViolation(data);
+                this.stats.violationsReceived++;
+            } catch (error) {
+                console.error('❌ Error processing radar violation:', error);
+                this.stats.errors++;
+            }
+        });
+
+        // Handle correlated violations
+        this.correlationService.on('correlatedViolation', async (violation) => {
+            try {
+                console.log('🎯 Correlated violation created:', violation.id);
+                const result = await dataProcessor.processCorrelatedViolation(violation);
+                if (result) {
+                    this.emit('correlatedViolationProcessed', result);
+                }
+            } catch (error) {
+                console.error('❌ Error processing correlated violation:', error);
                 this.stats.errors++;
             }
         });
@@ -293,6 +329,31 @@ class ExternalDataService extends EventEmitter {
         };
         dataProcessor.reset();
         console.log('📊 Statistics reset');
+    }
+
+    // Extract timestamp from image filename
+    extractImageTimestamp(imagePath) {
+        const filename = require('path').basename(imagePath);
+        
+        // Try to extract timestamp from filename (format: YYYYMMDDHHMMSS.jpg)
+        const timestampMatch = filename.match(/(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/);
+        if (timestampMatch) {
+            const [, year, month, day, hour, minute, second] = timestampMatch;
+            return new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`).toISOString();
+        }
+        
+        // Fallback to current time
+        return new Date().toISOString();
+    }
+
+    // Get correlation statistics
+    getCorrelationStats() {
+        return this.correlationService.getStats();
+    }
+
+    // Trigger manual correlation
+    async triggerManualCorrelation() {
+        return await this.correlationService.triggerManualCorrelation();
     }
 }
 

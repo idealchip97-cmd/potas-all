@@ -9,8 +9,8 @@ class FTPService extends EventEmitter {
         this.client = new FTP();
         this.isConnected = false;
         this.config = {
-            host: '192.186.1.14',
-            port: 21,
+            host: process.env.FTP_HOST || '192.168.1.55',
+            port: parseInt(process.env.FTP_PORT || '21', 10),
             user: process.env.FTP_USER || 'anonymous',
             password: process.env.FTP_PASSWORD || 'anonymous@',
             connTimeout: 60000,
@@ -22,6 +22,10 @@ class FTPService extends EventEmitter {
         this.downloadDir = imageBaseDir;
         this.setupEventHandlers();
         this.ensureDownloadDirectory();
+        try {
+            console.log(`🔧 FTP config -> host: ${this.config.host}, port: ${this.config.port}, user: ${this.config.user}`);
+            console.log(`📁 FTP download dir: ${this.downloadDir}`);
+        } catch (_) {}
     }
 
     setupEventHandlers() {
