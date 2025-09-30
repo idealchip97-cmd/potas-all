@@ -41,11 +41,16 @@ router.delete('/clear-all', authenticate, async (req, res) => {
 // Get all fines with filtering and pagination
 router.get('/', authenticate, async (req, res) => {
     try {
-        const { page, limit, radarId, fineStatus } = req.query;
+        const { page = 1, limit = 10, radarId, fineStatus } = req.query;
         const filter = {};
 
+        // Validate pagination parameters
+        const pageNum = parseInt(page) || 1;
+        const limitNum = parseInt(limit) || 10;
+        const offset = (pageNum - 1) * limitNum;
+
         if (radarId) {
-            filter.radarId = radarId;
+            filter.radarId = parseInt(radarId);
         }
 
         if (fineStatus) {
@@ -54,15 +59,30 @@ router.get('/', authenticate, async (req, res) => {
 
         const fines = await Fine.findAndCountAll({
             where: filter,
-            offset: (page - 1) * limit,
-            limit: limit
+            offset: offset,
+            limit: limitNum,
+            order: [['createdAt', 'DESC']],
+            include: [
+                {
+                    model: Radar,
+                    as: 'radar',
+                    attributes: ['id', 'name', 'location']
+                }
+            ]
         });
 
         res.json({
             success: true,
             message: 'Fines retrieved successfully',
-            data: fines.rows,
-            count: fines.count
+            data: {
+                fines: fines.rows,
+                pagination: {
+                    currentPage: pageNum,
+                    totalPages: Math.ceil(fines.count / limitNum),
+                    totalItems: fines.count,
+                    itemsPerPage: limitNum
+                }
+            }
         });
     } catch (error) {
         console.error('Error retrieving fines:', error);
@@ -74,7 +94,7 @@ router.get('/', authenticate, async (req, res) => {
     }
 });
 
-router.get('/radar/:radarId', getFinesByRadarId);
-router.get('/:id', getFineById);
+router.get('/radar/:radarId', authenticate, getFinesByRadarId);
+router.get('/:id', authenticate, getFineById);
 
 module.exports = router;
