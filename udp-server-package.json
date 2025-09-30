@@ -1,0 +1,20 @@
+{
+  "name": "radar-udp-server",
+  "version": "1.0.0",
+  "description": "UDP server for radar data processing and fine generation",
+  "main": "radar-udp-server.js",
+  "scripts": {
+    "start": "node radar-udp-server.js",
+    "dev": "nodemon radar-udp-server.js"
+  },
+  "dependencies": {
+    "mysql2": "^3.6.0",
+    "ws": "^8.14.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "keywords": ["radar", "udp", "fines", "mysql", "websocket"],
+  "author": "Radar System",
+  "license": "MIT"
+}

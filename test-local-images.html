@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>اختبار الصور المحلية</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .image-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            background: #fafafa;
+        }
+        .image-card img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .image-info {
+            font-size: 14px;
+            color: #666;
+        }
+        .status {
+            padding: 20px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🖼️ اختبار الصور المحلية من /srv/camera_uploads/camera001/192.168.1.54</h1>
+        
+        <button onclick="loadImages()">تحميل الصور</button>
+        <button onclick="clearImages()">مسح</button>
+        
+        <div id="status"></div>
+        <div id="images" class="image-grid"></div>
+    </div>
+
+    <script>
+        const LOCAL_SERVER = 'http://localhost:3003';
+        
+        function showStatus(message, isError = false) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = `<div class="status ${isError ? 'error' : 'success'}">${message}</div>`;
+        }
+        
+        function clearImages() {
+            document.getElementById('images').innerHTML = '';
+            document.getElementById('status').innerHTML = '';
+        }
+        
+        async function loadImages() {
+            showStatus('🔄 جاري تحميل الصور...');
+            
+            try {
+                // Test server health first
+                const healthResponse = await fetch(`${LOCAL_SERVER}/health`);
+                if (!healthResponse.ok) {
+                    throw new Error('خدمة الصور المحلية غير متاحة');
+                }
+                
+                // Get today's date
+                const today = new Date().toISOString().split('T')[0];
+                
+                // Fetch image list
+                const response = await fetch(`${LOCAL_SERVER}/api/ftp-images/list?camera=192.168.1.54&date=${today}`);
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'فشل في تحميل قائمة الصور');
+                }
+                
+                if (data.files.length === 0) {
+                    showStatus('⚠️ لا توجد صور لتاريخ اليوم. جرب تاريخ آخر.');
+                    return;
+                }
+                
+                showStatus(`✅ تم العثور على ${data.files.length} صورة حقيقية من المسار المحلي`);
+                
+                // Display images
+                const imagesDiv = document.getElementById('images');
+                imagesDiv.innerHTML = '';
+                
+                data.files.forEach((file, index) => {
+                    const imageCard = document.createElement('div');
+                    imageCard.className = 'image-card';
+                    
+                    const imageUrl = `${LOCAL_SERVER}${file.url}`;
+                    
+                    imageCard.innerHTML = `
+                        <img src="${imageUrl}" alt="${file.filename}" onerror="this.style.border='2px solid red'; this.alt='فشل تحميل الصورة';">
+                        <div class="image-info">
+                            <strong>اسم الملف:</strong> ${file.filename}<br>
+                            <strong>الحجم:</strong> ${(file.size / 1024).toFixed(1)} KB<br>
+                            <strong>التاريخ:</strong> ${new Date(file.modified).toLocaleString('ar-SA')}<br>
+                            <strong>الرابط:</strong> <a href="${imageUrl}" target="_blank">عرض</a>
+                        </div>
+                    `;
+                    
+                    imagesDiv.appendChild(imageCard);
+                });
+                
+            } catch (error) {
+                console.error('Error loading images:', error);
+                showStatus(`❌ خطأ: ${error.message}`, true);
+            }
+        }
+        
+        // Auto-load images on page load
+        window.addEventListener('load', loadImages);
+    </script>
+</body>
+</html>
