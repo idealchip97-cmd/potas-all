@@ -13,31 +13,41 @@ app.use(cors({
   credentials: true
 }));
 
-// FTP configuration
+// FTP configuration - UPDATED WITH CORRECT CREDENTIALS
 const FTP_CONFIG = {
-  host: '192.168.1.14',
+  host: '192.168.1.55',
   port: 21,
-  user: 'admin',
-  password: 'idealchip123',
+  user: 'camera001',
+  password: 'RadarCamera01',
   secure: false
 };
 
-// FTP path configuration
-const FTP_BASE_PATH = '/srv/camera_uploads/camera001/192.168.1.54';
+// FTP path configuration - CORRECTED BASED ON ACTUAL FTP STRUCTURE
+const FTP_BASE_PATH = '/192.168.1.54';
 
-// Cache for FTP connections to avoid reconnecting for each request
-let ftpClient = null;
+// FTP connection status
 let ftpConnected = false;
 
-// Initialize FTP connection
-async function initializeFTP() {
+// Create a new FTP client for each request to avoid concurrency issues
+async function createFTPClient() {
+  const client = new Client();
+  client.ftp.verbose = false; // Reduce logging noise
+  
   try {
-    if (ftpClient) {
-      ftpClient.close();
-    }
-    
-    ftpClient = new Client();
-    ftpClient.ftp.verbose = true; // Enable verbose logging for debugging
+    await client.access({
+      ...FTP_CONFIG,
+      timeout: 10000
+    });
+    return client;
+  } catch (error) {
+    client.close();
+    throw error;
+  }
+}
+
+// Test FTP connection on startup
+async function testFTPConnection() {
+  try {
     
     console.log(`Attempting FTP connection to ${FTP_CONFIG.host}:${FTP_CONFIG.port} with user ${FTP_CONFIG.user}`);
     
@@ -97,7 +107,7 @@ async function initializeFTP() {
     // Provide helpful troubleshooting information
     if (error.message.includes('EHOSTUNREACH')) {
       console.log('💡 Troubleshooting: Host unreachable. Check:');
-      console.log('   - Network connectivity to 192.168.1.14');
+      console.log('   - Network connectivity to 192.168.1.55');
       console.log('   - Firewall settings');
       console.log('   - VPN connection if required');
     } else if (error.message.includes('ECONNREFUSED')) {

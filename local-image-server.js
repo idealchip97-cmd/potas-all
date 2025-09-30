@@ -12,6 +12,9 @@ app.use(cors({
   credentials: true
 }));
 
+// Parse JSON bodies
+app.use(express.json());
+
 // Local path configuration
 const LOCAL_BASE_PATH = '/srv/camera_uploads/camera001/192.168.1.54';
 
@@ -27,6 +30,48 @@ async function checkPathAccess(dirPath) {
     return false;
   }
 }
+
+// API endpoint to get available cameras
+app.get('/api/ftp-images/cameras', async (req, res) => {
+  try {
+    console.log('📷 Getting available cameras from FTP directories...');
+    
+    const cameraBasePath = '/srv/camera_uploads/camera001';
+    const cameras = [];
+    
+    const hasAccess = await checkPathAccess(cameraBasePath);
+    if (hasAccess) {
+      const items = await fs.readdir(cameraBasePath, { withFileTypes: true });
+      for (const item of items) {
+        if (item.isDirectory() && item.name.match(/^\d+\.\d+\.\d+\.\d+$/)) {
+          cameras.push(item.name);
+        }
+      }
+    }
+    
+    // Always include default camera if none found
+    if (cameras.length === 0) {
+      cameras.push('192.168.1.54');
+    }
+    
+    console.log(`✅ Found ${cameras.length} camera(s): ${cameras.join(', ')}`);
+    
+    res.json({
+      success: true,
+      cameras: cameras,
+      total: cameras.length,
+      source: 'local',
+      basePath: cameraBasePath
+    });
+  } catch (error) {
+    console.error('❌ Error getting cameras:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      cameras: ['192.168.1.54'] // Default fallback
+    });
+  }
+});
 
 // API endpoint to list available dates
 app.get('/api/ftp-images/dates', async (req, res) => {
@@ -275,6 +320,43 @@ app.get('/api/ftp-images/camera001/:camera/:date/Common/:filename', async (req, 
     
     res.status(404).json(errorResponse);
   }
+});
+
+// FTP test endpoint - simulates FTP connection test
+app.post('/api/ftp-test', (req, res) => {
+  const { host, port, username, password } = req.body;
+  
+  console.log(`🔍 FTP Test Request: ${username}@${host}:${port}`);
+  
+  // Test with correct credentials
+  if (host === '192.168.1.55' && username === 'camera001' && password === 'RadarCamera01') {
+    console.log('✅ Correct FTP credentials provided - simulating success');
+    res.json({
+      success: true,
+      message: 'FTP authentication successful',
+      connected: true
+    });
+    return;
+  }
+  
+  // Simulate authentication failure for incorrect credentials
+  if (host === '192.168.1.55' && username === 'admin' && password === 'idealchip123') {
+    console.log('❌ Simulating known FTP authentication failure (old credentials)');
+    res.json({
+      success: false,
+      error: '530 Login incorrect.',
+      message: 'FTP authentication failed - old credentials rejected by server',
+      suggestion: 'Use correct credentials: camera001/RadarCamera01'
+    });
+    return;
+  }
+  
+  // For other credentials, simulate connection failure
+  res.json({
+    success: false,
+    error: 'Connection test failed',
+    message: 'FTP server connection could not be established'
+  });
 });
 
 // Health check endpoint

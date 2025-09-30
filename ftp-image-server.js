@@ -15,7 +15,7 @@ app.use(cors({
 
 // FTP configuration
 const FTP_CONFIG = {
-  host: '192.168.1.14',
+  host: '192.168.1.55',
   port: 21,
   user: 'admin',
   password: 'idealchip123',

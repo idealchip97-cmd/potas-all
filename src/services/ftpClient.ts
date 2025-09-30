@@ -9,6 +9,7 @@ interface PlateRecognitionImage {
   radarId?: number;
   imageUrl: string;
   thumbnailUrl?: string;
+  url?: string; // Added for backward compatibility with direct API calls
   processed: boolean;
   processingStatus: 'pending' | 'processing' | 'completed' | 'failed';
 }
@@ -25,7 +26,7 @@ class FTPClientService {
   private ftpPort = 21;
   private wsPort = 18081; // WebSocket proxy port for FTP
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 2; // Reduced for faster fallback to mock mode
+  private maxReconnectAttempts = 0; // Skip WebSocket attempts, go directly to local server
   private reconnectDelay = 2000; // 2 seconds
   private isConnecting = false;
   private useMockData = false; // Fallback to mock data when WebSocket fails

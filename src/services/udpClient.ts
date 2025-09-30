@@ -43,7 +43,7 @@ interface FineData {
 
 class UDPClientService {
   private ws: WebSocket | null = null;
-  private serverIP = '192.168.1.14';
+  private serverIP = '192.168.1.55';
   private serverPort = 17081;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 2; // Reduced for faster fallback to mock mode
@@ -62,108 +62,39 @@ class UDPClientService {
   private cachedFines: Fine[] = [];
 
   constructor() {
-    this.connect();
+    // Disable automatic connection - UDP service not available
+    console.log('UDP Client: Service disabled - no UDP server available');
+    this.generateMockData();
   }
 
   private generateMockRadars(): Radar[] {
-    const mockRadars: Radar[] = [];
-    const locations = ['Highway A1 - North', 'City Center - Main St', 'Industrial Zone - Route 5', 'Residential Area - Oak Ave', 'School Zone - Education Blvd'];
-    const statuses: ('active' | 'inactive' | 'maintenance')[] = ['active', 'active', 'active', 'maintenance', 'inactive'];
-
-    for (let i = 0; i < 5; i++) {
-      mockRadars.push({
-        id: i + 1,
-        name: `Radar ${i + 1}`,
-        location: locations[i],
-        status: statuses[i],
-        speedLimit: [50, 60, 80, 30, 40][i],
-        latitude: 31.7683 + (Math.random() - 0.5) * 0.1,
-        longitude: 35.2137 + (Math.random() - 0.5) * 0.1,
-        serialNumber: `RDR${String(i + 1).padStart(3, '0')}`,
-        ipAddress: `192.168.1.${10 + i}`,
-        installationDate: new Date(2023, i, 15).toISOString(),
-        lastMaintenance: new Date(2024, 8, i + 1).toISOString(),
-        ftpPath: `/radar${i + 1}/images`,
-        createdAt: new Date(2023, i, 15).toISOString(),
-        updatedAt: new Date(2024, 8, i + 1).toISOString(),
-        statistics: {
-          pendingFines: Math.floor(Math.random() * 20) + 5,
-          totalFines: Math.floor(Math.random() * 500) + 100
-        }
-      });
-    }
-
-    return mockRadars;
+    // Mock data disabled - return empty array
+    return [];
   }
 
   private generateMockFines(): Fine[] {
-    const mockFines: Fine[] = [];
-    const plateNumbers = ['ABC123', 'XYZ789', 'DEF456', 'GHI012', 'JKL345', 'MNO678', 'PQR901', 'STU234'];
-    const statuses: ('pending' | 'processed' | 'paid' | 'cancelled')[] = ['pending', 'processed', 'paid', 'cancelled'];
-
-    for (let i = 0; i < 25; i++) {
-      const radarId = Math.floor(Math.random() * 5) + 1;
-      const speedLimit = [50, 60, 80, 30, 40][radarId - 1];
-      const vehicleSpeed = speedLimit + Math.floor(Math.random() * 40) + 10;
-      const timestamp = new Date(Date.now() - (i * 3600000) - Math.random() * 86400000);
-
-      mockFines.push({
-        id: i + 1,
-        radarId: radarId,
-        vehicleSpeed: vehicleSpeed,
-        speedLimit: speedLimit,
-        plateNumber: plateNumbers[Math.floor(Math.random() * plateNumbers.length)],
-        violationTime: timestamp.toISOString(),
-        status: statuses[Math.floor(Math.random() * statuses.length)],
-        fineAmount: Math.floor((vehicleSpeed - speedLimit) * 5) + 50,
-        createdAt: timestamp.toISOString(),
-        updatedAt: timestamp.toISOString()
-      });
-    }
-
-    return mockFines.sort((a, b) => new Date(b.violationTime).getTime() - new Date(a.violationTime).getTime());
+    // Mock data disabled - return empty array
+    return [];
   }
 
-  private initializeMockMode(): void {
-    console.log('UDP Client: Initializing mock mode due to connection failure');
-    this.useMockData = true;
-    this.cachedRadars = this.generateMockRadars();
-    this.cachedFines = this.generateMockFines();
+  private generateMockData(): void {
+    console.log('❌ MOCK DATA DISABLED - No fake radar/fine data will be generated');
+    console.log('💡 To receive real radar data:');
+    console.log('   1. Start backend UDP service on port 17081');
+    console.log('   2. Send UDP messages in format: "ID: 1,Speed: 55, Time: 15:49:09."');
+    console.log('   3. Backend will process and correlate with FTP images');
     
-    // Simulate connection after a short delay
+    // DO NOT USE MOCK DATA - Keep empty
+    this.useMockData = false;
+    this.cachedRadars = [];
+    this.cachedFines = [];
+    
+    // Notify that no data is available (no fake data)
     setTimeout(() => {
-      this.notifyConnectionListeners(true);
-      this.notifyRadarListeners(this.cachedRadars);
-      this.notifyFineListeners(this.cachedFines);
+      this.notifyConnectionListeners(false);
+      this.notifyRadarListeners([]);
+      this.notifyFineListeners([]);
     }, 1000);
-
-    // Simulate periodic updates
-    setInterval(() => {
-      if (this.useMockData) {
-        // Occasionally add a new mock fine
-        if (Math.random() < 0.1) { // 10% chance every interval
-          const newFine: Fine = {
-            id: Date.now(),
-            radarId: Math.floor(Math.random() * 5) + 1,
-            vehicleSpeed: Math.floor(Math.random() * 40) + 60,
-            speedLimit: 50,
-            plateNumber: `NEW${Math.floor(Math.random() * 999)}`,
-            violationTime: new Date().toISOString(),
-            status: 'pending',
-            fineAmount: Math.floor(Math.random() * 100) + 50,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          };
-          
-          this.cachedFines.unshift(newFine);
-          // Keep only last 50 fines
-          if (this.cachedFines.length > 50) {
-            this.cachedFines = this.cachedFines.slice(0, 50);
-          }
-          this.notifyFineListeners(this.cachedFines);
-        }
-      }
-    }, 30000); // Every 30 seconds
   }
 
   private connect(): void {
@@ -234,18 +165,21 @@ class UDPClientService {
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++;
       console.log(`Scheduling UDP reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${this.reconnectDelay}ms`);
-      
       setTimeout(() => {
         this.connect();
       }, this.reconnectDelay);
     } else {
       console.error('Max UDP reconnection attempts reached, switching to mock mode');
-      this.initializeMockMode();
+      this.generateMockData();
     }
   }
 
   private handleMessage(message: UDPMessage): void {
     console.log('Received UDP message:', message);
+    if (this.useMockData) {
+      console.log('UDP Client: Mock mode enabled - ignoring real UDP messages');
+      return;
+    }
 
     switch (message.type) {
       case 'radar':

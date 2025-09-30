@@ -34,6 +34,7 @@ import {
 import { useDropzone } from 'react-dropzone';
 import realTimeDataService from '../services/realTimeDataService';
 import { PlateRecognitionImage } from '../services/ftpClient';
+import RealTimePlateRecognition from '../components/RealTimePlateRecognition';
 
 interface UploadedFile {
   file: File;
@@ -62,6 +63,8 @@ interface Statistics {
 }
 
 const PlateRecognition: React.FC = () => {
+  // All hooks must be at the top level - NEVER call hooks conditionally
+  const [showRealTimeView, setShowRealTimeView] = useState(true);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [results, setResults] = useState<RecognitionResult[]>([]);
@@ -78,6 +81,7 @@ const PlateRecognition: React.FC = () => {
     aiModel: 'gpt-4o-mini'
   });
 
+  // All hooks must be called before any conditional returns
   const setupRealTimeData = useCallback(() => {
     // Subscribe to connection status
     const unsubscribeConnection = realTimeDataService.onConnectionChange((status) => {
@@ -191,6 +195,11 @@ const PlateRecognition: React.FC = () => {
     },
     multiple: true,
   });
+
+  // Show real-time view by default - AFTER all hooks are called
+  if (showRealTimeView) {
+    return <RealTimePlateRecognition />;
+  }
 
   const removeFile = (id: string) => {
     setUploadedFiles(prev => {

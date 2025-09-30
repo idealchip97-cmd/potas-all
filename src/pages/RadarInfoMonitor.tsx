@@ -46,7 +46,7 @@ function TabPanel(props: TabPanelProps) {
   );
 }
 
-const UDPMonitor: React.FC = () => {
+const RadarInfoMonitor: React.FC = () => {
   const [radars, setRadars] = useState<Radar[]>([]);
   const [fines, setFines] = useState<Fine[]>([]);
   const [loading, setLoading] = useState(true);
@@ -159,7 +159,7 @@ const UDPMonitor: React.FC = () => {
           <Storage sx={{ fontSize: '2rem', color: isConnected ? 'success.main' : 'error.main' }} />
           <Box>
             <Typography variant="h4" component="h1">
-              UDP Server Monitor
+              Radar Info Monitor
             </Typography>
             <Typography variant="subtitle1" color="textSecondary">
               Server: 192.186.1.14:17081
@@ -388,4 +388,4 @@ const UDPMonitor: React.FC = () => {
   );
 };
 
-export default UDPMonitor;
+export default RadarInfoMonitor;

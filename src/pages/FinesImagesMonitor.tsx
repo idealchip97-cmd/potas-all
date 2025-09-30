@@ -46,11 +46,12 @@ interface FilterOptions {
   search: string;
 }
 
-const FTPMonitor: React.FC = () => {
+const FinesImagesMonitor: React.FC = () => {
   const [images, setImages] = useState<PlateRecognitionImage[]>([]);
   const [filteredImages, setFilteredImages] = useState<PlateRecognitionImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
+  const [connectionMode, setConnectionMode] = useState<string>('disconnected');
   const [error, setError] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<PlateRecognitionImage | null>(null);
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
@@ -77,7 +78,16 @@ const FTPMonitor: React.FC = () => {
     setupRealTimeMonitoring();
     loadAvailableDates();
     
+    // Set up auto-refresh every 30 seconds for real-time updates
+    const autoRefreshInterval = setInterval(() => {
+      console.log('🔄 Real-time refresh: Loading fresh FTP images');
+      // Force fresh data load
+      loadFreshImages();
+      loadAvailableDates();
+    }, 30000);
+    
     return () => {
+      clearInterval(autoRefreshInterval);
       // Cleanup subscriptions
     };
   }, []);
@@ -91,6 +101,34 @@ const FTPMonitor: React.FC = () => {
     }
   };
 
+  const loadFreshImages = async () => {
+    try {
+      // Direct API call to local image server for fresh data
+      const response = await fetch('http://localhost:3003/api/ftp-images/list?camera=192.168.1.54&date=all');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.files) {
+          const formattedImages = data.files.map((file: any) => ({
+            id: file.filename,
+            filename: file.filename,
+            timestamp: file.timestamp,
+            size: file.size,
+            url: `http://localhost:3003${file.url}`,
+            imageUrl: `http://localhost:3003${file.url}`,
+            thumbnailUrl: `http://localhost:3003${file.url}`,
+            plateNumber: 'Processing...',
+            confidence: 0,
+            status: 'pending' as const
+          }));
+          setImages(formattedImages);
+          console.log(`📸 Real-time: Loaded ${formattedImages.length} fresh images`);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load fresh images:', error);
+    }
+  };
+
   useEffect(() => {
     applyFilters();
   }, [images, filters]);
@@ -101,6 +139,10 @@ const FTPMonitor: React.FC = () => {
     // Subscribe to connection status
     const unsubscribeConnection = realTimeDataService.onConnectionChange((status) => {
       setIsConnected(status.ftp);
+      
+      // Set connection mode based on status
+      setConnectionMode(status.ftp ? 'local_server' : 'disconnected');
+      
       if (!status.ftp) {
         setError('FTP connection lost. Monitoring disabled.');
       } else {
@@ -201,14 +243,14 @@ const FTPMonitor: React.FC = () => {
 
   const handleRefresh = () => {
     setLoading(true);
-    realTimeDataService.requestImageList();
+    ftpClientService.requestFileList();
   };
 
   const handleClearCache = () => {
     setLoading(true);
     setImages([]);
     setFilteredImages([]);
-    realTimeDataService.clearFTPCacheAndRefresh();
+    ftpClientService.clearCacheAndRefresh();
   };
 
   const handleDateFilterChange = async (selectedDate: string) => {
@@ -216,10 +258,28 @@ const FTPMonitor: React.FC = () => {
     setFilters(prev => ({ ...prev, dateRange: selectedDate }));
     
     try {
-      if (selectedDate === 'all') {
-        await ftpClientService.filterImagesByDate();
-      } else {
-        await ftpClientService.filterImagesByDate(selectedDate);
+      // Reload images with the selected date filter
+      const response = await fetch(`http://localhost:3003/api/ftp-images/list?camera=192.168.1.54&date=${selectedDate}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.files) {
+          const formattedImages = data.files.map((file: any) => ({
+            id: file.filename,
+            filename: file.filename,
+            timestamp: file.timestamp,
+            size: file.size,
+            url: `http://localhost:3003${file.url}`,
+            imageUrl: `http://localhost:3003${file.url}`,
+            thumbnailUrl: `http://localhost:3003${file.url}`,
+            plateNumber: 'Processing...',
+            confidence: 0,
+            status: 'pending' as const,
+            processingStatus: 'completed' as const,
+            processed: true
+          }));
+          setImages(formattedImages);
+          console.log(`📸 Filtered: Loaded ${formattedImages.length} images for date ${selectedDate}`);
+        }
       }
     } catch (error) {
       console.error('Failed to filter images by date:', error);
@@ -254,6 +314,39 @@ const FTPMonitor: React.FC = () => {
     }
   };
 
+  const getConnectionLabel = () => {
+    switch (connectionMode) {
+      case 'local_server': return 'Local Server';
+      case 'ftp_websocket': return 'FTP WebSocket';
+      case 'ftp_http_api': return 'FTP Connected';
+      case 'ftp_auth_failed': return 'Auth Failed';
+      case 'disconnected': return 'Disconnected';
+      default: return isConnected ? 'Connected' : 'Disconnected';
+    }
+  };
+
+  const getConnectionColor = (): 'success' | 'error' | 'warning' | 'info' => {
+    switch (connectionMode) {
+      case 'local_server': return 'info';
+      case 'ftp_websocket': return 'success';
+      case 'ftp_http_api': return 'success';
+      case 'ftp_auth_failed': return 'error';
+      case 'disconnected': return 'error';
+      default: return isConnected ? 'success' : 'error';
+    }
+  };
+
+  const getLoadingMessage = () => {
+    switch (connectionMode) {
+      case 'local_server': return 'Connected to local server - Loading images...';
+      case 'ftp_websocket': return 'Connected to FTP WebSocket - Fetching file list';
+      case 'ftp_http_api': return 'Connected to FTP HTTP API - Loading real images...';
+      case 'ftp_auth_failed': return 'FTP authentication failed - Using local fallback';
+      case 'disconnected': return 'Attempting connection... Will fallback to local server';
+      default: return isConnected ? 'Connected - Fetching file list' : 'Connecting...';
+    }
+  };
+
   if (loading && images.length === 0) {
     return (
       <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center" minHeight="400px">
@@ -262,10 +355,10 @@ const FTPMonitor: React.FC = () => {
           {isConnected ? 'Loading FTP data...' : 'Connecting to FTP server...'}
         </Typography>
         <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
-          Server: 192.168.1.14:21 (WebSocket Proxy: 18081)
+          {connectionMode === 'local_server' ? 'Local Server: localhost:3003' : 'FTP Server: 192.168.1.55:21'}
         </Typography>
         <Typography variant="body2" color="textSecondary" sx={{ mt: 0.5 }}>
-          {isConnected ? 'Connected - Fetching file list' : 'Attempting connection... Will fallback to demo data if unavailable'}
+          {getLoadingMessage()}
         </Typography>
       </Box>
     );
@@ -279,16 +372,16 @@ const FTPMonitor: React.FC = () => {
           <CloudUpload sx={{ fontSize: '2rem', color: isConnected ? 'success.main' : 'error.main' }} />
           <Box>
             <Typography variant="h4" component="h1">
-              FTP Server Monitor
+              Fines Images Monitor
             </Typography>
             <Typography variant="subtitle1" color="textSecondary">
-              Server: 192.168.1.14:21
+              {connectionMode === 'local_server' ? 'Local Server: localhost:3003' : 'FTP Server: 192.168.1.55:21'}
             </Typography>
           </Box>
           <Chip 
             icon={isConnected ? <Wifi /> : <WifiOff />}
-            label={isConnected ? 'Connected' : 'Disconnected'} 
-            color={isConnected ? 'success' : 'error'} 
+            label={getConnectionLabel()} 
+            color={getConnectionColor()} 
           />
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
@@ -442,7 +535,7 @@ const FTPMonitor: React.FC = () => {
                     <TableRow key={image.id} hover>
                       <TableCell>
                         <Avatar
-                          src={image.thumbnailUrl || image.imageUrl}
+                          src={image.thumbnailUrl || image.imageUrl || image.url}
                           variant="rounded"
                           sx={{ width: 60, height: 40 }}
                         >
@@ -532,7 +625,7 @@ const FTPMonitor: React.FC = () => {
               <Box sx={{ display: 'flex', gap: 3, mb: 3 }}>
                 <Box sx={{ flex: 1 }}>
                   <img 
-                    src={selectedImage.imageUrl} 
+                    src={selectedImage.imageUrl || selectedImage.url} 
                     alt={selectedImage.filename}
                     style={{ width: '100%', maxHeight: 300, objectFit: 'contain' }}
                   />
@@ -587,7 +680,7 @@ const FTPMonitor: React.FC = () => {
                 Reprocess
               </Button>
               <Button 
-                onClick={() => window.open(selectedImage.imageUrl, '_blank')}
+                onClick={() => window.open(selectedImage.imageUrl || selectedImage.url, '_blank')}
                 startIcon={<Download />}
               >
                 Download
@@ -601,4 +694,4 @@ const FTPMonitor: React.FC = () => {
   );
 };
 
-export default FTPMonitor;
+export default FinesImagesMonitor;

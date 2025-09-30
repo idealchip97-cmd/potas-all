@@ -11,8 +11,8 @@ import Radars from './pages/Radars';
 import Fines from './pages/Fines';
 import Reports from './pages/Reports';
 import PlateRecognition from './pages/PlateRecognition';
-import FTPMonitor from './pages/FTPMonitor';
-import UDPMonitor from './pages/UDPMonitor';
+import FinesImagesMonitor from './pages/FinesImagesMonitor';
+import RadarInfoMonitor from './pages/RadarInfoMonitor';
 
 function App() {
   return (
@@ -74,21 +74,21 @@ function App() {
               }
             />
             <Route
-              path="/ftp-monitor"
+              path="/fines-images-monitor"
               element={
                 <ProtectedRoute>
                   <Layout>
-                    <FTPMonitor />
+                    <FinesImagesMonitor />
                   </Layout>
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/udp-monitor"
+              path="/radar-info-monitor"
               element={
                 <ProtectedRoute>
                   <Layout>
-                    <UDPMonitor />
+                    <RadarInfoMonitor />
                   </Layout>
                 </ProtectedRoute>
               }

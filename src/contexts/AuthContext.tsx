@@ -23,12 +23,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     // Check for stored auth data on app load
+    console.log('Auth: Checking for stored authentication');
     const storedToken = localStorage.getItem('authToken');
     const storedUser = localStorage.getItem('user');
     
     if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(JSON.parse(storedUser));
+      try {
+        const userData = JSON.parse(storedUser);
+        setToken(storedToken);
+        setUser(userData);
+        console.log('Auth: Restored session for', userData.email);
+      } catch (error) {
+        console.error('Auth: Error parsing stored user data', error);
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('user');
+      }
     }
     setIsLoading(false);
   }, []);
@@ -36,19 +45,42 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
       setIsLoading(true);
-      const response = await apiService.login(email, password);
       
-      if (response.success) {
-        const { token: authToken, user: userData } = response.data;
+      // Mock authentication - no backend API call
+      console.log('Auth: Mock login attempt for', email);
+      
+      // Check demo accounts
+      const demoAccounts = [
+        { email: 'admin@potasfactory.com', password: 'admin123', role: 'Admin' },
+        { email: 'operator@potasfactory.com', password: 'operator123', role: 'Operator' },
+        { email: 'viewer@potasfactory.com', password: 'viewer123', role: 'Viewer' },
+      ];
+      
+      const account = demoAccounts.find(acc => acc.email === email && acc.password === password);
+      
+      if (account) {
+        const mockToken = `mock_token_${Date.now()}`;
+        const mockUser: User = {
+          id: 1,
+          email: account.email,
+          firstName: account.role,
+          lastName: 'User',
+          role: account.role.toLowerCase() as 'admin' | 'operator' | 'viewer',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
         
-        setToken(authToken);
-        setUser(userData);
+        setToken(mockToken);
+        setUser(mockUser);
         
-        localStorage.setItem('authToken', authToken);
-        localStorage.setItem('user', JSON.stringify(userData));
+        localStorage.setItem('authToken', mockToken);
+        localStorage.setItem('user', JSON.stringify(mockUser));
         
+        console.log('Auth: Mock login successful for', account.role);
         return true;
       }
+      
+      console.log('Auth: Mock login failed - invalid credentials');
       return false;
     } catch (error) {
       console.error('Login error:', error);

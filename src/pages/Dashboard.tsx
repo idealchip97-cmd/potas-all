@@ -556,7 +556,7 @@ const Dashboard: React.FC = () => {
                 color={connectionStatus.udp ? 'success' : 'error'}
               />
               <Chip 
-                label={`Server: 192.168.1.14:17081`}
+                label={`Server: 192.168.1.55:17081`}
                 variant="outlined"
               />
             </Box>
