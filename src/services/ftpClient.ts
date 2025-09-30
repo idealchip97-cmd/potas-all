@@ -66,7 +66,11 @@ class FTPClientService {
     console.log('📁 Using local image server for real images from /srv/camera_uploads/camera001/192.168.1.54');
     // Force local mode - skip WebSocket connection and use local images directly
     this.useMockData = false;
-    this.initializeLocalMode();
+    
+    // Initialize local mode immediately
+    setTimeout(() => {
+      this.initializeLocalMode();
+    }, 100);
   }
 
   private async initializeLocalMode(): Promise<void> {
@@ -135,6 +139,7 @@ class FTPClientService {
         });
         
         this.notifyImageListeners(this.cachedImages);
+        this.notifyConnectionListeners(true);
         console.log('📸 Real images loaded and displayed');
       } else {
         throw new Error('No files found in response');
@@ -173,11 +178,11 @@ class FTPClientService {
   }
 
   private initializeMockMode(): void {
-    console.error('❌ MOCK MODE DISABLED - No fake images will be shown');
+    console.error('❌ Local image server not available - No images will be shown');
     console.log('💡 To use real images from /srv/camera_uploads/camera001/192.168.1.54:');
-    console.log('   1. Start local image server: sudo node local-image-server.js');
-    console.log('   2. Ensure path permissions are correct');
-    console.log('   3. Click "Clear Cache" button in the FTP Monitor');
+    console.log('   1. Ensure local image server is running on port 3003');
+    console.log('   2. Check that path /srv/camera_uploads/camera001/192.168.1.54 is accessible');
+    console.log('   3. Click "Refresh" button in the FTP Monitor');
     
     // DO NOT USE MOCK DATA - Keep empty
     this.useMockData = false;
@@ -187,7 +192,7 @@ class FTPClientService {
     setTimeout(() => {
       this.notifyConnectionListeners(false);
       this.notifyImageListeners([]);
-    }, 1000);
+    }, 500);
   }
 
   private connect(): void {
@@ -584,6 +589,10 @@ class FTPClientService {
 
   // Utility methods
   public isConnected(): boolean {
+    // In local mode, we're always "connected" if we have images or if local server is available
+    if (!this.useMockData && this.cachedImages.length > 0) {
+      return true;
+    }
     return this.useMockData || (this.ws !== null && this.ws.readyState === WebSocket.OPEN);
   }
 

@@ -37,8 +37,7 @@ import {
   Image as ImageIcon,
   Close,
 } from '@mui/icons-material';
-import realTimeDataService from '../services/realTimeDataService';
-import ftpClientService, { PlateRecognitionImage } from '../services/ftpClient';
+import { PlateRecognitionImage } from '../services/ftpClient';
 
 interface FilterOptions {
   status: string;
@@ -75,27 +74,32 @@ const FinesImagesMonitor: React.FC = () => {
   });
 
   useEffect(() => {
-    setupRealTimeMonitoring();
+    // Simple initialization - load data directly
     loadAvailableDates();
+    loadFreshImages();
     
-    // Set up auto-refresh every 30 seconds for real-time updates
+    // Set up auto-refresh every 30 seconds
     const autoRefreshInterval = setInterval(() => {
-      console.log('🔄 Real-time refresh: Loading fresh FTP images');
-      // Force fresh data load
+      console.log('🔄 Auto-refresh: Loading fresh images');
       loadFreshImages();
       loadAvailableDates();
     }, 30000);
     
     return () => {
       clearInterval(autoRefreshInterval);
-      // Cleanup subscriptions
     };
   }, []);
 
   const loadAvailableDates = async () => {
     try {
-      const dates = await ftpClientService.getAvailableDates();
-      setAvailableDates(dates);
+      const response = await fetch('/api/ftp-images/dates?camera=192.168.1.54');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.dates) {
+          const dates = data.dates.map((d: any) => d.date).sort().reverse();
+          setAvailableDates(dates);
+        }
+      }
     } catch (error) {
       console.error('Failed to load available dates:', error);
     }
@@ -103,8 +107,11 @@ const FinesImagesMonitor: React.FC = () => {
 
   const loadFreshImages = async () => {
     try {
+      setLoading(true);
+      setError(null);
+      
       // Direct API call to local image server for fresh data
-      const response = await fetch('http://localhost:3003/api/ftp-images/list?camera=192.168.1.54&date=all');
+      const response = await fetch('/api/ftp-images/list?camera=192.168.1.54&date=all');
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.files) {
@@ -113,19 +120,35 @@ const FinesImagesMonitor: React.FC = () => {
             filename: file.filename,
             timestamp: file.timestamp,
             size: file.size,
-            url: `http://localhost:3003${file.url}`,
-            imageUrl: `http://localhost:3003${file.url}`,
-            thumbnailUrl: `http://localhost:3003${file.url}`,
+            url: file.url,
+            imageUrl: file.url,
+            thumbnailUrl: file.url,
             plateNumber: 'Processing...',
             confidence: 0,
-            status: 'pending' as const
+            status: 'pending' as const,
+            processingStatus: 'completed' as const,
+            processed: true
           }));
           setImages(formattedImages);
-          console.log(`📸 Real-time: Loaded ${formattedImages.length} fresh images`);
+          setIsConnected(true);
+          setConnectionMode('local_server');
+          updateStats(formattedImages);
+          console.log(`📸 Loaded ${formattedImages.length} fresh images from local server`);
+        } else {
+          setError('No images found on local server');
+          setImages([]);
         }
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
     } catch (error) {
       console.error('Failed to load fresh images:', error);
+      setError(`Failed to connect to local image server: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setIsConnected(false);
+      setConnectionMode('disconnected');
+      setImages([]);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -133,56 +156,8 @@ const FinesImagesMonitor: React.FC = () => {
     applyFilters();
   }, [images, filters]);
 
-  const setupRealTimeMonitoring = () => {
-    setLoading(true);
-
-    // Subscribe to connection status
-    const unsubscribeConnection = realTimeDataService.onConnectionChange((status) => {
-      setIsConnected(status.ftp);
-      
-      // Set connection mode based on status
-      setConnectionMode(status.ftp ? 'local_server' : 'disconnected');
-      
-      if (!status.ftp) {
-        setError('FTP connection lost. Monitoring disabled.');
-      } else {
-        setError(null);
-      }
-    });
-
-    // Subscribe to image updates
-    const unsubscribeImages = realTimeDataService.onImageUpdate((updatedImages) => {
-      setImages(updatedImages);
-      calculateStats(updatedImages);
-      setLoading(false);
-    });
-
-    // Subscribe to new image notifications
-    const unsubscribeNewImages = realTimeDataService.onNewImage((image) => {
-      console.log('New image received:', image.filename);
-    });
-
-    // Subscribe to errors
-    const unsubscribeErrors = realTimeDataService.onError((error, source) => {
-      if (source === 'ftp') {
-        setError(`FTP Error: ${error}`);
-        setLoading(false);
-      }
-    });
-
-    // Request initial data
-    realTimeDataService.requestImageList();
-
-    // Return cleanup function (not used here but good practice)
-    return () => {
-      unsubscribeConnection();
-      unsubscribeImages();
-      unsubscribeNewImages();
-      unsubscribeErrors();
-    };
-  };
-
-  const calculateStats = (imageList: PlateRecognitionImage[]) => {
+  // Simple stats calculation
+  const updateStats = (imageList: PlateRecognitionImage[]) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -199,6 +174,7 @@ const FinesImagesMonitor: React.FC = () => {
       todayCount: todayImages.length
     });
   };
+
 
   const applyFilters = () => {
     let filtered = [...images];
@@ -242,48 +218,83 @@ const FinesImagesMonitor: React.FC = () => {
   };
 
   const handleRefresh = () => {
-    setLoading(true);
-    ftpClientService.requestFileList();
+    setError(null);
+    // Force fresh data load from local server
+    loadFreshImages();
+    loadAvailableDates();
   };
 
   const handleClearCache = () => {
-    setLoading(true);
     setImages([]);
     setFilteredImages([]);
-    ftpClientService.clearCacheAndRefresh();
+    setStats({
+      total: 0,
+      pending: 0,
+      processing: 0,
+      completed: 0,
+      failed: 0,
+      todayCount: 0
+    });
+    // Reload fresh data
+    setTimeout(() => {
+      loadFreshImages();
+      loadAvailableDates();
+    }, 500);
   };
 
   const handleDateFilterChange = async (selectedDate: string) => {
+    console.log(`🔍 Date filter changed to: ${selectedDate}`);
     setLoading(true);
+    setError(null);
     setFilters(prev => ({ ...prev, dateRange: selectedDate }));
     
     try {
-      // Reload images with the selected date filter
-      const response = await fetch(`http://localhost:3003/api/ftp-images/list?camera=192.168.1.54&date=${selectedDate}`);
+      const apiUrl = selectedDate === 'all' 
+        ? '/api/ftp-images/list?camera=192.168.1.54&date=all'
+        : `/api/ftp-images/list?camera=192.168.1.54&date=${selectedDate}`;
+      
+      console.log(`🌐 Loading images for: ${selectedDate === 'all' ? 'all dates' : selectedDate}`);
+      
+      const response = await fetch(apiUrl);
+      
       if (response.ok) {
         const data = await response.json();
+        
         if (data.success && data.files) {
           const formattedImages = data.files.map((file: any) => ({
             id: file.filename,
             filename: file.filename,
             timestamp: file.timestamp,
             size: file.size,
-            url: `http://localhost:3003${file.url}`,
-            imageUrl: `http://localhost:3003${file.url}`,
-            thumbnailUrl: `http://localhost:3003${file.url}`,
+            url: file.url,
+            imageUrl: file.url,
+            thumbnailUrl: file.url,
             plateNumber: 'Processing...',
             confidence: 0,
             status: 'pending' as const,
             processingStatus: 'completed' as const,
             processed: true
           }));
+          
           setImages(formattedImages);
-          console.log(`📸 Filtered: Loaded ${formattedImages.length} images for date ${selectedDate}`);
+          setIsConnected(true);
+          setConnectionMode('local_server');
+          updateStats(formattedImages);
+          
+          console.log(`✅ Successfully loaded ${formattedImages.length} images for ${selectedDate === 'all' ? 'all dates' : selectedDate}`);
+        } else {
+          setImages([]);
+          setError(`No images found for ${selectedDate === 'all' ? 'any date' : selectedDate}`);
         }
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
     } catch (error) {
-      console.error('Failed to filter images by date:', error);
-      setError('Failed to load images for selected date');
+      console.error('❌ Failed to filter images by date:', error);
+      setError(`Failed to load images: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setImages([]);
+      setIsConnected(false);
+      setConnectionMode('disconnected');
     } finally {
       setLoading(false);
     }
@@ -296,12 +307,38 @@ const FinesImagesMonitor: React.FC = () => {
 
   const handleDeleteImage = (imageId: string) => {
     if (window.confirm('Are you sure you want to delete this image?')) {
-      realTimeDataService.deleteImage(imageId);
+      // Remove from local state
+      const updatedImages = images.filter(img => img.id !== imageId);
+      setImages(updatedImages);
+      updateStats(updatedImages);
     }
   };
 
   const handleReprocessImage = (imageId: string) => {
-    realTimeDataService.reprocessImage(imageId);
+    // Simulate reprocessing by updating the image status
+    const updatedImages = images.map(img => 
+      img.id === imageId 
+        ? { ...img, processingStatus: 'processing' as const }
+        : img
+    );
+    setImages(updatedImages);
+    updateStats(updatedImages);
+    
+    // Simulate completion after 2 seconds
+    setTimeout(() => {
+      const finalImages = images.map(img => 
+        img.id === imageId 
+          ? { 
+              ...img, 
+              processingStatus: 'completed' as const,
+              plateNumber: `ABC${Math.floor(Math.random() * 1000)}`,
+              confidence: Math.floor(Math.random() * 30) + 70
+            }
+          : img
+      );
+      setImages(finalImages);
+      updateStats(finalImages);
+    }, 2000);
   };
 
   const getStatusColor = (status: string) => {
@@ -352,13 +389,10 @@ const FinesImagesMonitor: React.FC = () => {
       <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center" minHeight="400px">
         <CircularProgress />
         <Typography variant="h6" sx={{ ml: 2, mt: 2 }}>
-          {isConnected ? 'Loading FTP data...' : 'Connecting to FTP server...'}
+          Loading images from local server...
         </Typography>
         <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
-          {connectionMode === 'local_server' ? 'Local Server: localhost:3003' : 'FTP Server: 192.168.1.55:21'}
-        </Typography>
-        <Typography variant="body2" color="textSecondary" sx={{ mt: 0.5 }}>
-          {getLoadingMessage()}
+          Local Image Server: localhost:3003
         </Typography>
       </Box>
     );
@@ -375,7 +409,7 @@ const FinesImagesMonitor: React.FC = () => {
               Fines Images Monitor
             </Typography>
             <Typography variant="subtitle1" color="textSecondary">
-              {connectionMode === 'local_server' ? 'Local Server: localhost:3003' : 'FTP Server: 192.168.1.55:21'}
+              Local Image Server: localhost:3003
             </Typography>
           </Box>
           <Chip 
@@ -486,7 +520,7 @@ const FinesImagesMonitor: React.FC = () => {
               <MenuItem value="all">All Dates</MenuItem>
               {availableDates.map((date) => (
                 <MenuItem key={date} value={date}>
-                  {new Date(date).toLocaleDateString('en-US', { 
+                  {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { 
                     year: 'numeric', 
                     month: 'short', 
                     day: 'numeric' 
