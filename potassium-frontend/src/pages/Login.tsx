@@ -12,7 +12,7 @@ import {
   CardContent,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/SimpleAuthContext';
+import { useAuth } from '../contexts/AuthContext';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -43,10 +43,11 @@ const Login: React.FC = () => {
       
       if (success) {
         console.log('✅ Login successful - Redirecting to dashboard');
-        // Force navigation after a short delay to ensure state is set
+        // Force navigation after a longer delay to ensure state is properly set
         setTimeout(() => {
+          console.log('🔄 Navigating to dashboard...');
           navigate('/dashboard', { replace: true });
-        }, 100);
+        }, 300);
       } else {
         console.log('❌ Login failed - Invalid credentials');
         setError('Invalid email or password. Try: admin@potasfactory.com / admin123');

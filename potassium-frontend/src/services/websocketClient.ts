@@ -75,7 +75,10 @@ class WebSocketClient {
           console.error('❌ WebSocket error:', error);
           this.isConnecting = false;
           this.notifyConnectionHandlers(false);
-          reject(error);
+          // Don't reject on error during connection, just log it
+          if (this.reconnectAttempts === 0) {
+            reject(new Error('WebSocket connection failed'));
+          }
         };
 
       } catch (error) {

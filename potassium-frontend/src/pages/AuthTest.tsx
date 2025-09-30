@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Typography, Button, Paper, Alert } from '@mui/material';
-import { useAuth } from '../contexts/SimpleAuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
 const AuthTest: React.FC = () => {

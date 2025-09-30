@@ -33,21 +33,39 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (storedToken && storedUser) {
       try {
         const userData = JSON.parse(storedUser);
+        console.log('Auth: Restoring session for', userData.email);
+        console.log('Auth: User data:', userData);
+        
+        // Set state synchronously to avoid race conditions
         setToken(storedToken);
         setUser(userData);
-        console.log('Auth: Restored session for', userData.email);
-        console.log('Auth: User data:', userData);
+        
+        // Add a small delay to ensure state is set before marking as loaded
+        setTimeout(() => {
+          console.log('Auth: Session restored, setting isLoading to false');
+          setIsLoading(false);
+        }, 100);
+        
       } catch (error) {
         console.error('Auth: Error parsing stored user data', error);
         localStorage.removeItem('authToken');
         localStorage.removeItem('user');
+        setIsLoading(false);
       }
     } else {
       console.log('Auth: No stored authentication found');
+      setIsLoading(false);
     }
-    
-    console.log('Auth: Setting isLoading to false');
-    setIsLoading(false);
+
+    // Failsafe: ensure loading state doesn't persist indefinitely
+    const failsafeTimeout = setTimeout(() => {
+      console.log('Auth: Failsafe timeout - forcing isLoading to false');
+      setIsLoading(false);
+    }, 5000);
+
+    return () => {
+      clearTimeout(failsafeTimeout);
+    };
   }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
@@ -82,19 +100,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           updatedAt: new Date().toISOString()
         };
         
-        // Set state immediately
-        setToken(authToken);
-        setUser(userData);
-        
-        // Save to localStorage
+        // Save to localStorage first
         try {
           localStorage.setItem('authToken', authToken);
           localStorage.setItem('user', JSON.stringify(userData));
-          console.log('✅ Login successful - Session saved');
+          console.log('✅ Login successful - Session saved to localStorage');
         } catch (storageError) {
           console.warn('⚠️ Could not save to localStorage:', storageError);
         }
         
+        // Set state after localStorage is saved
+        setToken(authToken);
+        setUser(userData);
+        
+        console.log('✅ Login successful - State updated');
         return true;
       } else {
         console.log('❌ Invalid credentials');
@@ -115,12 +134,32 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     localStorage.removeItem('user');
   };
 
+  // Calculate authentication status more reliably
+  const isAuthenticated = React.useMemo(() => {
+    const hasToken = !!token;
+    const hasUser = !!user;
+    const hasStoredToken = !!localStorage.getItem('authToken');
+    const hasStoredUser = !!localStorage.getItem('user');
+    
+    const authenticated = (hasToken && hasUser) || (hasStoredToken && hasStoredUser);
+    
+    console.log('Auth: isAuthenticated calculation:', {
+      hasToken,
+      hasUser,
+      hasStoredToken,
+      hasStoredUser,
+      authenticated
+    });
+    
+    return authenticated;
+  }, [token, user]);
+
   const value: AuthContextType = {
     user,
     token,
     login,
     logout,
-    isAuthenticated: !!token && !!user,
+    isAuthenticated,
     isLoading,
   };
 

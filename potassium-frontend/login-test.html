@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login Test - Inject into React App</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f0f0f0; }
+        .test-box { background: white; padding: 20px; border-radius: 8px; margin: 15px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .success { background: #d4edda; color: #155724; padding: 10px; border-radius: 4px; }
+        .error { background: #f8d7da; color: #721c24; padding: 10px; border-radius: 4px; }
+        .info { background: #d1ecf1; color: #0c5460; padding: 10px; border-radius: 4px; }
+        code { background: #f8f9fa; padding: 2px 4px; border-radius: 3px; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <h1>🔧 React Login Debugger</h1>
+    
+    <div class="test-box">
+        <h3>Step 1: Open React App</h3>
+        <button onclick="openReactApp()">Open React App (Port 3001)</button>
+        <div class="info">
+            <strong>Instructions:</strong>
+            <ol>
+                <li>Click the button above to open the React app</li>
+                <li>Navigate to the login page if not already there</li>
+                <li>Come back to this page and use the tools below</li>
+            </ol>
+        </div>
+    </div>
+    
+    <div class="test-box">
+        <h3>Step 2: Inject Login Credentials</h3>
+        <button onclick="injectCredentials()">Inject Admin Credentials</button>
+        <div id="inject-result"></div>
+        <div class="info">
+            This will set the credentials in localStorage that the React app should recognize.
+        </div>
+    </div>
+    
+    <div class="test-box">
+        <h3>Step 3: Test Form Submission</h3>
+        <button onclick="testFormSubmission()">Test Login Form</button>
+        <div id="form-result"></div>
+        <div class="info">
+            This will try to programmatically submit the login form in the React app.
+        </div>
+    </div>
+    
+    <div class="test-box">
+        <h3>Step 4: Manual Console Commands</h3>
+        <p>Copy and paste these commands in the React app's browser console (F12):</p>
+        
+        <h4>Check Authentication State:</h4>
+        <code>localStorage.getItem('authToken')</code><br>
+        <code>localStorage.getItem('user')</code>
+        
+        <h4>Set Credentials Manually:</h4>
+        <code>
+localStorage.setItem('authToken', 'token_' + Date.now());<br>
+localStorage.setItem('user', JSON.stringify({
+  id: 1,
+  email: 'admin@potasfactory.com',
+  firstName: 'Admin',
+  lastName: 'User',
+  role: 'admin',
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString()
+}));<br>
+window.location.reload();
+        </code>
+        
+        <h4>Clear All Data:</h4>
+        <code>localStorage.clear(); window.location.reload();</code>
+    </div>
+    
+    <div class="test-box">
+        <h3>Step 5: Check Current Status</h3>
+        <button onclick="checkStatus()">Check Current Auth Status</button>
+        <div id="status-result"></div>
+    </div>
+    
+    <script>
+        function openReactApp() {
+            window.open('http://localhost:3001/login', '_blank');
+        }
+        
+        function injectCredentials() {
+            const result = document.getElementById('inject-result');
+            try {
+                const token = `token_${Date.now()}_injected`;
+                const user = {
+                    id: 1,
+                    email: 'admin@potasfactory.com',
+                    firstName: 'Admin',
+                    lastName: 'User',
+                    role: 'admin',
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                };
+                
+                localStorage.setItem('authToken', token);
+                localStorage.setItem('user', JSON.stringify(user));
+                
+                result.innerHTML = `
+                    <div class="success">
+                        ✅ Credentials injected successfully!<br>
+                        Token: ${token}<br>
+                        Now refresh the React app or navigate to /dashboard
+                    </div>
+                `;
+                
+                console.log('🔐 Injected credentials:', { token, user });
+                
+            } catch (error) {
+                result.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        }
+        
+        function testFormSubmission() {
+            const result = document.getElementById('form-result');
+            result.innerHTML = `
+                <div class="info">
+                    📝 To test form submission:<br>
+                    1. Go to the React app<br>
+                    2. Open browser console (F12)<br>
+                    3. Try entering credentials and clicking login<br>
+                    4. Look for console messages starting with 🔐, ✅, or ❌<br>
+                    5. If no messages appear, the form isn't submitting properly
+                </div>
+            `;
+        }
+        
+        function checkStatus() {
+            const result = document.getElementById('status-result');
+            const token = localStorage.getItem('authToken');
+            const user = localStorage.getItem('user');
+            
+            if (token && user) {
+                try {
+                    const userData = JSON.parse(user);
+                    result.innerHTML = `
+                        <div class="success">
+                            ✅ Authentication found:<br>
+                            Email: ${userData.email}<br>
+                            Role: ${userData.role}<br>
+                            Token: ${token.substring(0, 20)}...
+                        </div>
+                    `;
+                } catch (error) {
+                    result.innerHTML = `<div class="error">❌ Invalid user data in localStorage</div>`;
+                }
+            } else {
+                result.innerHTML = `<div class="info">ℹ️ No authentication found in localStorage</div>`;
+            }
+        }
+        
+        // Auto-check status on load
+        window.onload = checkStatus;
+    </script>
+</body>
+</html>

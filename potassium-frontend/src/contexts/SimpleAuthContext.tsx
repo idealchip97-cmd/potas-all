@@ -69,7 +69,45 @@ export const SimpleAuthProvider: React.FC<SimpleAuthProviderProps> = ({ children
     setIsLoading(true);
     
     try {
-      // Simple demo accounts
+      // Connect to real backend API
+      const response = await fetch('http://localhost:3000/api/auth/signin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        const { user: userData, token: authToken } = data.data;
+        
+        const user: SimpleUser = {
+          id: userData.id,
+          email: userData.email,
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          role: userData.role,
+        };
+        
+        setToken(authToken);
+        setUser(user);
+        
+        localStorage.setItem('authToken', authToken);
+        localStorage.setItem('user', JSON.stringify(user));
+        
+        console.log('✅ Backend login successful for', userData.email);
+        return true;
+      } else {
+        console.log('❌ Backend login failed:', data.message);
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ Backend login error:', error);
+      
+      // Fallback to demo accounts if backend is unavailable
+      console.log('🔄 Falling back to demo authentication');
       const accounts = [
         { email: 'admin@potasfactory.com', password: 'admin123', role: 'admin' as const },
         { email: 'operator@potasfactory.com', password: 'operator123', role: 'operator' as const },
@@ -82,7 +120,7 @@ export const SimpleAuthProvider: React.FC<SimpleAuthProviderProps> = ({ children
       );
       
       if (account) {
-        const authToken = `token_${Date.now()}`;
+        const authToken = `demo_token_${Date.now()}`;
         const userData: SimpleUser = {
           id: 1,
           email: account.email,
@@ -97,14 +135,10 @@ export const SimpleAuthProvider: React.FC<SimpleAuthProviderProps> = ({ children
         localStorage.setItem('authToken', authToken);
         localStorage.setItem('user', JSON.stringify(userData));
         
-        console.log('✅ Login successful for', account.role);
+        console.log('✅ Demo login successful for', account.role);
         return true;
-      } else {
-        console.log('❌ Invalid credentials');
-        return false;
       }
-    } catch (error) {
-      console.error('❌ Login error:', error);
+      
       return false;
     } finally {
       setIsLoading(false);

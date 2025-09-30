@@ -65,15 +65,15 @@ class UDPClientService {
 
   constructor() {
     // Enable UDP service - connect to real UDP server
-    console.log('UDP Client: Connecting to real UDP server on port 18081');
+    console.log('UDP Client: Will attempt to connect to UDP server');
     this.useMockData = false;
     this.cachedRadars = [];
     this.cachedFines = [];
     
-    // Start connection after short delay
+    // Start connection after longer delay to not interfere with app startup
     setTimeout(() => {
       this.connect();
-    }, 1000);
+    }, 3000);
   }
 
   private generateMockRadars(): Radar[] {
@@ -114,11 +114,12 @@ class UDPClientService {
 
     this.isConnecting = true;
     
-    const wsProxyPort = this.serverPort + 1000; // 18081
-    console.log(`UDP Client: Connecting to WebSocket server at localhost:${wsProxyPort}`);
+    // Connect to backend WebSocket server on port 3000
+    const backendPort = 3000;
+    console.log(`UDP Client: Connecting to backend WebSocket server at localhost:${backendPort}`);
     
     try {
-      const wsUrl = `ws://localhost:${wsProxyPort}`;
+      const wsUrl = `ws://localhost:${backendPort}`;
       
       this.ws = new WebSocket(wsUrl);
 
@@ -154,9 +155,10 @@ class UDPClientService {
       };
 
       this.ws.onerror = (error) => {
-        console.error('❌ UDP WebSocket connection error:', error);
+        console.warn('⚠️ UDP WebSocket connection error:', error);
         this.isConnecting = false;
-        this.notifyErrorListeners('WebSocket connection failed - make sure UDP server is running');
+        this.notifyConnectionListeners(false);
+        // Don't notify error listeners immediately, let reconnect logic handle it
       };
 
     } catch (error) {

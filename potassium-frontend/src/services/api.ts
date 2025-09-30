@@ -17,7 +17,7 @@ import {
 
 class ApiService {
   private api: AxiosInstance;
-  private baseURL = '/api';
+  private baseURL = 'http://localhost:3000/api';
 
   constructor() {
     this.api = axios.create({
@@ -45,9 +45,18 @@ class ApiService {
       (response) => response,
       (error) => {
         if (error.response?.status === 401) {
+          console.log('🔐 Authentication error - clearing stored credentials');
           localStorage.removeItem('authToken');
           localStorage.removeItem('user');
-          window.location.href = '/login';
+          
+          // Only redirect if we're not already on the login page
+          if (!window.location.pathname.includes('/login')) {
+            console.log('🔄 Redirecting to login page');
+            window.location.href = '/login';
+          }
+        } else if (error.code === 'ECONNREFUSED' || error.message.includes('Network Error')) {
+          console.log('🌐 Backend connection failed - using fallback mode');
+          // Don't redirect on network errors, let components handle gracefully
         }
         return Promise.reject(error);
       }

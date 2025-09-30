@@ -52,8 +52,10 @@ class RealTimeDataService extends EventEmitter {
   }
 
   private initialize(): void {
-    // Initialize WebSocket connection
-    this.initializeWebSocket();
+    // Initialize WebSocket connection (non-blocking)
+    setTimeout(() => {
+      this.initializeWebSocket();
+    }, 1000);
     
     // Subscribe to UDP client events
     const unsubscribeUdpConnection = udpClient.onConnectionChange((connected) => {
@@ -111,14 +113,18 @@ class RealTimeDataService extends EventEmitter {
   }
 
   private updateOverallConnectionStatus(): void {
-    this.connectionStatus.overall = this.connectionStatus.websocket && 
-                                   (this.connectionStatus.udp || this.connectionStatus.ftp);
+    // Overall connection is considered good if we have UDP or FTP, WebSocket is optional
+    this.connectionStatus.overall = this.connectionStatus.udp || this.connectionStatus.ftp;
   }
 
   private initializeWebSocket(): void {
-    // Connect to WebSocket server
+    // Connect to WebSocket server with better error handling
     websocketClient.connect().catch(error => {
       console.warn('⚠️ Failed to connect to WebSocket server:', error);
+      // Set websocket as disconnected but don't fail the entire service
+      this.connectionStatus.websocket = false;
+      this.updateOverallConnectionStatus();
+      this.notifyConnectionListeners();
     });
 
     // Subscribe to WebSocket connection changes
