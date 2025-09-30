@@ -7,10 +7,12 @@ const axios = require('axios');
 const app = express();
 const PORT = 3003;
 
-// Enable CORS for the frontend
+// Enable CORS for the frontend - very permissive for development
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3003', 'http://localhost:3004'],
-  credentials: true
+  origin: true, // Allow all origins for development
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With']
 }));
 
 // Parse JSON bodies

@@ -74,21 +74,7 @@ const FinesImagesMonitor: React.FC = () => {
     todayCount: 0
   });
 
-  useEffect(() => {
-    // Simple initialization - load data directly
-    loadAvailableDates();
-    loadFreshImages();
-    
-    // Set up auto-refresh every 30 seconds
-    const autoRefreshInterval = setInterval(() => {
-      console.log('🔄 Auto-refresh: Loading fresh images');
-      loadFreshImages();
-      loadAvailableDates();
-    }, 30000);
-    
-    return () => {
-    };
-  }, []);
+  // Move useEffect after function definitions
 
   const loadAvailableDates = async () => {
     try {
@@ -106,28 +92,38 @@ const FinesImagesMonitor: React.FC = () => {
         try {
           console.log('🔍 Attempting to fetch dates from:', endpoint);
           response = await fetch(endpoint, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        },
-        mode: 'cors'
-      });
-      
-      console.log('📡 Response status:', response.status, response.statusText);
-      console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.dates) {
-          setAvailableDates(data.dates);
-          console.log(`📅 Loaded ${data.dates.length} available dates from image server`);
-        } else {
-          console.warn('⚠️ Image server responded but no dates found:', data);
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json'
+            },
+            mode: 'cors'
+          });
+          
+          console.log('📡 Response status:', response.status, response.statusText);
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.dates) {
+              setAvailableDates(data.dates);
+              console.log(`📅 Loaded ${data.dates.length} available dates from image server via ${endpoint}`);
+              return; // Success, exit the loop
+            } else {
+              console.warn('⚠️ Image server responded but no dates found:', data);
+            }
+          } else {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+        } catch (endpointError: any) {
+          console.warn(`⚠️ Failed to fetch from ${endpoint}:`, endpointError.message);
+          lastError = endpointError;
+          continue; // Try next endpoint
         }
-      } else {
-        console.error(`❌ Image server responded with status ${response.status}: ${response.statusText}`);
       }
+      
+      // If we get here, all endpoints failed
+      throw lastError || new Error('All endpoints failed');
+      
     } catch (error: any) {
       console.error('❌ Failed to load available dates from image server:');
       console.error('   Error name:', error.name || 'Unknown');
@@ -144,21 +140,45 @@ const FinesImagesMonitor: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      // Direct API call to local image server for fresh data
+      // Try multiple endpoints: proxy first, then direct
       const cacheBuster = Date.now();
-      const url = `http://localhost:3003/api/ftp-images/list?camera=192.168.1.54&date=all&_t=${cacheBuster}`;
-      console.log('🔍 Attempting to fetch images from:', url);
+      const endpoints = [
+        `/api/ftp-images/list?camera=192.168.1.54&date=all&_t=${cacheBuster}`, // Via proxy
+        `http://localhost:3003/api/ftp-images/list?camera=192.168.1.54&date=all&_t=${cacheBuster}` // Direct
+      ];
       
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        },
-        mode: 'cors'
-      });
+      let response: Response | null = null;
+      let lastError: any = null;
       
-      console.log('📡 Images response status:', response.status, response.statusText);
+      for (const endpoint of endpoints) {
+        try {
+          console.log('🔍 Attempting to fetch images from:', endpoint);
+          response = await fetch(endpoint, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json'
+            },
+            mode: 'cors'
+          });
+          
+          console.log('📡 Images response status:', response.status, response.statusText);
+          
+          if (response.ok) {
+            break; // Success, exit the loop
+          } else {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+        } catch (endpointError: any) {
+          console.warn(`⚠️ Failed to fetch images from ${endpoint}:`, endpointError.message);
+          lastError = endpointError;
+          continue; // Try next endpoint
+        }
+      }
+      
+      if (!response || !response.ok) {
+        throw lastError || new Error('All image endpoints failed');
+      }
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.files) {
@@ -245,6 +265,24 @@ const FinesImagesMonitor: React.FC = () => {
       setLoading(false);
     }
   };
+
+  // Initialize data loading
+  useEffect(() => {
+    // Simple initialization - load data directly
+    loadAvailableDates();
+    loadFreshImages();
+    
+    // Set up auto-refresh every 30 seconds
+    const autoRefreshInterval = setInterval(() => {
+      console.log('🔄 Auto-refresh: Loading fresh images');
+      loadFreshImages();
+      loadAvailableDates();
+    }, 30000);
+    
+    return () => {
+      clearInterval(autoRefreshInterval);
+    };
+  }, []);
 
   useEffect(() => {
     applyFilters();
