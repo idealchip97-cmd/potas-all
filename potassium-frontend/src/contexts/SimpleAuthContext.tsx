@@ -1,5 +1,4 @@
-import * as React from 'react';
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 // Simple User type
 interface SimpleUser {
