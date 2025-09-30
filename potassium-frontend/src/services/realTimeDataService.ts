@@ -301,6 +301,15 @@ class RealTimeDataService extends EventEmitter {
     }
   }
 
+  public reconnectFTP(): void {
+    try {
+      console.log('🔄 Reconnecting FTP service...');
+      ftpClient.forceReconnectToLocalServer();
+    } catch (error) {
+      this.notifyErrorListeners('Failed to reconnect FTP service', 'ftp');
+    }
+  }
+
   public disconnect(): void {
     try {
       udpClient.disconnect();

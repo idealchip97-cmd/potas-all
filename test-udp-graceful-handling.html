@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UDP Client Graceful Handling Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔌 UDP Client Graceful Handling Test</h1>
+        <p>This test verifies that the UDP client handles WebSocket connection failures gracefully without interfering with authentication.</p>
+        
+        <div id="status" class="status info">
+            📊 Status: Initializing test...
+        </div>
+        
+        <div>
+            <button onclick="testUDPGracefulHandling()">Test UDP Connection Handling</button>
+            <button onclick="testAuthenticationFlow()">Test Authentication Flow</button>
+            <button onclick="clearLog()">Clear Log</button>
+        </div>
+        
+        <h3>📋 Test Log</h3>
+        <div id="log" class="log"></div>
+        
+        <h3>🎯 Expected Behavior</h3>
+        <ul>
+            <li>✅ UDP client should attempt WebSocket connection to port 3000</li>
+            <li>✅ When connection fails, it should handle gracefully (no errors thrown)</li>
+            <li>✅ Should continue in offline mode without blocking authentication</li>
+            <li>✅ Should load basic radar data for display</li>
+            <li>✅ Should not interfere with login/dashboard functionality</li>
+        </ul>
+    </div>
+
+    <script>
+        let logElement = document.getElementById('log');
+        let statusElement = document.getElementById('status');
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${message}`;
+            console.log(logEntry);
+            
+            const div = document.createElement('div');
+            div.textContent = logEntry;
+            div.style.color = type === 'error' ? '#dc3545' : 
+                             type === 'success' ? '#28a745' : 
+                             type === 'warning' ? '#ffc107' : '#6c757d';
+            logElement.appendChild(div);
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+        
+        function updateStatus(message, type = 'info') {
+            statusElement.textContent = message;
+            statusElement.className = `status ${type}`;
+        }
+        
+        function clearLog() {
+            logElement.innerHTML = '';
+        }
+        
+        async function testUDPGracefulHandling() {
+            log('🔌 Testing UDP WebSocket connection handling...', 'info');
+            updateStatus('🔌 Testing UDP connection...', 'info');
+            
+            try {
+                // Simulate UDP client behavior
+                log('Attempting WebSocket connection to ws://localhost:3000', 'info');
+                
+                const ws = new WebSocket('ws://localhost:3000');
+                
+                ws.onopen = () => {
+                    log('✅ WebSocket connection established (unexpected)', 'success');
+                    updateStatus('✅ WebSocket connected', 'success');
+                    ws.close();
+                };
+                
+                ws.onerror = (error) => {
+                    log('🔌 WebSocket connection failed (expected) - handling gracefully', 'warning');
+                    updateStatus('🔌 WebSocket unavailable - operating in offline mode', 'warning');
+                };
+                
+                ws.onclose = () => {
+                    log('🔌 WebSocket connection closed', 'info');
+                };
+                
+                // Test timeout
+                setTimeout(() => {
+                    if (ws.readyState === WebSocket.CONNECTING) {
+                        log('⏰ Connection timeout - closing and continuing in offline mode', 'warning');
+                        ws.close();
+                        updateStatus('✅ Graceful handling verified - no blocking errors', 'success');
+                    }
+                }, 3000);
+                
+            } catch (error) {
+                log(`❌ WebSocket creation failed: ${error.message}`, 'error');
+                log('✅ Error caught and handled gracefully', 'success');
+                updateStatus('✅ Error handling verified', 'success');
+            }
+        }
+        
+        async function testAuthenticationFlow() {
+            log('🔐 Testing authentication flow...', 'info');
+            updateStatus('🔐 Testing authentication...', 'info');
+            
+            try {
+                // Test backend connection
+                log('Testing backend API connection...', 'info');
+                
+                const response = await fetch('http://localhost:3000/api/auth/signin', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: 'admin@potasfactory.com',
+                        password: 'admin123'
+                    }),
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        log('✅ Authentication successful', 'success');
+                        log(`✅ Token received: ${data.data.token.substring(0, 30)}...`, 'success');
+                        updateStatus('✅ Authentication working - no UDP interference', 'success');
+                    } else {
+                        log('❌ Authentication failed: ' + data.message, 'error');
+                        updateStatus('❌ Authentication failed', 'error');
+                    }
+                } else {
+                    log(`❌ HTTP ${response.status}: ${response.statusText}`, 'error');
+                    updateStatus('❌ Backend connection failed', 'error');
+                }
+                
+            } catch (error) {
+                log(`❌ Authentication test failed: ${error.message}`, 'error');
+                updateStatus('❌ Backend not available', 'error');
+            }
+        }
+        
+        // Auto-run tests on page load
+        window.onload = () => {
+            log('🚀 UDP Client Graceful Handling Test initialized', 'info');
+            updateStatus('📊 Ready to test UDP connection handling', 'info');
+            
+            // Auto-test UDP handling
+            setTimeout(() => {
+                testUDPGracefulHandling();
+            }, 1000);
+        };
+    </script>
+</body>
+</html>

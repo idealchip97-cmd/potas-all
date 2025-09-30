@@ -36,15 +36,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         console.log('Auth: Restoring session for', userData.email);
         console.log('Auth: User data:', userData);
         
-        // Set state synchronously to avoid race conditions
-        setToken(storedToken);
-        setUser(userData);
-        
-        // Add a small delay to ensure state is set before marking as loaded
-        setTimeout(() => {
-          console.log('Auth: Session restored, setting isLoading to false');
-          setIsLoading(false);
-        }, 100);
+        // Validate token with backend if it's not a demo token
+        if (!storedToken.startsWith('demo_token_')) {
+          validateStoredToken(storedToken, userData);
+        } else {
+          // Demo token, restore immediately
+          setToken(storedToken);
+          setUser(userData);
+          setTimeout(() => {
+            console.log('Auth: Demo session restored, setting isLoading to false');
+            setIsLoading(false);
+          }, 100);
+        }
         
       } catch (error) {
         console.error('Auth: Error parsing stored user data', error);
@@ -55,6 +58,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } else {
       console.log('Auth: No stored authentication found');
       setIsLoading(false);
+    }
+
+    async function validateStoredToken(token: string, userData: User) {
+      try {
+        // Import API service dynamically
+        const { default: apiService } = await import('../services/api');
+        
+        // Try to make an authenticated request to validate the token
+        await apiService.getDashboardStats();
+        
+        // If successful, restore the session
+        setToken(token);
+        setUser(userData);
+        console.log('Auth: Token validated, session restored');
+      } catch (error) {
+        console.warn('Auth: Stored token is invalid, clearing session');
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('user');
+      } finally {
+        setIsLoading(false);
+      }
     }
 
     // Failsafe: ensure loading state doesn't persist indefinitely
@@ -74,53 +98,76 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setIsLoading(true);
       
-      // Simple demo accounts - always works
-      const validCredentials = [
-        { email: 'admin@potasfactory.com', password: 'admin123', role: 'admin' },
-        { email: 'operator@potasfactory.com', password: 'operator123', role: 'operator' },
-        { email: 'viewer@potasfactory.com', password: 'viewer123', role: 'viewer' },
-      ];
+      // Import API service dynamically to avoid circular dependencies
+      const { default: apiService } = await import('../services/api');
       
-      // Find matching credentials
-      const account = validCredentials.find(acc => 
-        acc.email.toLowerCase() === email.toLowerCase() && 
-        acc.password === password
-      );
+      // Try to authenticate with the backend API
+      const response = await apiService.login(email, password);
       
-      if (account) {
-        // Create user session
-        const authToken = `token_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        const userData: User = {
-          id: 1,
-          email: account.email,
-          firstName: account.role.charAt(0).toUpperCase() + account.role.slice(1),
-          lastName: 'User',
-          role: account.role as 'admin' | 'operator' | 'viewer',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
+      if (response.success && response.data) {
+        const { token, user } = response.data;
+        
+        console.log('✅ Backend authentication successful for:', user.email);
         
         // Save to localStorage first
         try {
-          localStorage.setItem('authToken', authToken);
-          localStorage.setItem('user', JSON.stringify(userData));
+          localStorage.setItem('authToken', token);
+          localStorage.setItem('user', JSON.stringify(user));
           console.log('✅ Login successful - Session saved to localStorage');
         } catch (storageError) {
           console.warn('⚠️ Could not save to localStorage:', storageError);
         }
         
         // Set state after localStorage is saved
-        setToken(authToken);
-        setUser(userData);
+        setToken(token);
+        setUser(user);
         
         console.log('✅ Login successful - State updated');
         return true;
       } else {
-        console.log('❌ Invalid credentials');
+        console.log('❌ Backend authentication failed:', response.message || 'Invalid credentials');
         return false;
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Login error:', error);
+      
+      // Fallback to demo accounts if backend is not available
+      if (error.code === 'ECONNREFUSED' || error.message?.includes('Network Error')) {
+        console.log('🔄 Backend unavailable, trying demo accounts...');
+        
+        const validCredentials = [
+          { email: 'admin@potasfactory.com', password: 'admin123', role: 'admin' },
+          { email: 'operator@potasfactory.com', password: 'operator123', role: 'operator' },
+          { email: 'viewer@potasfactory.com', password: 'viewer123', role: 'viewer' },
+        ];
+        
+        const account = validCredentials.find(acc => 
+          acc.email.toLowerCase() === email.toLowerCase() && 
+          acc.password === password
+        );
+        
+        if (account) {
+          const authToken = `demo_token_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          const userData: User = {
+            id: 1,
+            email: account.email,
+            firstName: account.role.charAt(0).toUpperCase() + account.role.slice(1),
+            lastName: 'User',
+            role: account.role as 'admin' | 'operator' | 'viewer',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          
+          localStorage.setItem('authToken', authToken);
+          localStorage.setItem('user', JSON.stringify(userData));
+          setToken(authToken);
+          setUser(userData);
+          
+          console.log('✅ Demo login successful');
+          return true;
+        }
+      }
+      
       return false;
     } finally {
       setIsLoading(false);

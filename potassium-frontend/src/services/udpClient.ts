@@ -58,28 +58,68 @@ class UDPClientService {
   private connectionListeners: ((connected: boolean) => void)[] = [];
   private errorListeners: ((error: string) => void)[] = [];
 
-  // Data cache
   private cachedRadars: Radar[] = [];
   private cachedFines: Fine[] = [];
   private cachedRadarReadings: any[] = [];
 
   constructor() {
-    // Enable UDP service - connect to real UDP server
-    console.log('UDP Client: Will attempt to connect to UDP server');
+    // Initialize UDP client in graceful mode
+    console.log('UDP Client: Initializing with graceful fallback mode');
     this.useMockData = false;
     this.cachedRadars = [];
     this.cachedFines = [];
     
-    // Start connection after longer delay to not interfere with app startup
+    // Start connection after delay, but don't block if it fails
     setTimeout(() => {
+      this.attemptConnection();
+    }, 2000);
+  }
+
+  private attemptConnection(): void {
+    console.log('UDP Client: Attempting WebSocket connection...');
+    try {
       this.connect();
-    }, 3000);
+    } catch (error) {
+      console.log('UDP Client: Connection attempt failed, continuing in offline mode');
+      this.handleConnectionFailure();
+    }
+  }
+
+  private handleConnectionFailure(): void {
+    console.log('UDP Client: Operating in offline mode - WebSocket connection not available');
+    this.useMockData = false; // Don't use mock data, just operate without real-time updates
+    this.notifyConnectionListeners(false);
+    
+    // Load basic radar data from mock for display purposes
+    this.cachedRadars = this.generateMockRadars();
+    this.notifyRadarListeners(this.cachedRadars);
   }
 
   private generateMockRadars(): Radar[] {
-    // Import mock radar data
-    const { mockRadars } = require('../data/mockRadars');
-    return mockRadars;
+    try {
+      // Import mock radar data
+      const { mockRadars } = require('../data/mockRadars');
+      return mockRadars.map((radar: any) => ({
+        id: radar.id,
+        name: radar.name,
+        location: radar.location,
+        status: radar.status,
+        speedLimit: radar.speedLimit,
+        latitude: radar.latitude,
+        longitude: radar.longitude,
+        serialNumber: radar.serialNumber || '',
+        ipAddress: radar.ipAddress || '',
+        installationDate: radar.installationDate || new Date().toISOString(),
+        lastMaintenance: radar.lastMaintenance || null,
+        ftpPath: `/images/radar_${radar.id}`,
+        statistics: radar.statistics,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }));
+    } catch (error) {
+      console.log('UDP Client: Mock radar data not available, using empty array');
+      return [];
+    }
   }
 
   private generateMockFines(): Fine[] {
@@ -149,39 +189,35 @@ class UDPClientService {
 
       this.ws.onclose = () => {
         console.log('🔌 UDP WebSocket connection closed');
-        this.isConnecting = false;
         this.notifyConnectionListeners(false);
         this.scheduleReconnect();
       };
 
       this.ws.onerror = (error) => {
-        console.warn('⚠️ UDP WebSocket connection error:', error);
+        console.log('UDP WebSocket connection not available - continuing in offline mode');
         this.isConnecting = false;
-        this.notifyConnectionListeners(false);
-        // Don't notify error listeners immediately, let reconnect logic handle it
+        // Don't notify as error, just handle gracefully
+        this.handleConnectionFailure();
       };
 
     } catch (error) {
-      console.error('Failed to create WebSocket connection:', error);
+      console.log('UDP Client: WebSocket connection failed, continuing in offline mode');
       this.isConnecting = false;
-      this.notifyErrorListeners('Failed to create connection');
-      this.scheduleReconnect();
+      this.handleConnectionFailure();
     }
   }
 
   private scheduleReconnect(): void {
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++;
-      console.log(`🔄 Scheduling UDP reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${this.reconnectDelay}ms`);
+      console.log(`🔄 UDP reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} (silent retry)`);
       setTimeout(() => {
-        this.connect();
+        this.attemptConnection();
       }, this.reconnectDelay);
     } else {
-      console.log('❌ Max UDP reconnection attempts reached - loading mock radar data');
-      // Load mock radar data when connection fails
-      this.cachedRadars = this.generateMockRadars();
-      this.notifyRadarListeners(this.cachedRadars);
-      this.notifyConnectionListeners(false);
+      console.log('🔌 UDP WebSocket not available - operating in offline mode');
+      // Handle gracefully without WebSocket connection
+      this.handleConnectionFailure();
     }
   }
 

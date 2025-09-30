@@ -72,10 +72,10 @@ class FTPClientService {
     // Force local mode - skip WebSocket connection and use local images directly
     this.useMockData = false;
     
-    // Initialize local mode immediately
+    // Initialize local mode with a longer delay to avoid interference with app startup
     setTimeout(() => {
       this.initializeLocalMode();
-    }, 100);
+    }, 2000);
   }
 
   private async initializeLocalMode(): Promise<void> {
@@ -87,22 +87,46 @@ class FTPClientService {
     while (retryCount < maxRetries) {
       try {
         // Test connection to local image server
+        console.log(`🔍 Testing connection to: ${this.imageHttpHost}/health`);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
         const response = await fetch(`${this.imageHttpHost}/health`, {
-          timeout: 5000
-        } as any);
+          signal: controller.signal,
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        clearTimeout(timeoutId);
         
         if (response.ok) {
-          console.log('✅ Local image server is available');
+          const healthData = await response.json();
+          console.log('✅ Local image server is available:', healthData.message);
           this.useMockData = false;
           await this.loadRealImages();
           this.notifyConnectionListeners(true);
           return; // Success, exit retry loop
         } else {
-          throw new Error(`Local server responded with status: ${response.status}`);
+          throw new Error(`Local server responded with status: ${response.status} ${response.statusText}`);
         }
-      } catch (error) {
+      } catch (error: any) {
         retryCount++;
-        console.warn(`⚠️ Local image server connection attempt ${retryCount}/${maxRetries} failed:`, error);
+        console.warn(`⚠️ Local image server connection attempt ${retryCount}/${maxRetries} failed:`);
+        console.warn(`   Error type: ${error.name || 'Unknown'}`);
+        console.warn(`   Error message: ${error.message || 'No message'}`);
+        console.warn(`   Error code: ${error.code || 'No code'}`);
+        
+        if (error.name === 'AbortError') {
+          console.warn('   → Connection timed out after 5 seconds');
+        } else if (error.message?.includes('NetworkError')) {
+          console.warn('   → Network error - server may be down or unreachable');
+        } else if (error.message?.includes('CORS')) {
+          console.warn('   → CORS error - check server CORS configuration');
+        }
         
         if (retryCount < maxRetries) {
           console.log(`🔄 Retrying in ${retryCount * 2} seconds...`);
@@ -675,6 +699,19 @@ class FTPClientService {
         this.initializeLocalMode();
       }, 2000);
     }, 1000);
+  }
+
+  public forceReconnectToLocalServer(): void {
+    console.log('🔄 FTP Client: Force reconnecting to local image server...');
+    this.cachedImages = [];
+    this.imageProcessingQueue.clear();
+    this.useMockData = false;
+    this.notifyConnectionListeners(false);
+    
+    // Retry connection to local server
+    setTimeout(() => {
+      this.initializeLocalMode();
+    }, 500);
   }
 
   public disconnect(): void {

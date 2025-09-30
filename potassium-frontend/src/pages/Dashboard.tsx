@@ -525,6 +525,16 @@ const Dashboard: React.FC = () => {
           <Button onClick={() => realTimeDataService.requestImageList()} startIcon={<Refresh />}>
             Refresh
           </Button>
+          <Button 
+            onClick={() => {
+              console.log('🔄 Manual FTP reconnection triggered');
+              realTimeDataService.reconnectFTP();
+            }} 
+            startIcon={<Wifi />}
+            color="warning"
+          >
+            Reconnect
+          </Button>
           <Button onClick={() => setFtpDialogOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>

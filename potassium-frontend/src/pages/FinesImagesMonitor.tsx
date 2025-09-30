@@ -93,7 +93,30 @@ const FinesImagesMonitor: React.FC = () => {
   const loadAvailableDates = async () => {
     try {
       const cacheBuster = Date.now();
-      const response = await fetch(`http://localhost:3003/api/ftp-images/dates?camera=192.168.1.54&_t=${cacheBuster}`);
+      // Try multiple endpoints: proxy first, then direct
+      const endpoints = [
+        `/api/ftp-images/dates?camera=192.168.1.54&_t=${cacheBuster}`, // Via proxy
+        `http://localhost:3003/api/ftp-images/dates?camera=192.168.1.54&_t=${cacheBuster}` // Direct
+      ];
+      
+      let response: Response | null = null;
+      let lastError: any = null;
+      
+      for (const endpoint of endpoints) {
+        try {
+          console.log('🔍 Attempting to fetch dates from:', endpoint);
+          response = await fetch(endpoint, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        mode: 'cors'
+      });
+      
+      console.log('📡 Response status:', response.status, response.statusText);
+      console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
+      
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.dates) {
@@ -105,9 +128,14 @@ const FinesImagesMonitor: React.FC = () => {
       } else {
         console.error(`❌ Image server responded with status ${response.status}: ${response.statusText}`);
       }
-    } catch (error) {
-      console.error('❌ Failed to load available dates from image server:', error);
+    } catch (error: any) {
+      console.error('❌ Failed to load available dates from image server:');
+      console.error('   Error name:', error.name || 'Unknown');
+      console.error('   Error message:', error.message || 'No message');
+      console.error('   Error type:', typeof error);
+      console.error('   Full error:', error);
       console.log('🔧 Check if image server is running on http://localhost:3003');
+      console.log('🔧 Check browser console for CORS or network errors');
     }
   };
 
@@ -118,7 +146,19 @@ const FinesImagesMonitor: React.FC = () => {
       
       // Direct API call to local image server for fresh data
       const cacheBuster = Date.now();
-      const response = await fetch(`http://localhost:3003/api/ftp-images/list?camera=192.168.1.54&date=all&_t=${cacheBuster}`);
+      const url = `http://localhost:3003/api/ftp-images/list?camera=192.168.1.54&date=all&_t=${cacheBuster}`;
+      console.log('🔍 Attempting to fetch images from:', url);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        mode: 'cors'
+      });
+      
+      console.log('📡 Images response status:', response.status, response.statusText);
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.files) {
@@ -191,9 +231,13 @@ const FinesImagesMonitor: React.FC = () => {
       } else {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-    } catch (error) {
-      console.error('Failed to load fresh images:', error);
-      setError(`Failed to connect to local image server: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } catch (error: any) {
+      console.error('❌ Failed to load fresh images:');
+      console.error('   Error name:', error.name || 'Unknown');
+      console.error('   Error message:', error.message || 'No message');
+      console.error('   Error type:', typeof error);
+      console.error('   Full error:', error);
+      setError(`Failed to connect to local image server: ${error instanceof Error ? error.message : 'Network error'}`);
       setIsConnected(false);
       setConnectionMode('disconnected');
       setImages([]);
