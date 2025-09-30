@@ -282,6 +282,10 @@ class RealTimeDataService {
     return ftpClient.onImageProcessed(callback);
   }
 
+  public onRadarReadingUpdate(callback: (readings: any[]) => void): () => void {
+    return udpClient.onRadarReadingUpdate(callback);
+  }
+
   // Data manipulation methods (proxy methods)
   public requestRadarData(): void {
     if (this.connectionStatus.udp) {

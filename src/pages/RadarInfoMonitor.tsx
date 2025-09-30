@@ -46,9 +46,31 @@ function TabPanel(props: TabPanelProps) {
   );
 }
 
+interface RadarReading {
+  id: number;
+  radarId: number;
+  speedDetected: number;
+  speedLimit: number;
+  detectionTime: string;
+  isViolation: boolean;
+  fineId?: number;
+  correlatedImages?: any[];
+  sourceIP?: string;
+  radar?: {
+    name: string;
+    location: string;
+  };
+  fine?: {
+    id: number;
+    fineAmount: number;
+    status: string;
+  };
+}
+
 const RadarInfoMonitor: React.FC = () => {
   const [radars, setRadars] = useState<Radar[]>([]);
   const [fines, setFines] = useState<Fine[]>([]);
+  const [radarReadings, setRadarReadings] = useState<RadarReading[]>([]);
   const [loading, setLoading] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,6 +80,7 @@ const RadarInfoMonitor: React.FC = () => {
   // Filter states
   const [radarFilter, setRadarFilter] = useState('all');
   const [fineFilter, setFineFilter] = useState('all');
+  const [readingFilter, setReadingFilter] = useState('all');
 
   useEffect(() => {
     setupRealTimeMonitoring();
@@ -94,6 +117,13 @@ const RadarInfoMonitor: React.FC = () => {
       setLoading(false);
     });
 
+    // Subscribe to radar reading updates
+    const unsubscribeReadings = realTimeDataService.onRadarReadingUpdate((updatedReadings: any[]) => {
+      setRadarReadings(updatedReadings);
+      setLastUpdate(new Date().toISOString());
+      setLoading(false);
+    });
+
     // Subscribe to errors
     const unsubscribeErrors = realTimeDataService.onError((error, source) => {
       if (source === 'udp') {
@@ -111,6 +141,7 @@ const RadarInfoMonitor: React.FC = () => {
       unsubscribeConnection();
       unsubscribeRadars();
       unsubscribeFines();
+      unsubscribeReadings();
       unsubscribeErrors();
     };
   };
@@ -142,7 +173,21 @@ const RadarInfoMonitor: React.FC = () => {
     fineFilter === 'all' || fine.status === fineFilter
   );
 
+  const filteredReadings = radarReadings.filter(reading => 
+    readingFilter === 'all' || 
+    (readingFilter === 'violations' && reading.isViolation) ||
+    (readingFilter === 'compliant' && !reading.isViolation)
+  );
+
   if (loading && radars.length === 0 && fines.length === 0) {
+    // Show loading for maximum 3 seconds, then show empty state
+    setTimeout(() => {
+      if (radars.length === 0 && fines.length === 0) {
+        setLoading(false);
+        setError('UDP service not available. No radar data to display.');
+      }
+    }, 3000);
+    
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
         <CircularProgress />
@@ -221,6 +266,15 @@ const RadarInfoMonitor: React.FC = () => {
         </Card>
         <Card sx={{ flex: '1 1 calc(25% - 12px)', minWidth: 200 }}>
           <CardContent>
+            <Typography color="textSecondary" gutterBottom variant="body2">Radar Readings</Typography>
+            <Typography variant="h4">{radarReadings.length}</Typography>
+            <Typography variant="body2" color="error.main">
+              {radarReadings.filter(r => r.isViolation).length} Violations
+            </Typography>
+          </CardContent>
+        </Card>
+        <Card sx={{ flex: '1 1 calc(25% - 12px)', minWidth: 200 }}>
+          <CardContent>
             <Typography color="textSecondary" gutterBottom variant="body2">Connection Status</Typography>
             <Typography variant="h6" color={isConnected ? 'success.main' : 'error.main'}>
               {isConnected ? 'Online' : 'Offline'}
@@ -244,6 +298,11 @@ const RadarInfoMonitor: React.FC = () => {
             <Tab 
               label={`Fines (${fines.length})`} 
               icon={<Receipt />} 
+              iconPosition="start"
+            />
+            <Tab 
+              label={`Readings (${radarReadings.length})`} 
+              icon={<RadarIcon />} 
               iconPosition="start"
             />
           </Tabs>
@@ -375,6 +434,103 @@ const RadarInfoMonitor: React.FC = () => {
                     <TableCell>
                       <Typography variant="body2">
                         {new Date(fine.violationTime).toLocaleString()}
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </TabPanel>
+
+        {/* Radar Readings Tab */}
+        <TabPanel value={tabValue} index={2}>
+          <Box sx={{ mb: 2 }}>
+            <TextField
+              select
+              label="Filter by Type"
+              value={readingFilter}
+              onChange={(e) => setReadingFilter(e.target.value)}
+              sx={{ minWidth: 200 }}
+              size="small"
+            >
+              <MenuItem value="all">All Readings</MenuItem>
+              <MenuItem value="violations">Violations Only</MenuItem>
+              <MenuItem value="compliant">Compliant Only</MenuItem>
+            </TextField>
+          </Box>
+          
+          <TableContainer component={Paper} sx={{ maxHeight: 600 }}>
+            <Table stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Reading ID</TableCell>
+                  <TableCell>Radar ID</TableCell>
+                  <TableCell>Speed Detected</TableCell>
+                  <TableCell>Speed Limit</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Detection Time</TableCell>
+                  <TableCell>Fine ID</TableCell>
+                  <TableCell>Images</TableCell>
+                  <TableCell>Source IP</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {filteredReadings.map((reading) => (
+                  <TableRow key={reading.id} hover>
+                    <TableCell>{reading.id}</TableCell>
+                    <TableCell>{reading.radarId}</TableCell>
+                    <TableCell>
+                      <Typography 
+                        variant="body2" 
+                        color={reading.isViolation ? 'error.main' : 'success.main'}
+                        fontWeight="bold"
+                      >
+                        {reading.speedDetected} km/h
+                      </Typography>
+                    </TableCell>
+                    <TableCell>{reading.speedLimit} km/h</TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={reading.isViolation ? 'VIOLATION' : 'COMPLIANT'} 
+                        color={reading.isViolation ? 'error' : 'success'}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2">
+                        {new Date(reading.detectionTime).toLocaleString()}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      {reading.fineId ? (
+                        <Chip 
+                          label={`Fine #${reading.fineId}`} 
+                          color="warning"
+                          size="small"
+                        />
+                      ) : (
+                        <Typography variant="body2" color="textSecondary">
+                          No Fine
+                        </Typography>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {reading.correlatedImages && reading.correlatedImages.length > 0 ? (
+                        <Chip 
+                          label={`${reading.correlatedImages.length} Images`} 
+                          color="info"
+                          size="small"
+                        />
+                      ) : (
+                        <Typography variant="body2" color="textSecondary">
+                          No Images
+                        </Typography>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color="textSecondary">
+                        {reading.sourceIP || 'N/A'}
                       </Typography>
                     </TableCell>
                   </TableRow>

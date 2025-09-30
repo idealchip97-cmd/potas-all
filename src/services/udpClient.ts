@@ -1,7 +1,7 @@
 import { Radar, Fine } from '../types';
 
 interface UDPMessage {
-  type: 'radar' | 'fine' | 'heartbeat';
+  type: 'radar' | 'radar_reading' | 'fine' | 'heartbeat';
   timestamp: string;
   data: any;
 }
@@ -54,17 +54,26 @@ class UDPClientService {
   // Event listeners
   private radarListeners: ((radars: Radar[]) => void)[] = [];
   private fineListeners: ((fines: Fine[]) => void)[] = [];
+  private radarReadingListeners: ((readings: any[]) => void)[] = [];
   private connectionListeners: ((connected: boolean) => void)[] = [];
   private errorListeners: ((error: string) => void)[] = [];
 
   // Data cache
   private cachedRadars: Radar[] = [];
   private cachedFines: Fine[] = [];
+  private cachedRadarReadings: any[] = [];
 
   constructor() {
-    // Disable automatic connection - UDP service not available
-    console.log('UDP Client: Service disabled - no UDP server available');
-    this.generateMockData();
+    // Enable UDP service - connect to real UDP server
+    console.log('UDP Client: Connecting to real UDP server on port 18081');
+    this.useMockData = false;
+    this.cachedRadars = [];
+    this.cachedFines = [];
+    
+    // Start connection after short delay
+    setTimeout(() => {
+      this.connect();
+    }, 1000);
   }
 
   private generateMockRadars(): Radar[] {
@@ -105,19 +114,15 @@ class UDPClientService {
     this.isConnecting = true;
     
     const wsProxyPort = this.serverPort + 1000; // 18081
-    console.log(`UDP Client: Attempting to connect to WebSocket proxy at ${this.serverIP}:${wsProxyPort}`);
-    console.log(`UDP Client: Note - Actual UDP server is available at ${this.serverIP}:${this.serverPort}`);
+    console.log(`UDP Client: Connecting to WebSocket server at localhost:${wsProxyPort}`);
     
     try {
-      // Use WebSocket to connect to a WebSocket proxy that forwards UDP data
-      // In a real implementation, you'd need a WebSocket server that receives UDP data
-      // and forwards it to WebSocket clients
-      const wsUrl = `ws://${this.serverIP}:${wsProxyPort}`;
+      const wsUrl = `ws://localhost:${wsProxyPort}`;
       
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = () => {
-        console.log('UDP WebSocket connection established');
+        console.log('✅ UDP WebSocket connection established');
         this.isConnecting = false;
         this.reconnectAttempts = 0;
         this.notifyConnectionListeners(true);
@@ -141,16 +146,16 @@ class UDPClientService {
       };
 
       this.ws.onclose = () => {
-        console.log('UDP WebSocket connection closed');
+        console.log('🔌 UDP WebSocket connection closed');
         this.isConnecting = false;
         this.notifyConnectionListeners(false);
         this.scheduleReconnect();
       };
 
       this.ws.onerror = (error) => {
-        console.error('UDP WebSocket proxy not available:', error);
+        console.error('❌ UDP WebSocket connection error:', error);
         this.isConnecting = false;
-        this.notifyErrorListeners('WebSocket proxy not available - UDP server is running but WebSocket proxy service needed');
+        this.notifyErrorListeners('WebSocket connection failed - make sure UDP server is running');
       };
 
     } catch (error) {
@@ -164,13 +169,13 @@ class UDPClientService {
   private scheduleReconnect(): void {
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++;
-      console.log(`Scheduling UDP reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${this.reconnectDelay}ms`);
+      console.log(`🔄 Scheduling UDP reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${this.reconnectDelay}ms`);
       setTimeout(() => {
         this.connect();
       }, this.reconnectDelay);
     } else {
-      console.error('Max UDP reconnection attempts reached, switching to mock mode');
-      this.generateMockData();
+      console.log('❌ Max UDP reconnection attempts reached');
+      this.notifyConnectionListeners(false);
     }
   }
 
@@ -184,6 +189,9 @@ class UDPClientService {
     switch (message.type) {
       case 'radar':
         this.handleRadarData(message.data);
+        break;
+      case 'radar_reading':
+        this.handleRadarReadingData(message.data);
         break;
       case 'fine':
         this.handleFineData(message.data);
@@ -284,6 +292,31 @@ class UDPClientService {
     } catch (error) {
       console.error('Error processing fine data:', error);
       this.notifyErrorListeners('Failed to process fine data');
+    }
+  }
+
+  private handleRadarReadingData(data: any): void {
+    try {
+      console.log('Processing radar reading data:', data);
+      
+      // Add or update radar reading in cache
+      const existingIndex = this.cachedRadarReadings.findIndex(r => r.id === data.id);
+      if (existingIndex >= 0) {
+        this.cachedRadarReadings[existingIndex] = data;
+      } else {
+        this.cachedRadarReadings.unshift(data); // Add to beginning for newest first
+      }
+
+      // Keep only last 1000 readings to prevent memory issues
+      if (this.cachedRadarReadings.length > 1000) {
+        this.cachedRadarReadings = this.cachedRadarReadings.slice(0, 1000);
+      }
+
+      // Notify listeners
+      this.notifyRadarReadingListeners(this.cachedRadarReadings);
+    } catch (error) {
+      console.error('Error processing radar reading data:', error);
+      this.notifyErrorListeners('Failed to process radar reading data');
     }
   }
 
@@ -396,6 +429,16 @@ class UDPClientService {
     });
   }
 
+  private notifyRadarReadingListeners(readings: any[]): void {
+    this.radarReadingListeners.forEach(callback => {
+      try {
+        callback(readings);
+      } catch (error) {
+        console.error('Error in radar reading listener callback:', error);
+      }
+    });
+  }
+
   // Utility methods
   public isConnected(): boolean {
     return this.useMockData || (this.ws !== null && this.ws.readyState === WebSocket.OPEN);
@@ -407,6 +450,27 @@ class UDPClientService {
 
   public getCachedFines(): Fine[] {
     return [...this.cachedFines];
+  }
+
+  public getCachedRadarReadings(): any[] {
+    return [...this.cachedRadarReadings];
+  }
+
+  public onRadarReadingUpdate(callback: (readings: any[]) => void): () => void {
+    this.radarReadingListeners.push(callback);
+    
+    // Send cached data immediately if available
+    if (this.cachedRadarReadings.length > 0) {
+      callback(this.cachedRadarReadings);
+    }
+    
+    // Return unsubscribe function
+    return () => {
+      const index = this.radarReadingListeners.indexOf(callback);
+      if (index > -1) {
+        this.radarReadingListeners.splice(index, 1);
+      }
+    };
   }
 
   public reconnect(): void {
