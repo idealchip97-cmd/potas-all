@@ -131,9 +131,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (error: any) {
       console.error('❌ Login error:', error);
       
-      // Fallback to demo accounts if backend is not available
-      if (error.code === 'ECONNREFUSED' || error.message?.includes('Network Error')) {
-        console.log('🔄 Backend unavailable, trying demo accounts...');
+      // Fallback to demo accounts if backend is not available or rate limited
+      if (error.code === 'ECONNREFUSED' || 
+          error.message?.includes('Network Error') ||
+          error.status === 429 ||
+          error.response?.status === 429) {
+        
+        if (error.status === 429 || error.response?.status === 429) {
+          console.log('🚫 Backend rate limited (HTTP 429) - too many requests, using demo accounts...');
+        } else {
+          console.log('🔄 Backend unavailable, trying demo accounts...');
+        }
         
         const validCredentials = [
           { email: 'admin@potasfactory.com', password: 'admin123', role: 'admin' },
