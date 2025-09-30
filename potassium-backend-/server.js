@@ -250,18 +250,23 @@ const startServer = async () => {
         console.warn('⚠️ Failed to start WebSocket service:', error.message);
       }
 
-      // Optionally auto-start external data service
-      if (process.env.AUTO_START_EXTERNAL_DATA === 'true') {
-        try {
-          console.log('🔄 Auto-starting external data service...');
-          await externalDataService.start();
-          console.log('✅ External data service started automatically');
-        } catch (error) {
-          console.warn('⚠️ Failed to auto-start external data service:', error.message);
-          console.log('💡 You can start it manually via API: POST /api/external-data/start');
-        }
-      } else {
-        console.log('💡 External data service not auto-started. Start manually via API: POST /api/external-data/start');
+      // Always auto-start external data service (UDP listener)
+      try {
+        console.log('🔄 Auto-starting external data service (UDP listener)...');
+        await externalDataService.start();
+        console.log('✅ External data service started - UDP listening on port 17081');
+        console.log('📡 Ready to receive binary radar packets: FE AF 05 01 0A [SPEED] 16 EF');
+      } catch (error) {
+        console.error('❌ CRITICAL: Failed to start UDP service:', error.message);
+        console.log('🔧 Retrying UDP service startup in 5 seconds...');
+        setTimeout(async () => {
+          try {
+            await externalDataService.start();
+            console.log('✅ UDP service started on retry');
+          } catch (retryError) {
+            console.error('❌ UDP service failed on retry:', retryError.message);
+          }
+        }, 5000);
       }
     });
   } catch (error) {

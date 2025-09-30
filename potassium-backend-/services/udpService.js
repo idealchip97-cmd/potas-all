@@ -18,31 +18,44 @@ class UDPService extends EventEmitter {
         this.server.on('listening', () => {
             const address = this.server.address();
             console.log(`✅ UDP Server listening on ${address.address}:${address.port}`);
+            console.log(`📡 Waiting for binary radar packets...`);
+            console.log(`📄 Expected format: FE AF 05 01 0A [SPEED] 16 EF`);
+            console.log(`📍 Example: FE AF 05 01 0A 42 16 EF (Speed: 66 km/h)`);
             this.isListening = true;
-            this.emit('listening', address);
         });
 
         this.server.on('message', (msg, rinfo) => {
             try {
                 console.log(`📨 UDP Message received from ${rinfo.address}:${rinfo.port}`);
-                console.log(`📄 Message: ${msg.toString()}`);
+                console.log(`📄 Raw Message: ${msg.toString()}`);
+                console.log(`📦 Binary Hex: ${msg.toString('hex').toUpperCase()}`);
+                console.log(`📏 Message Length: ${msg.length} bytes`);
                 
                 // Parse the message
-                const data = this.parseMessage(msg.toString());
+                const data = this.parseMessage(msg);
                 
                 if (data) {
+                    console.log(`✅ Parsed Data:`, JSON.stringify(data, null, 2));
+                    
                     // Emit different events based on data type
                     if (data.type === 'radar') {
+                        console.log('📡 Emitting radarData event');
                         this.emit('radarData', data);
                     } else if (data.type === 'radar_violation') {
+                        console.log('🚨 Emitting radarViolation event');
                         this.emit('radarViolation', data);
                     } else if (data.type === 'fine') {
+                        console.log('💰 Emitting fineData event');
                         this.emit('fineData', data);
                     } else if (data.type === 'violation') {
+                        console.log('⚠️ Emitting violationData event');
                         this.emit('violationData', data);
                     } else {
+                        console.log('❓ Emitting unknownData event');
                         this.emit('unknownData', data);
                     }
+                } else {
+                    console.warn('⚠️ Failed to parse UDP message');
                 }
             } catch (error) {
                 console.error('❌ Error processing UDP message:', error);

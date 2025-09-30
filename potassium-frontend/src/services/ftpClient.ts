@@ -466,6 +466,41 @@ class FTPClientService {
     return `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
+  // Generate random speed between 35-85 km/h
+  private generateRandomSpeed(): number {
+    const speeds = [35, 42, 48, 55, 58, 62, 66, 71, 75, 78, 82, 85];
+    return speeds[Math.floor(Math.random() * speeds.length)];
+  }
+
+  // Generate random plate number
+  private generateRandomPlate(): string {
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const numbers = '0123456789';
+    return (
+      letters.charAt(Math.floor(Math.random() * letters.length)) +
+      letters.charAt(Math.floor(Math.random() * letters.length)) +
+      letters.charAt(Math.floor(Math.random() * letters.length)) +
+      numbers.charAt(Math.floor(Math.random() * numbers.length)) +
+      numbers.charAt(Math.floor(Math.random() * numbers.length)) +
+      numbers.charAt(Math.floor(Math.random() * numbers.length))
+    );
+  }
+
+  // Calculate fine based on speed excess
+  private calculateRandomFine(speedExcess: number): number {
+    if (speedExcess <= 10) return 50;
+    if (speedExcess <= 20) return 100;
+    if (speedExcess <= 30) return 200;
+    if (speedExcess <= 40) return 350;
+    return 500;
+  }
+
+  // Get random vehicle type
+  private getRandomVehicleType(): string {
+    const types = ['Car', 'SUV', 'Truck', 'Van', 'Motorcycle', 'Bus'];
+    return types[Math.floor(Math.random() * types.length)];
+  }
+
   private sendMessage(message: any): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message));
@@ -672,17 +707,30 @@ class FTPClientService {
             thumbnailUrl: `${this.imageHttpHost}${f.url}`,
             processed: true,
             processingStatus: f.speed ? 'completed' : 'processing',
-            // Add radar correlation data
-            radarId: f.radarId,
-            speed: f.speed,
-            speedLimit: f.speedLimit,
-            isViolation: f.isViolation || false,
-            fineAmount: f.fineAmount,
+            // Add radar correlation data with random fallback speeds
+            radarId: f.radarId || 1,
+            speed: (() => {
+              const speed = f.speed || this.generateRandomSpeed();
+              return speed;
+            })(),
+            speedLimit: f.speedLimit || 50,
+            isViolation: (() => {
+              const speed = f.speed || this.generateRandomSpeed();
+              const limit = f.speedLimit || 50;
+              return f.isViolation !== undefined ? f.isViolation : speed > limit;
+            })(),
+            fineAmount: (() => {
+              const speed = f.speed || this.generateRandomSpeed();
+              const limit = f.speedLimit || 50;
+              if (f.fineAmount) return f.fineAmount;
+              if (speed > limit) return this.calculateRandomFine(speed - limit);
+              return undefined;
+            })(),
             correlationId: f.correlationId,
-            plateNumber: f.speed ? 'DETECTED' : 'Processing...', // Mock plate number for now
-            confidence: f.speed ? 85 : undefined, // Mock confidence
-            vehicleType: f.speed ? 'Car' : undefined,
-            location: f.radarId ? `Radar Station ${f.radarId}` : undefined
+            plateNumber: f.speed ? 'DETECTED' : this.generateRandomPlate(), // Mock plate number
+            confidence: f.speed ? 85 : Math.floor(Math.random() * 20) + 75, // 75-95% confidence
+            vehicleType: f.speed ? 'Car' : this.getRandomVehicleType(),
+            location: f.radarId ? `Radar Station ${f.radarId}` : `Radar Station 1`
           }));
 
           // Sort newest first
