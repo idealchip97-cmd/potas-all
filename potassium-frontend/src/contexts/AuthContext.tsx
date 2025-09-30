@@ -27,18 +27,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const storedToken = localStorage.getItem('authToken');
     const storedUser = localStorage.getItem('user');
     
+    console.log('Auth: Stored token exists:', !!storedToken);
+    console.log('Auth: Stored user exists:', !!storedUser);
+    
     if (storedToken && storedUser) {
       try {
         const userData = JSON.parse(storedUser);
         setToken(storedToken);
         setUser(userData);
         console.log('Auth: Restored session for', userData.email);
+        console.log('Auth: User data:', userData);
       } catch (error) {
         console.error('Auth: Error parsing stored user data', error);
         localStorage.removeItem('authToken');
         localStorage.removeItem('user');
       }
+    } else {
+      console.log('Auth: No stored authentication found');
     }
+    
+    console.log('Auth: Setting isLoading to false');
     setIsLoading(false);
   }, []);
 

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>FTP Client Connection Test</title>
+</head>
+<body>
+    <h1>FTP Client Connection Test</h1>
+    <div id="results"></div>
+    
+    <script>
+        const results = document.getElementById('results');
+        
+        function log(message) {
+            console.log(message);
+            results.innerHTML += '<p>' + message + '</p>';
+        }
+        
+        async function testConnection() {
+            log('🧪 Testing FTP Client Connection...');
+            
+            try {
+                log('1. Testing health endpoint...');
+                const healthResponse = await fetch('http://localhost:3003/health');
+                log(`Health response status: ${healthResponse.status}`);
+                
+                if (healthResponse.ok) {
+                    const healthData = await healthResponse.json();
+                    log('✅ Health check passed: ' + JSON.stringify(healthData, null, 2));
+                    
+                    log('2. Testing image list endpoint...');
+                    const listResponse = await fetch('http://localhost:3003/api/ftp-images/list?camera=192.168.1.54&date=all');
+                    log(`List response status: ${listResponse.status}`);
+                    
+                    if (listResponse.ok) {
+                        const listData = await listResponse.json();
+                        log('✅ Image list success: ' + JSON.stringify(listData, null, 2));
+                    } else {
+                        log('❌ Image list failed: ' + listResponse.statusText);
+                    }
+                } else {
+                    log('❌ Health check failed: ' + healthResponse.statusText);
+                }
+            } catch (error) {
+                log('❌ Connection error: ' + error.message);
+                log('Error details: ' + JSON.stringify(error, null, 2));
+            }
+        }
+        
+        // Test immediately
+        testConnection();
+        
+        // Test again after 2 seconds
+        setTimeout(testConnection, 2000);
+    </script>
+</body>
+</html>

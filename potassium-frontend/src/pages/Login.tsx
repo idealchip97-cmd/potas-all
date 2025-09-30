@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Container,
   Paper,
@@ -19,22 +19,38 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    console.log('Login: useEffect - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated);
+    if (!isLoading && isAuthenticated) {
+      console.log('Login: Already authenticated, redirecting to dashboard');
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, isLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
+    console.log('Login: Attempting login with email:', email);
+
     try {
       const success = await login(email, password);
+      console.log('Login: Login result:', success);
+      
       if (success) {
+        console.log('Login: Login successful, navigating to dashboard');
         navigate('/dashboard');
       } else {
+        console.log('Login: Login failed - invalid credentials');
         setError('Invalid email or password');
       }
     } catch (err) {
+      console.error('Login: Login error:', err);
       setError('Login failed. Please try again.');
     } finally {
       setLoading(false);

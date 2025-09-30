@@ -5,198 +5,74 @@ import {
   Card,
   CardContent,
   Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
   Chip,
   Alert,
   CircularProgress,
-  TextField,
-  MenuItem,
-  Tabs,
-  Tab,
 } from '@mui/material';
 import {
   Storage,
   Wifi,
   WifiOff,
   Refresh,
-  Radar as RadarIcon,
-  Receipt,
 } from '@mui/icons-material';
-import realTimeDataService from '../services/realTimeDataService';
-import websocketClient from '../services/websocketClient';
-import apiService from '../services/api';
-import { Radar, Fine } from '../types';
-
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-  return (
-    <div role="tabpanel" hidden={value !== index} {...other}>
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
-    </div>
-  );
-}
-
-interface RadarReading {
-  id: number;
-  radarId: number;
-  speed: number;
-  speedLimit: number;
-  timestamp: string;
-  isViolation: boolean;
-  correlatedImages?: any[];
-  fineAmount?: number;
-  plateNumber?: string;
-  location?: string;
-  fineId?: number;
-  sourceIP?: string;
-  radar?: {
-    name: string;
-    location: string;
-  };
-  fine?: {
-    id: number;
-    fineAmount: number;
-    status: string;
-  };
-}
+import udpReadingsApi, { UdpSystemStatus, UdpStatistics } from '../services/udpReadingsApi';
 
 const RadarInfoMonitor: React.FC = () => {
-  const [radars, setRadars] = useState<Radar[]>([]);
-  const [fines, setFines] = useState<Fine[]>([]);
-  const [radarReadings, setRadarReadings] = useState<RadarReading[]>([]);
+  const [udpStatus, setUdpStatus] = useState<UdpSystemStatus | null>(null);
+  const [udpStats, setUdpStats] = useState<UdpStatistics | null>(null);
   const [loading, setLoading] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tabValue, setTabValue] = useState(0);
   const [lastUpdate, setLastUpdate] = useState<string | null>(null);
 
-  // Filter states
-  const [radarFilter, setRadarFilter] = useState('all');
-  const [fineFilter, setFineFilter] = useState('all');
-  const [readingFilter, setReadingFilter] = useState('all');
+  const loadUdpData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-  useEffect(() => {
-    setupRealTimeMonitoring();
-    
-    return () => {
-      // Cleanup subscriptions
-    };
-  }, []);
+      // Load UDP system status
+      const status = await udpReadingsApi.getSystemStatus();
+      setUdpStatus(status);
+      setIsConnected(status.listening);
 
-  const setupRealTimeMonitoring = () => {
-    setLoading(true);
-
-    // Subscribe to connection status
-    const unsubscribeConnection = realTimeDataService.onConnectionChange((status) => {
-      setIsConnected(status.udp);
-      if (!status.udp) {
-        setError('UDP connection lost. Monitoring disabled.');
-      } else {
-        setError(null);
+      // Load UDP statistics
+      const statsResponse = await udpReadingsApi.getStatistics();
+      if (statsResponse.success) {
+        setUdpStats(statsResponse.data);
       }
-    });
 
-    // Subscribe to radar updates
-    const unsubscribeRadars = realTimeDataService.onRadarUpdate((updatedRadars) => {
-      setRadars(updatedRadars);
       setLastUpdate(new Date().toISOString());
+      console.log('✅ UDP system connected - Status:', status.listening ? 'Online' : 'Offline');
+    } catch (error) {
+      console.error('❌ Error loading UDP data:', error);
+      setError('Failed to connect to UDP system');
+      setIsConnected(false);
+    } finally {
       setLoading(false);
-    });
-
-    // Subscribe to fine updates
-    const unsubscribeFines = realTimeDataService.onFineUpdate((updatedFines) => {
-      setFines(updatedFines);
-      setLastUpdate(new Date().toISOString());
-      setLoading(false);
-    });
-
-    // Subscribe to radar reading updates
-    const unsubscribeReadings = realTimeDataService.onRadarReadingUpdate((updatedReadings: any[]) => {
-      setRadarReadings(updatedReadings);
-      setLastUpdate(new Date().toISOString());
-      setLoading(false);
-    });
-
-    // Subscribe to errors
-    const unsubscribeErrors = realTimeDataService.onError((error, source) => {
-      if (source === 'udp') {
-        setError(`UDP Error: ${error}`);
-        setLoading(false);
-      }
-    });
-
-    // Request initial data
-    realTimeDataService.requestRadarData();
-    realTimeDataService.requestFineData();
-
-    // Return cleanup function
-    return () => {
-      unsubscribeConnection();
-      unsubscribeRadars();
-      unsubscribeFines();
-      unsubscribeReadings();
-      unsubscribeErrors();
-    };
-  };
-
-  const handleRefresh = () => {
-    setLoading(true);
-    realTimeDataService.requestRadarData();
-    realTimeDataService.requestFineData();
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return 'success';
-      case 'inactive': return 'error';
-      case 'maintenance': return 'warning';
-      case 'pending': return 'warning';
-      case 'processed': return 'info';
-      case 'paid': return 'success';
-      case 'cancelled': return 'error';
-      default: return 'default';
     }
   };
 
-  const filteredRadars = radars.filter(radar => 
-    radarFilter === 'all' || radar.status === radarFilter
-  );
+  useEffect(() => {
+    loadUdpData();
 
-  const filteredFines = fines.filter(fine => 
-    fineFilter === 'all' || fine.status === fineFilter
-  );
+    // Set up periodic refresh
+    const refreshInterval = setInterval(() => {
+      loadUdpData();
+    }, 10000);
 
-  const filteredReadings = radarReadings.filter(reading => 
-    readingFilter === 'all' || 
-    (readingFilter === 'violations' && reading.isViolation) ||
-    (readingFilter === 'compliant' && !reading.isViolation)
-  );
+    return () => {
+      clearInterval(refreshInterval);
+    };
+  }, []);
 
-  if (loading && radars.length === 0 && fines.length === 0) {
-    // Show loading for maximum 3 seconds, then show empty state
-    setTimeout(() => {
-      if (radars.length === 0 && fines.length === 0) {
-        setLoading(false);
-        setError('UDP service not available. No radar data to display.');
-      }
-    }, 3000);
-    
+  const handleRefresh = () => {
+    loadUdpData();
+  };
+
+  if (loading && !udpStatus) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
         <CircularProgress />
-        <Typography variant="h6" sx={{ ml: 2 }}>Loading UDP data...</Typography>
       </Box>
     );
   }
@@ -211,7 +87,7 @@ const RadarInfoMonitor: React.FC = () => {
             <Typography variant="h4" component="h1">
               Radar Info Monitor
             </Typography>
-            <Typography variant="subtitle1" color="textSecondary">
+            <Typography variant="subtitle1" color="text.secondary">
               Server: 192.186.1.14:17081
             </Typography>
           </Box>
@@ -222,328 +98,113 @@ const RadarInfoMonitor: React.FC = () => {
           />
         </Box>
         <Button
-          onClick={handleRefresh}
-          startIcon={<Refresh />}
-          disabled={loading}
           variant="contained"
+          startIcon={<Refresh />}
+          onClick={handleRefresh}
+          disabled={loading}
         >
           Refresh
         </Button>
       </Box>
 
-      {/* Error Alert */}
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
+        <Alert severity="error" sx={{ mb: 3 }}>
           {error}
         </Alert>
       )}
 
       {/* Statistics Cards */}
-      <Box display="flex" flexWrap="wrap" gap={2} sx={{ mb: 3 }}>
-        <Card sx={{ flex: '1 1 calc(25% - 12px)', minWidth: 200 }}>
+      <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+        <Card sx={{ flex: '1 1 calc(20% - 12px)', minWidth: 180 }}>
           <CardContent>
-            <Typography color="textSecondary" gutterBottom variant="body2">Total Radars</Typography>
-            <Typography variant="h4">{radars.length}</Typography>
-            <Typography variant="body2" color="success.main">
-              {radars.filter(r => r.status === 'active').length} Active
-            </Typography>
-          </CardContent>
-        </Card>
-        <Card sx={{ flex: '1 1 calc(25% - 12px)', minWidth: 200 }}>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom variant="body2">Total Fines</Typography>
-            <Typography variant="h4">{fines.length}</Typography>
-            <Typography variant="body2" color="warning.main">
-              {fines.filter(f => f.status === 'pending').length} Pending
-            </Typography>
-          </CardContent>
-        </Card>
-        <Card sx={{ flex: '1 1 calc(25% - 12px)', minWidth: 200 }}>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom variant="body2">Last Update</Typography>
-            <Typography variant="h6">
-              {lastUpdate ? new Date(lastUpdate).toLocaleTimeString() : 'Never'}
-            </Typography>
-            <Typography variant="body2" color="textSecondary">
-              {lastUpdate ? new Date(lastUpdate).toLocaleDateString() : ''}
-            </Typography>
-          </CardContent>
-        </Card>
-        <Card sx={{ flex: '1 1 calc(25% - 12px)', minWidth: 200 }}>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom variant="body2">Radar Readings</Typography>
-            <Typography variant="h4">{radarReadings.length}</Typography>
-            <Typography variant="body2" color="error.main">
-              {radarReadings.filter(r => r.isViolation).length} Violations
-            </Typography>
-          </CardContent>
-        </Card>
-        <Card sx={{ flex: '1 1 calc(25% - 12px)', minWidth: 200 }}>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom variant="body2">Connection Status</Typography>
+            <Typography color="textSecondary" gutterBottom variant="body2">System Status</Typography>
             <Typography variant="h6" color={isConnected ? 'success.main' : 'error.main'}>
               {isConnected ? 'Online' : 'Offline'}
             </Typography>
             <Typography variant="body2" color="textSecondary">
-              Real-time monitoring
+              {udpStatus?.stats.uptime ? `${Math.floor(udpStatus.stats.uptime / 60000)}m uptime` : 'No data'}
+            </Typography>
+          </CardContent>
+        </Card>
+
+        <Card sx={{ flex: '1 1 calc(20% - 12px)', minWidth: 180 }}>
+          <CardContent>
+            <Typography color="textSecondary" gutterBottom variant="body2">Messages Received</Typography>
+            <Typography variant="h6">
+              {udpStatus?.stats.messagesReceived || 0}
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              Total UDP messages
+            </Typography>
+          </CardContent>
+        </Card>
+
+        <Card sx={{ flex: '1 1 calc(20% - 12px)', minWidth: 180 }}>
+          <CardContent>
+            <Typography color="textSecondary" gutterBottom variant="body2">Violations Detected</Typography>
+            <Typography variant="h6" color="warning.main">
+              {udpStatus?.stats.violationsDetected || 0}
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              Speed violations
+            </Typography>
+          </CardContent>
+        </Card>
+
+        <Card sx={{ flex: '1 1 calc(20% - 12px)', minWidth: 180 }}>
+          <CardContent>
+            <Typography color="textSecondary" gutterBottom variant="body2">Fines Created</Typography>
+            <Typography variant="h6" color="error.main">
+              {udpStatus?.stats.finesCreated || 0}
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              Automatic fines
+            </Typography>
+          </CardContent>
+        </Card>
+
+        <Card sx={{ flex: '1 1 calc(20% - 12px)', minWidth: 180 }}>
+          <CardContent>
+            <Typography color="textSecondary" gutterBottom variant="body2">Speed Limit</Typography>
+            <Typography variant="h6">
+              {udpStatus?.stats.config.speedLimit || 30} km/h
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              Current limit
             </Typography>
           </CardContent>
         </Card>
       </Box>
 
-      {/* Data Tabs */}
+      {/* System Information */}
       <Card>
-        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)}>
-            <Tab 
-              label={`Radars (${radars.length})`} 
-              icon={<RadarIcon />} 
-              iconPosition="start"
-            />
-            <Tab 
-              label={`Fines (${fines.length})`} 
-              icon={<Receipt />} 
-              iconPosition="start"
-            />
-            <Tab 
-              label={`Readings (${radarReadings.length})`} 
-              icon={<RadarIcon />} 
-              iconPosition="start"
-            />
-          </Tabs>
-        </Box>
-
-        {/* Radars Tab */}
-        <TabPanel value={tabValue} index={0}>
-          <Box sx={{ mb: 2 }}>
-            <TextField
-              select
-              label="Filter by Status"
-              value={radarFilter}
-              onChange={(e) => setRadarFilter(e.target.value)}
-              sx={{ minWidth: 200 }}
-              size="small"
-            >
-              <MenuItem value="all">All Status</MenuItem>
-              <MenuItem value="active">Active</MenuItem>
-              <MenuItem value="inactive">Inactive</MenuItem>
-              <MenuItem value="maintenance">Maintenance</MenuItem>
-            </TextField>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>
+            UDP System Information
+          </Typography>
+          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2 }}>
+            <Box>
+              <Typography variant="body2" color="textSecondary">Port</Typography>
+              <Typography variant="body1">{udpStatus?.address?.port || 17081}</Typography>
+            </Box>
+            <Box>
+              <Typography variant="body2" color="textSecondary">Address</Typography>
+              <Typography variant="body1">{udpStatus?.address?.address || '0.0.0.0'}</Typography>
+            </Box>
+            <Box>
+              <Typography variant="body2" color="textSecondary">Status</Typography>
+              <Typography variant="body1" color={isConnected ? 'success.main' : 'error.main'}>
+                {udpStatus?.status || 'Unknown'}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="body2" color="textSecondary">Last Update</Typography>
+              <Typography variant="body1">
+                {lastUpdate ? new Date(lastUpdate).toLocaleTimeString() : 'Never'}
+              </Typography>
+            </Box>
           </Box>
-          
-          <TableContainer component={Paper} sx={{ maxHeight: 600 }}>
-            <Table stickyHeader>
-              <TableHead>
-                <TableRow>
-                  <TableCell>ID</TableCell>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Location</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Speed Limit</TableCell>
-                  <TableCell>IP Address</TableCell>
-                  <TableCell>Serial Number</TableCell>
-                  <TableCell>Statistics</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredRadars.map((radar) => (
-                  <TableRow key={radar.id} hover>
-                    <TableCell>{radar.id}</TableCell>
-                    <TableCell>{radar.name}</TableCell>
-                    <TableCell>{radar.location}</TableCell>
-                    <TableCell>
-                      <Chip 
-                        label={radar.status} 
-                        color={getStatusColor(radar.status) as any}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>{radar.speedLimit} km/h</TableCell>
-                    <TableCell>{radar.ipAddress || 'N/A'}</TableCell>
-                    <TableCell>{radar.serialNumber || 'N/A'}</TableCell>
-                    <TableCell>
-                      <Typography variant="body2">
-                        Total: {radar.statistics?.totalFines || 0}
-                      </Typography>
-                      <Typography variant="body2">
-                        Pending: {radar.statistics?.pendingFines || 0}
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </TabPanel>
-
-        {/* Fines Tab */}
-        <TabPanel value={tabValue} index={1}>
-          <Box sx={{ mb: 2 }}>
-            <TextField
-              select
-              label="Filter by Status"
-              value={fineFilter}
-              onChange={(e) => setFineFilter(e.target.value)}
-              sx={{ minWidth: 200 }}
-              size="small"
-            >
-              <MenuItem value="all">All Status</MenuItem>
-              <MenuItem value="pending">Pending</MenuItem>
-              <MenuItem value="processed">Processed</MenuItem>
-              <MenuItem value="paid">Paid</MenuItem>
-              <MenuItem value="cancelled">Cancelled</MenuItem>
-            </TextField>
-          </Box>
-          
-          <TableContainer component={Paper} sx={{ maxHeight: 600 }}>
-            <Table stickyHeader>
-              <TableHead>
-                <TableRow>
-                  <TableCell>ID</TableCell>
-                  <TableCell>Radar ID</TableCell>
-                  <TableCell>Plate Number</TableCell>
-                  <TableCell>Vehicle Speed</TableCell>
-                  <TableCell>Speed Limit</TableCell>
-                  <TableCell>Fine Amount</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Violation Time</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredFines.map((fine) => (
-                  <TableRow key={fine.id} hover>
-                    <TableCell>{fine.id}</TableCell>
-                    <TableCell>{fine.radarId}</TableCell>
-                    <TableCell>
-                      <Typography variant="body2" fontWeight="bold">
-                        {fine.plateNumber}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography 
-                        variant="body2" 
-                        color={fine.vehicleSpeed > fine.speedLimit ? 'error.main' : 'text.primary'}
-                      >
-                        {fine.vehicleSpeed} km/h
-                      </Typography>
-                    </TableCell>
-                    <TableCell>{fine.speedLimit} km/h</TableCell>
-                    <TableCell>${fine.fineAmount}</TableCell>
-                    <TableCell>
-                      <Chip 
-                        label={fine.status} 
-                        color={getStatusColor(fine.status) as any}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">
-                        {new Date(fine.violationTime).toLocaleString()}
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </TabPanel>
-
-        {/* Radar Readings Tab */}
-        <TabPanel value={tabValue} index={2}>
-          <Box sx={{ mb: 2 }}>
-            <TextField
-              select
-              label="Filter by Type"
-              value={readingFilter}
-              onChange={(e) => setReadingFilter(e.target.value)}
-              sx={{ minWidth: 200 }}
-              size="small"
-            >
-              <MenuItem value="all">All Readings</MenuItem>
-              <MenuItem value="violations">Violations Only</MenuItem>
-              <MenuItem value="compliant">Compliant Only</MenuItem>
-            </TextField>
-          </Box>
-          
-          <TableContainer component={Paper} sx={{ maxHeight: 600 }}>
-            <Table stickyHeader>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Reading ID</TableCell>
-                  <TableCell>Radar ID</TableCell>
-                  <TableCell>Speed Detected</TableCell>
-                  <TableCell>Speed Limit</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Detection Time</TableCell>
-                  <TableCell>Fine ID</TableCell>
-                  <TableCell>Images</TableCell>
-                  <TableCell>Source IP</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredReadings.map((reading) => (
-                  <TableRow key={reading.id} hover>
-                    <TableCell>{reading.id}</TableCell>
-                    <TableCell>{reading.radarId}</TableCell>
-                    <TableCell>
-                      <Typography 
-                        variant="body2" 
-                        color={reading.isViolation ? 'error.main' : 'success.main'}
-                        fontWeight="bold"
-                      >
-                        {reading.speed} km/h
-                      </Typography>
-                    </TableCell>
-                    <TableCell>{reading.speedLimit} km/h</TableCell>
-                    <TableCell>
-                      <Chip 
-                        label={reading.isViolation ? 'VIOLATION' : 'COMPLIANT'} 
-                        color={reading.isViolation ? 'error' : 'success'}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">
-                        {new Date(reading.timestamp).toLocaleString()}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      {reading.fineId ? (
-                        <Chip 
-                          label={`Fine #${reading.fineId}`} 
-                          color="warning"
-                          size="small"
-                        />
-                      ) : (
-                        <Typography variant="body2" color="textSecondary">
-                          No Fine
-                        </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {reading.correlatedImages && reading.correlatedImages.length > 0 ? (
-                        <Chip 
-                          label={`${reading.correlatedImages.length} Images`} 
-                          color="info"
-                          size="small"
-                        />
-                      ) : (
-                        <Typography variant="body2" color="textSecondary">
-                          No Images
-                        </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" color="textSecondary">
-                        {reading.sourceIP || 'N/A'}
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </TabPanel>
+        </CardContent>
       </Card>
     </Box>
   );

@@ -13,6 +13,7 @@ import Reports from './pages/Reports';
 import PlateRecognition from './pages/PlateRecognition';
 import FinesImagesMonitor from './pages/FinesImagesMonitor';
 import RadarInfoMonitor from './pages/RadarInfoMonitor';
+import AuthTest from './pages/AuthTest';
 
 function App() {
   return (

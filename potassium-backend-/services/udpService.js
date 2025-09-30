@@ -1,14 +1,18 @@
 const dgram = require('dgram');
 const EventEmitter = require('events');
+const { getRadarConfig } = require('../config/systemConstants');
 
 class UDPService extends EventEmitter {
     constructor() {
         super();
         this.server = dgram.createSocket('udp4');
+        
+        // Use centralized radar configuration
+        const radarConfig = getRadarConfig();
         this.config = {
-            host: '192.186.1.14',
-            port: 17081,
-            localPort: process.env.UDP_LOCAL_PORT || 17081
+            host: radarConfig.HOST,
+            port: radarConfig.UDP_PORT,
+            localPort: process.env.UDP_LOCAL_PORT || radarConfig.UDP_PORT
         };
         this.isListening = false;
         this.setupEventHandlers();

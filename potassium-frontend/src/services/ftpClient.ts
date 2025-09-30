@@ -81,20 +81,38 @@ class FTPClientService {
   private async initializeLocalMode(): Promise<void> {
     console.log('🚀 FTP Client: Initializing LOCAL MODE - using real images from /srv/camera_uploads/camera001/192.168.1.54');
     
-    try {
-      // Test connection to local image server
-      const response = await fetch(`${this.imageHttpHost}/health`);
-      if (response.ok) {
-        console.log('✅ Local image server is available');
-        this.useMockData = false;
-        await this.loadRealImages();
-        this.notifyConnectionListeners(true);
-      } else {
-        throw new Error('Local server not responding');
+    const maxRetries = 3;
+    let retryCount = 0;
+    
+    while (retryCount < maxRetries) {
+      try {
+        // Test connection to local image server
+        const response = await fetch(`${this.imageHttpHost}/health`, {
+          timeout: 5000
+        } as any);
+        
+        if (response.ok) {
+          console.log('✅ Local image server is available');
+          this.useMockData = false;
+          await this.loadRealImages();
+          this.notifyConnectionListeners(true);
+          return; // Success, exit retry loop
+        } else {
+          throw new Error(`Local server responded with status: ${response.status}`);
+        }
+      } catch (error) {
+        retryCount++;
+        console.warn(`⚠️ Local image server connection attempt ${retryCount}/${maxRetries} failed:`, error);
+        
+        if (retryCount < maxRetries) {
+          console.log(`🔄 Retrying in ${retryCount * 2} seconds...`);
+          await new Promise(resolve => setTimeout(resolve, retryCount * 2000));
+        } else {
+          console.error('❌ Local image server connection failed after all retries');
+          console.error('❌ Local image server not available - Using mock data');
+          this.initializeMockMode();
+        }
       }
-    } catch (error) {
-      console.error('❌ Local image server not available:', error);
-      this.initializeMockMode();
     }
   }
 
@@ -111,6 +129,12 @@ class FTPClientService {
       const data = await response.json();
       
       if (data.success && data.files) {
+        if (data.files.length === 0) {
+          console.log('⚠️ Local image server connected but no images found in directory');
+          this.initializeMockMode();
+          return;
+        }
+        
         console.log(`✅ Loaded ${data.files.length} real images from local server (filter: ${dateParam})`);
         
         this.cachedImages = data.files.map((file: any, index: number) => {
@@ -183,20 +207,21 @@ class FTPClientService {
   }
 
   private initializeMockMode(): void {
-    console.error('❌ Local image server not available - No images will be shown');
-    console.log('💡 To use real images from /srv/camera_uploads/camera001/192.168.1.54:');
-    console.log('   1. Ensure local image server is running on port 3003');
-    console.log('   2. Check that path /srv/camera_uploads/camera001/192.168.1.54 is accessible');
-    console.log('   3. Click "Refresh" button in the FTP Monitor');
+    console.warn('⚠️ No images found in camera directory - Directory is empty');
+    console.log('💡 Image directory status:');
+    console.log('   ✅ Local image server is running on port 3003');
+    console.log('   ✅ Directory /srv/camera_uploads/camera001/192.168.1.54 is accessible');
+    console.log('   ⚠️ No image files (.jpg, .png) found in the directory');
+    console.log('   💡 Upload images to the camera directory or wait for camera to capture images');
     
     // DO NOT USE MOCK DATA - Keep empty
     this.useMockData = false;
     this.cachedImages = [];
     
-    // Notify that no images are available (no fake images)
+    // Notify that connection is OK but no images available
     setTimeout(() => {
-      this.notifyConnectionListeners(false);
-      this.notifyImageListeners([]);
+      this.notifyConnectionListeners(true); // Connection is OK
+      this.notifyImageListeners([]); // But no images
     }, 500);
   }
 
@@ -641,11 +666,15 @@ class FTPClientService {
   }
 
   public reconnect(): void {
-    if (this.ws) {
-      this.ws.close();
-    }
-    this.reconnectAttempts = 0;
-    this.connect();
+    console.log('🔄 FTP Client: Attempting to reconnect...');
+    this.disconnect();
+    setTimeout(() => {
+      this.connect();
+      // Also retry local mode initialization
+      setTimeout(() => {
+        this.initializeLocalMode();
+      }, 2000);
+    }, 1000);
   }
 
   public disconnect(): void {

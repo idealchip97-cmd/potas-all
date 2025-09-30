@@ -2,24 +2,27 @@ const FTP = require('ftp');
 const fs = require('fs-extra');
 const path = require('path');
 const EventEmitter = require('events');
+const { getFtpConfig } = require('../config/systemConstants');
 
 class FTPService extends EventEmitter {
     constructor() {
         super();
         this.client = new FTP();
         this.isConnected = false;
+        
+        // Use centralized FTP configuration
+        const ftpConfig = getFtpConfig();
         this.config = {
-            host: process.env.FTP_HOST || '192.168.1.55',
-            port: parseInt(process.env.FTP_PORT || '21', 10),
-            user: process.env.FTP_USER || 'anonymous',
-            password: process.env.FTP_PASSWORD || 'anonymous@',
-            connTimeout: 60000,
-            pasvTimeout: 60000,
-            keepalive: 60000
+            host: ftpConfig.HOST,
+            port: ftpConfig.PORT,
+            user: ftpConfig.USER,
+            password: ftpConfig.PASSWORD,
+            connTimeout: ftpConfig.CONN_TIMEOUT,
+            pasvTimeout: ftpConfig.PASV_TIMEOUT,
+            keepalive: ftpConfig.KEEPALIVE
         };
-        // Use IMAGE_BASE_DIR from environment or default to /srv/camera_uploads
-        const imageBaseDir = process.env.IMAGE_BASE_DIR || '/srv/camera_uploads';
-        this.downloadDir = imageBaseDir;
+        
+        this.downloadDir = ftpConfig.LOCAL_DOWNLOAD_DIR;
         this.setupEventHandlers();
         this.ensureDownloadDirectory();
         try {

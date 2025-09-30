@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Cache and Test Login</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .button { padding: 10px 20px; margin: 10px; background: #007bff; color: white; border: none; cursor: pointer; }
+        .result { margin: 10px 0; padding: 10px; background: #f8f9fa; border: 1px solid #dee2e6; }
+        .error { background: #f8d7da; border-color: #f5c6cb; }
+        .success { background: #d4edda; border-color: #c3e6cb; }
+    </style>
+</head>
+<body>
+    <h1>🧹 Clear Cache and Test Login System</h1>
+    
+    <div>
+        <button class="button" onclick="clearAllCaches()">Clear All Caches</button>
+        <button class="button" onclick="testLoginAPI()">Test Login API</button>
+        <button class="button" onclick="testFrontendLogin()">Test Frontend Login</button>
+        <button class="button" onclick="checkLocalStorage()">Check LocalStorage</button>
+    </div>
+    
+    <div id="results"></div>
+    
+    <script>
+        function log(message, type = 'info') {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `result ${type}`;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${message}`;
+            results.appendChild(div);
+            console.log(message);
+        }
+        
+        function clearAllCaches() {
+            log('🧹 Clearing all caches...', 'info');
+            
+            // Clear localStorage
+            localStorage.clear();
+            log('✅ LocalStorage cleared', 'success');
+            
+            // Clear sessionStorage
+            sessionStorage.clear();
+            log('✅ SessionStorage cleared', 'success');
+            
+            // Clear cookies
+            document.cookie.split(";").forEach(function(c) { 
+                document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+            });
+            log('✅ Cookies cleared', 'success');
+            
+            // Clear service worker cache if available
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                    for(let registration of registrations) {
+                        registration.unregister();
+                    }
+                    log('✅ Service workers cleared', 'success');
+                });
+            }
+            
+            log('🎉 All caches cleared! You can now test login.', 'success');
+        }
+        
+        async function testLoginAPI() {
+            log('🧪 Testing login API...', 'info');
+            
+            try {
+                // Test if backend is running
+                const healthResponse = await fetch('http://localhost:3000/health');
+                if (healthResponse.ok) {
+                    log('✅ Backend API is running on port 3000', 'success');
+                } else {
+                    log('❌ Backend API not responding properly', 'error');
+                }
+            } catch (error) {
+                log('❌ Backend API not accessible: ' + error.message, 'error');
+            }
+            
+            // Test mock login logic
+            const demoAccounts = [
+                { email: 'admin@potasfactory.com', password: 'admin123', role: 'Admin' },
+                { email: 'operator@potasfactory.com', password: 'operator123', role: 'Operator' },
+                { email: 'viewer@potasfactory.com', password: 'viewer123', role: 'Viewer' },
+            ];
+            
+            const testEmail = 'admin@potasfactory.com';
+            const testPassword = 'admin123';
+            
+            const account = demoAccounts.find(acc => acc.email === testEmail && acc.password === testPassword);
+            
+            if (account) {
+                log('✅ Mock login logic working - credentials valid', 'success');
+                
+                // Simulate login
+                const mockToken = `mock_token_${Date.now()}`;
+                const mockUser = {
+                    id: 1,
+                    email: account.email,
+                    firstName: account.role,
+                    lastName: 'User',
+                    role: account.role.toLowerCase(),
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                };
+                
+                localStorage.setItem('authToken', mockToken);
+                localStorage.setItem('user', JSON.stringify(mockUser));
+                
+                log('✅ Test login data stored in localStorage', 'success');
+                log('📋 Token: ' + mockToken.substring(0, 20) + '...', 'info');
+                log('📋 User: ' + JSON.stringify(mockUser, null, 2), 'info');
+            } else {
+                log('❌ Mock login logic failed', 'error');
+            }
+        }
+        
+        function testFrontendLogin() {
+            log('🌐 Testing frontend login...', 'info');
+            
+            // Check if frontend is accessible
+            fetch('http://localhost:3001')
+                .then(response => {
+                    if (response.ok) {
+                        log('✅ Frontend is running on port 3001', 'success');
+                        log('🔗 Login URL: http://localhost:3001/login', 'info');
+                        log('🔗 Dashboard URL: http://localhost:3001/dashboard', 'info');
+                    } else {
+                        log('❌ Frontend not responding properly', 'error');
+                    }
+                })
+                .catch(error => {
+                    log('❌ Frontend not accessible: ' + error.message, 'error');
+                });
+        }
+        
+        function checkLocalStorage() {
+            log('🔍 Checking localStorage...', 'info');
+            
+            const token = localStorage.getItem('authToken');
+            const user = localStorage.getItem('user');
+            
+            if (token) {
+                log('✅ Auth token found: ' + token.substring(0, 20) + '...', 'success');
+            } else {
+                log('❌ No auth token found', 'error');
+            }
+            
+            if (user) {
+                try {
+                    const userData = JSON.parse(user);
+                    log('✅ User data found: ' + JSON.stringify(userData, null, 2), 'success');
+                } catch (error) {
+                    log('❌ Invalid user data in localStorage: ' + error.message, 'error');
+                }
+            } else {
+                log('❌ No user data found', 'error');
+            }
+            
+            log('📊 LocalStorage keys: ' + Object.keys(localStorage).join(', '), 'info');
+        }
+        
+        // Auto-run initial checks
+        window.onload = function() {
+            log('🚀 Cache and Login Test Tool Loaded', 'info');
+            log('📋 Available demo accounts:', 'info');
+            log('   • admin@potasfactory.com / admin123', 'info');
+            log('   • operator@potasfactory.com / operator123', 'info');
+            log('   • viewer@potasfactory.com / viewer123', 'info');
+        };
+    </script>
+</body>
+</html>

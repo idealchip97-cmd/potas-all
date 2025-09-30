@@ -1,15 +1,19 @@
 const dgram = require('dgram');
 const EventEmitter = require('events');
-const { RadarReading, Fine, Radar, UdpReading } = require('../models');
+const { RadarReading, Fine, Radar } = require('../models');
 const sequelize = require('../config/database');
+const { getRadarConfig, calculateFineAmount, SYSTEM_CONSTANTS } = require('../config/systemConstants');
 
 class PersistentUdpListener extends EventEmitter {
     constructor() {
         super();
         this.server = dgram.createSocket('udp4');
+        
+        // Use centralized configuration
+        const radarConfig = getRadarConfig();
         this.config = {
-            port: process.env.UDP_PORT || 17081,
-            speedLimit: process.env.SPEED_LIMIT || 30
+            port: radarConfig.UDP_PORT,
+            speedLimit: SYSTEM_CONSTANTS.RADAR.SPEED.DEFAULT_LIMIT
         };
         this.isListening = false;
         this.stats = {
@@ -339,11 +343,8 @@ class PersistentUdpListener extends EventEmitter {
     }
 
     calculateFineAmount(speedExcess) {
-        // Fine calculation based on speed excess
-        if (speedExcess <= 10) return 50;
-        if (speedExcess <= 20) return 100;
-        if (speedExcess <= 30) return 200;
-        return 300; // 30+ km/h over limit
+        // Use centralized fine calculation
+        return calculateFineAmount(speedExcess);
     }
 
     async start() {

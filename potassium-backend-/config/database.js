@@ -1,27 +1,29 @@
 const { Sequelize } = require('sequelize');
-require('dotenv').config();
+const { getDatabaseConfig, SYSTEM_CONSTANTS } = require('./systemConstants');
 
-// MySQL-only configuration (SQLite disabled)
+// Use centralized database configuration
+const dbConfig = getDatabaseConfig();
+
 const sequelize = new Sequelize(
-  process.env.DB_NAME || 'potassium_backend',
-  process.env.DB_USER || 'root',
-  process.env.DB_PASSWORD || '',
+  dbConfig.DATABASE,
+  dbConfig.USERNAME,
+  dbConfig.PASSWORD,
   {
-    host: process.env.DB_HOST || 'localhost',
-    port: process.env.DB_PORT || 3306,
+    host: dbConfig.HOST,
+    port: dbConfig.PORT,
     dialect: 'mysql',
-    logging: process.env.NODE_ENV === 'development' ? console.log : false,
+    logging: SYSTEM_CONSTANTS.SERVER.API.ENVIRONMENT === 'development' ? console.log : false,
     pool: {
-      max: 10,
-      min: 0,
-      acquire: 30000,
-      idle: 10000,
+      max: dbConfig.POOL.MAX,
+      min: dbConfig.POOL.MIN,
+      acquire: dbConfig.POOL.ACQUIRE,
+      idle: dbConfig.POOL.IDLE,
     },
     define: {
-      charset: 'utf8mb4',
-      collate: 'utf8mb4_unicode_ci',
+      charset: dbConfig.CHARSET,
+      collate: dbConfig.COLLATE,
     },
-    timezone: '+03:00', // Local timezone
+    timezone: dbConfig.TIMEZONE,
   }
 );
 

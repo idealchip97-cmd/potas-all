@@ -1,7 +1,11 @@
 const express = require('express');
 const { Op } = require('sequelize');
 const { UdpReading, Radar, Fine } = require('../models');
+const { authenticate, authorize } = require('../middleware/auth');
 const router = express.Router();
+
+// Apply authentication middleware to all routes
+router.use(authenticate);
 
 // Get all UDP readings with pagination and filtering
 router.get('/', async (req, res) => {
