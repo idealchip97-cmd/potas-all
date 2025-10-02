@@ -81,8 +81,7 @@ const FinesImagesMonitor: React.FC = () => {
       const cacheBuster = Date.now();
       // Try multiple endpoints: proxy first, then direct
       const endpoints = [
-        `/api/ftp-images/dates?camera=192.168.1.54&_t=${cacheBuster}`, // Via proxy
-        `http://localhost:3003/api/ftp-images/dates?camera=192.168.1.54&_t=${cacheBuster}` // Direct
+        `/api/ftp-images/dates?camera=192.168.1.54&_t=${cacheBuster}` // Via proxy
       ];
       
       let response: Response | null = null;
@@ -143,8 +142,7 @@ const FinesImagesMonitor: React.FC = () => {
       // Try multiple endpoints: proxy first, then direct
       const cacheBuster = Date.now();
       const endpoints = [
-        `/api/ftp-images/list?camera=192.168.1.54&date=all&_t=${cacheBuster}`, // Via proxy
-        `http://localhost:3003/api/ftp-images/list?camera=192.168.1.54&date=all&_t=${cacheBuster}` // Direct
+        `/api/ftp-images/list?camera=192.168.1.54&date=all&_t=${cacheBuster}` // Via proxy
       ];
       
       let response: Response | null = null;
@@ -223,9 +221,9 @@ const FinesImagesMonitor: React.FC = () => {
               filename: file.filename,
               timestamp: file.timestamp,
               size: file.size,
-              url: `http://localhost:3003${file.url}`,
-              imageUrl: `http://localhost:3003${file.url}`,
-              thumbnailUrl: `http://localhost:3003${file.url}`,
+              url: `${file.url}`,
+              imageUrl: `${file.url}`,
+              thumbnailUrl: `${file.url}`,
               plateNumber: 'Processing...',
               confidence: 0,
               status: 'pending' as const,
@@ -384,8 +382,8 @@ const FinesImagesMonitor: React.FC = () => {
     try {
       const cacheBuster = Date.now();
       const apiUrl = selectedDate === 'all' 
-        ? `http://localhost:3003/api/ftp-images/list?camera=192.168.1.54&date=all&_t=${cacheBuster}`
-        : `http://localhost:3003/api/ftp-images/list?camera=192.168.1.54&date=${selectedDate}&_t=${cacheBuster}`;
+        ? `/api/ftp-images/list?camera=192.168.1.54&date=all&_t=${cacheBuster}`
+        : `/api/ftp-images/list?camera=192.168.1.54&date=${selectedDate}&_t=${cacheBuster}`;
       
       console.log(`🌐 Loading images for: ${selectedDate === 'all' ? 'all dates' : selectedDate}`);
       
@@ -416,9 +414,9 @@ const FinesImagesMonitor: React.FC = () => {
               filename: file.filename,
               timestamp: file.timestamp,
               size: file.size,
-              url: `http://localhost:3003${file.url}`,
-              imageUrl: `http://localhost:3003${file.url}`,
-              thumbnailUrl: `http://localhost:3003${file.url}`,
+              url: `${file.url}`,
+              imageUrl: `${file.url}`,
+              thumbnailUrl: `${file.url}`,
               plateNumber: 'Processing...',
               confidence: 0,
               status: 'pending' as const,

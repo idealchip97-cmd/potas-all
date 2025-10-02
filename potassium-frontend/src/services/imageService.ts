@@ -1,11 +1,11 @@
 import axios from 'axios';
 
 class ImageService {
-  private imageServerUrl = 'http://localhost:3003';
+  // Use relative base so CRA dev proxy routes to local image server (port 3003)
+  private imageServerUrl = '';
 
   async getFTPImages() {
     try {
-      // Use direct connection to image server since it's on different port
       const response = await axios.get(`${this.imageServerUrl}/api/ftp-images/list`);
       return response.data;
     } catch (error) {
