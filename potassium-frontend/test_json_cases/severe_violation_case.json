@@ -2,7 +2,7 @@
   "camera_id": "camera003",
   "speed": 85,
   "src_ip": "192.168.1.65",
-  "event_ts": 1759665380,
+  "event_ts": 1759680379,
   "decision": "violation",
   "vehicle_type": "car",
   "lane": 2

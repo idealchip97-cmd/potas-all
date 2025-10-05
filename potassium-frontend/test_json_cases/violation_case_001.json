@@ -2,7 +2,7 @@
   "camera_id": "camera002",
   "speed": 70,
   "src_ip": "192.168.1.60",
-  "event_ts": 1759665680,
+  "event_ts": 1759680679,
   "decision": "violation",
   "location": "Main Street",
   "weather": "clear"

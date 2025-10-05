@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box,
-  Typography,
   Card,
   CardContent,
-  Button,
+  Typography,
   Table,
   TableBody,
   TableCell,
@@ -14,15 +13,19 @@ import {
   Paper,
   Chip,
   IconButton,
-  Alert,
-  CircularProgress,
+  Button,
   TextField,
   MenuItem,
+  Alert,
+  CircularProgress,
   Avatar,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
+  InputProps,
+  Pagination,
+  Autocomplete
 } from '@mui/material';
 import {
   CloudUpload,
@@ -86,6 +89,11 @@ const FinesImagesMonitor: React.FC = () => {
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [availableCameras] = useState<string[]>(['camera001', 'camera002', 'camera003']);
   const [selectedCamera, setSelectedCamera] = useState<string>('camera002'); // Default to camera002
+  const [availableCases, setAvailableCases] = useState<string[]>([]);
+  
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [rowsPerPage] = useState(10);
   
   // Filter states
   const [filters, setFilters] = useState<FilterOptions>({
@@ -136,31 +144,62 @@ const FinesImagesMonitor: React.FC = () => {
       
       let allCases: ViolationCase[] = [];
       
-      // Load violations for selected camera
-      const camera = cameraId || selectedCamera;
-      try {
-        const response = await fetch(`http://localhost:3003/api/violations/${camera}/${date}`);
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success && data.violations) {
-            const formattedCases = data.violations.map((violation: any) => ({
-              eventId: violation.eventId,
-              cameraId: camera,
-              date: date,
-              verdict: violation.verdict,
-              photos: violation.photos,
-              folderPath: violation.folderPath
-            }));
-            
-            allCases = formattedCases;
-            console.log(`📷 Loaded ${formattedCases.length} cases from ${camera}`);
+      if (cameraId) {
+        // Load violations for specific camera
+        try {
+          const response = await fetch(`http://localhost:3003/api/violations/${cameraId}/${date}`);
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.violations) {
+              const formattedCases = data.violations.map((violation: any) => ({
+                eventId: violation.eventId,
+                cameraId: cameraId,
+                date: date,
+                verdict: violation.verdict,
+                photos: violation.photos,
+                folderPath: violation.folderPath
+              }));
+              
+              allCases = formattedCases;
+              console.log(`📷 Loaded ${formattedCases.length} cases from ${cameraId}`);
+            }
+          } else {
+            console.warn(`⚠️ No violations found for ${cameraId} on ${date}`);
           }
-        } else {
-          console.warn(`⚠️ No violations found for ${camera} on ${date}`);
+        } catch (cameraError) {
+          console.warn(`⚠️ Failed to load violations for ${cameraId}:`, cameraError);
         }
-      } catch (cameraError) {
-        console.warn(`⚠️ Failed to load violations for ${camera}:`, cameraError);
+      } else {
+        // Load violations from all cameras
+        const cameras = ['camera001', 'camera002', 'camera003'];
+        
+        for (const camera of cameras) {
+          try {
+            const response = await fetch(`http://localhost:3003/api/violations/${camera}/${date}`);
+            
+            if (response.ok) {
+              const data = await response.json();
+              if (data.success && data.violations) {
+                const formattedCases = data.violations.map((violation: any) => ({
+                  eventId: violation.eventId,
+                  cameraId: camera,
+                  date: date,
+                  verdict: violation.verdict,
+                  photos: violation.photos,
+                  folderPath: violation.folderPath
+                }));
+                
+                allCases = [...allCases, ...formattedCases];
+                console.log(`📷 Loaded ${formattedCases.length} cases from ${camera}`);
+              }
+            } else {
+              console.warn(`⚠️ No violations found for ${camera} on ${date}`);
+            }
+          } catch (cameraError) {
+            console.warn(`⚠️ Failed to load violations for ${camera}:`, cameraError);
+          }
+        }
       }
       
       // Sort by event timestamp (newest first)
@@ -170,6 +209,10 @@ const FinesImagesMonitor: React.FC = () => {
       setIsConnected(true);
       setConnectionMode('violation_system');
       updateViolationStats(allCases);
+      
+      // Update available cases for autocomplete
+      const caseIds = allCases.map(c => c.eventId).sort();
+      setAvailableCases(caseIds);
       
       console.log(`✅ Loaded ${allCases.length} total violation cases`);
       
@@ -188,7 +231,7 @@ const FinesImagesMonitor: React.FC = () => {
   useEffect(() => {
     // Load available dates and violation cases
     loadAvailableDates();
-    loadViolationCases('2025-10-05', 'camera002'); // Load with specific date and camera
+    loadViolationCases('2025-10-05'); // Load from all cameras for the date
     
     // Set up auto-refresh every 30 seconds
     const autoRefreshInterval = setInterval(() => {
@@ -240,21 +283,24 @@ const FinesImagesMonitor: React.FC = () => {
       filtered = filtered.filter(c => c.verdict.decision === filters.status);
     }
 
-    // Case filter (by event ID)
+    // Car Case ID filter (exact case ID matching)
     if (filters.caseFilter && filters.caseFilter.trim() !== '') {
       filtered = filtered.filter(c => c.eventId.toLowerCase().includes(filters.caseFilter.toLowerCase()));
     }
 
-    // Search filter
+    // Search All filter (searches across multiple fields)
     if (filters.search && filters.search.trim() !== '') {
       const searchLower = filters.search.toLowerCase();
       filtered = filtered.filter(c => 
         c.eventId.toLowerCase().includes(searchLower) ||
-        c.verdict.src_ip.includes(searchLower)
+        c.verdict.src_ip.includes(searchLower) ||
+        c.cameraId.toLowerCase().includes(searchLower) ||
+        c.verdict.speed.toString().includes(searchLower)
       );
     }
 
     setFilteredCases(filtered);
+    setPage(1); // Reset to first page when filters change
   };
 
   const handleRefresh = () => {
@@ -503,7 +549,7 @@ const FinesImagesMonitor: React.FC = () => {
               ))}
             </TextField>
             <TextField
-              label="Search"
+              label="Search All"
               placeholder="Search by case ID, IP address..."
               value={filters.search}
               onChange={(e) => setFilters({ ...filters, search: e.target.value })}
@@ -512,15 +558,25 @@ const FinesImagesMonitor: React.FC = () => {
               }}
               sx={{ minWidth: 250 }}
               size="small"
+              helperText="Search in all fields"
             />
-            <TextField
-              label="Car Filter"
-              placeholder="e.g. case001, case002..."
+            <Autocomplete
+              options={availableCases}
               value={filters.caseFilter}
-              onChange={(e) => setFilters({ ...filters, caseFilter: e.target.value })}
+              onChange={(event, newValue) => {
+                setFilters({ ...filters, caseFilter: newValue || '' });
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Car Case ID"
+                  placeholder="Select or type case ID..."
+                  size="small"
+                  helperText="Select from list or search"
+                />
+              )}
+              freeSolo
               sx={{ minWidth: 200 }}
-              size="small"
-              helperText="Type car case ID to filter"
             />
           </Box>
         </CardContent>
@@ -529,25 +585,33 @@ const FinesImagesMonitor: React.FC = () => {
       {/* Violation Cases Table */}
       <Card>
         <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Car Violation Cases - {selectedCamera.toUpperCase()} ({filteredCases.length})
-          </Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6">
+              Car Violation Cases - {selectedCamera.toUpperCase()} ({filteredCases.length})
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              Page {page} of {Math.ceil(filteredCases.length / rowsPerPage)} • {rowsPerPage} per page
+            </Typography>
+          </Box>
           {filteredCases.length > 0 ? (
-            <TableContainer component={Paper} sx={{ maxHeight: 600 }}>
-              <Table stickyHeader>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Case ID (Car)</TableCell>
-                    <TableCell>Speed Detection</TableCell>
-                    <TableCell>Decision</TableCell>
-                    <TableCell>Photos (3)</TableCell>
-                    <TableCell>Timestamp</TableCell>
-                    <TableCell>Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {filteredCases.map((violationCase) => (
-                    <TableRow key={violationCase.eventId} hover>
+            <>
+              <TableContainer component={Paper} sx={{ maxHeight: 600 }}>
+                <Table stickyHeader>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Case ID (Car)</TableCell>
+                      <TableCell>Speed Detection</TableCell>
+                      <TableCell>Decision</TableCell>
+                      <TableCell>Photos (3)</TableCell>
+                      <TableCell>Timestamp</TableCell>
+                      <TableCell>Actions</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {filteredCases
+                      .slice((page - 1) * rowsPerPage, page * rowsPerPage)
+                      .map((violationCase) => (
+                      <TableRow key={violationCase.eventId} hover>
                       <TableCell>
                         <Typography variant="body2" fontWeight="bold">
                           {violationCase.eventId}
@@ -629,9 +693,29 @@ const FinesImagesMonitor: React.FC = () => {
                       </TableCell>
                     </TableRow>
                   ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              
+              {/* Pagination */}
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+                <Pagination
+                  count={Math.ceil(filteredCases.length / rowsPerPage)}
+                  page={page}
+                  onChange={(event, newPage) => setPage(newPage)}
+                  color="primary"
+                  showFirstButton
+                  showLastButton
+                />
+              </Box>
+              
+              {/* Pagination Info */}
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
+                <Typography variant="body2" color="textSecondary">
+                  Showing {((page - 1) * rowsPerPage) + 1}-{Math.min(page * rowsPerPage, filteredCases.length)} of {filteredCases.length} cases
+                </Typography>
+              </Box>
+            </>
           ) : (
             <Alert severity="info">
               {violationCases.length === 0 ? `No violation cases found in ${selectedCamera.toUpperCase()}` : 'No cases match the current filters'}
