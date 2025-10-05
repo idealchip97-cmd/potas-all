@@ -108,6 +108,11 @@ const PlateRecognition = sequelize.define('PlateRecognition', {
       type: DataTypes.JSON,
       allowNull: true,
       comment: 'Results from all AI engines used'
+    },
+    eventId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'Event ID for new processing system (links to 3-photo folders)'
     }
   }, {
     tableName: 'plate_recognitions',

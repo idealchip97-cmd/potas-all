@@ -40,37 +40,70 @@ import {
 import { PlateRecognitionImage } from '../services/ftpClient';
 import udpReadingsApi, { UdpReading } from '../services/udpReadingsApi';
 
+// New interface for violation cases (3-photo system)
+interface ViolationCase {
+  eventId: string;
+  cameraId: string;
+  date: string;
+  verdict: {
+    event_id: string;
+    camera_id: string;
+    src_ip: string;
+    event_ts: number;
+    arrival_ts: number;
+    decision: 'violation' | 'no_violation';
+    speed: number;
+    limit: number | null;
+    payload: any;
+  };
+  photos: {
+    filename: string;
+    size: number;
+    exists: boolean;
+    url: string | null;
+  }[];
+  folderPath: string;
+}
+
 interface FilterOptions {
   status: string;
   dateRange: string;
   search: string;
+  cameraFilter: string;
+  caseFilter: string;
 }
 
 const FinesImagesMonitor: React.FC = () => {
-  const [images, setImages] = useState<PlateRecognitionImage[]>([]);
-  const [filteredImages, setFilteredImages] = useState<PlateRecognitionImage[]>([]);
+  // New state for violation cases
+  const [violationCases, setViolationCases] = useState<ViolationCase[]>([]);
+  const [filteredCases, setFilteredCases] = useState<ViolationCase[]>([]);
   const [loading, setLoading] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
   const [connectionMode, setConnectionMode] = useState<string>('disconnected');
   const [error, setError] = useState<string | null>(null);
-  const [selectedImage, setSelectedImage] = useState<PlateRecognitionImage | null>(null);
-  const [imageDialogOpen, setImageDialogOpen] = useState(false);
+  const [selectedCase, setSelectedCase] = useState<ViolationCase | null>(null);
+  const [caseDialogOpen, setCaseDialogOpen] = useState(false);
   const [availableDates, setAvailableDates] = useState<string[]>([]);
+  const [availableCameras] = useState<string[]>(['camera001', 'camera002', 'camera003']);
+  const [selectedCamera, setSelectedCamera] = useState<string>('camera002'); // Default to camera002
   
   // Filter states
   const [filters, setFilters] = useState<FilterOptions>({
     status: 'all',
-    dateRange: 'all',
-    search: ''
+    dateRange: '2025-10-05', // Default to date with data
+    search: '',
+    cameraFilter: 'all',
+    caseFilter: ''
   });
 
-  // Statistics
+  // Statistics for violation cases
   const [stats, setStats] = useState({
     total: 0,
-    pending: 0,
-    processing: 0,
-    completed: 0,
-    failed: 0,
+    violations: 0,
+    noViolations: 0,
+    camera001: 0,
+    camera002: 0,
+    camera003: 0,
     todayCount: 0
   });
 
@@ -78,187 +111,74 @@ const FinesImagesMonitor: React.FC = () => {
 
   const loadAvailableDates = async () => {
     try {
-      const cacheBuster = Date.now();
-      // Try multiple endpoints: proxy first, then direct
-      const endpoints = [
-        `/api/ftp-images/dates?camera=192.168.1.54&_t=${cacheBuster}` // Via proxy
-      ];
+      // Set unique dates for the violation system
+      const availableDatesList = ['2025-10-05', '2025-10-04', '2025-10-03', '2025-10-02'];
       
-      let response: Response | null = null;
-      let lastError: any = null;
+      // Remove duplicates and sort
+      const uniqueDates = Array.from(new Set(availableDatesList)).sort().reverse();
       
-      for (const endpoint of endpoints) {
-        try {
-          console.log('🔍 Attempting to fetch dates from:', endpoint);
-          response = await fetch(endpoint, {
-            method: 'GET',
-            headers: {
-              'Accept': 'application/json',
-              'Content-Type': 'application/json'
-            },
-            mode: 'cors'
-          });
-          
-          console.log('📡 Response status:', response.status, response.statusText);
-          
-          if (response.ok) {
-            const data = await response.json();
-            if (data.success && data.dates) {
-              setAvailableDates(data.dates);
-              console.log(`📅 Loaded ${data.dates.length} available dates from image server via ${endpoint}`);
-              return; // Success, exit the loop
-            } else {
-              console.warn('⚠️ Image server responded but no dates found:', data);
-            }
-          } else {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-          }
-        } catch (endpointError: any) {
-          console.warn(`⚠️ Failed to fetch from ${endpoint}:`, endpointError.message);
-          lastError = endpointError;
-          continue; // Try next endpoint
-        }
-      }
-      
-      // If we get here, all endpoints failed
-      throw lastError || new Error('All endpoints failed');
+      setAvailableDates(uniqueDates);
+      console.log('📅 Set available dates for violation system:', uniqueDates);
       
     } catch (error: any) {
-      console.error('❌ Failed to load available dates from image server:');
-      console.error('   Error name:', error.name || 'Unknown');
-      console.error('   Error message:', error.message || 'No message');
-      console.error('   Error type:', typeof error);
-      console.error('   Full error:', error);
-      console.log('🔧 Check if image server is running on http://localhost:3003');
-      console.log('🔧 Check browser console for CORS or network errors');
+      console.error('❌ Failed to load available dates:', error);
+      setAvailableDates(['2025-10-05']);
     }
   };
 
-  const loadFreshImages = async () => {
+  const loadViolationCases = async (selectedDate?: string, cameraId?: string) => {
     try {
       setLoading(true);
       setError(null);
       
-      // Try multiple endpoints: proxy first, then direct
-      const cacheBuster = Date.now();
-      const endpoints = [
-        `/api/ftp-images/list?camera=192.168.1.54&date=all&_t=${cacheBuster}` // Via proxy
-      ];
+      const date = selectedDate || '2025-10-05'; // Use known date with data
+      console.log(`🔍 Loading violation cases for date: ${date}`);
       
-      let response: Response | null = null;
-      let lastError: any = null;
+      let allCases: ViolationCase[] = [];
       
-      for (const endpoint of endpoints) {
-        try {
-          console.log('🔍 Attempting to fetch images from:', endpoint);
-          response = await fetch(endpoint, {
-            method: 'GET',
-            headers: {
-              'Accept': 'application/json',
-              'Content-Type': 'application/json'
-            },
-            mode: 'cors'
-          });
-          
-          console.log('📡 Images response status:', response.status, response.statusText);
-          
-          if (response.ok) {
-            break; // Success, exit the loop
-          } else {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-          }
-        } catch (endpointError: any) {
-          console.warn(`⚠️ Failed to fetch images from ${endpoint}:`, endpointError.message);
-          lastError = endpointError;
-          continue; // Try next endpoint
-        }
-      }
-      
-      if (!response || !response.ok) {
-        throw lastError || new Error('All image endpoints failed');
-      }
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.files) {
-          // Get UDP readings to correlate with images
-          let udpReadings: UdpReading[] = [];
-          try {
-            const udpResponse = await udpReadingsApi.getLiveReadings(100);
-            if (udpResponse.success) {
-              udpReadings = udpResponse.data;
-            }
-          } catch (udpError) {
-            console.warn('Could not load UDP readings for correlation:', udpError);
-          }
-
-          const formattedImages = data.files.map((file: any) => {
-            // Try to correlate image with UDP reading based on timestamp
-            const imageTime = new Date(file.timestamp);
-            const correlatedReading = udpReadings.find(reading => {
-              const readingTime = new Date(reading.detectionTime);
-              const timeDiff = Math.abs(imageTime.getTime() - readingTime.getTime());
-              return timeDiff < 30000; // Within 30 seconds
-            });
-
-            // Generate random speed if no UDP data available (30-77 km/h)
-            const randomSpeed = Math.floor(Math.random() * (77 - 30 + 1)) + 30;
-            const speedLimit = 30;
-            const detectedSpeed = correlatedReading?.speedDetected || randomSpeed;
-            const isViolation = correlatedReading?.isViolation || (detectedSpeed > speedLimit);
+      // Load violations for selected camera
+      const camera = cameraId || selectedCamera;
+      try {
+        const response = await fetch(`http://localhost:3003/api/violations/${camera}/${date}`);
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.violations) {
+            const formattedCases = data.violations.map((violation: any) => ({
+              eventId: violation.eventId,
+              cameraId: camera,
+              date: date,
+              verdict: violation.verdict,
+              photos: violation.photos,
+              folderPath: violation.folderPath
+            }));
             
-            // Calculate fine amount based on speed
-            let fineAmount = null;
-            if (isViolation) {
-              const speedOver = detectedSpeed - speedLimit;
-              if (speedOver <= 10) fineAmount = 100;
-              else if (speedOver <= 20) fineAmount = 200;
-              else if (speedOver <= 30) fineAmount = 300;
-              else fineAmount = 500;
-            }
-
-            return {
-              id: file.filename,
-              filename: file.filename,
-              timestamp: file.timestamp,
-              size: file.size,
-              url: `${file.url}`,
-              imageUrl: `${file.url}`,
-              thumbnailUrl: `${file.url}`,
-              plateNumber: 'Processing...',
-              confidence: 0,
-              status: 'pending' as const,
-              processingStatus: 'completed' as const,
-              processed: true,
-              // Add speed data (UDP or random)
-              speed: detectedSpeed,
-              speedLimit: speedLimit,
-              isViolation: isViolation,
-              radarId: correlatedReading?.radarId || 1,
-              fineAmount: correlatedReading?.fine?.fineAmount || fineAmount
-            };
-          });
-          setImages(formattedImages);
-          setIsConnected(true);
-          setConnectionMode('local_server');
-          updateStats(formattedImages);
-          console.log(`📸 Loaded ${formattedImages.length} fresh images from local server with UDP correlation`);
+            allCases = formattedCases;
+            console.log(`📷 Loaded ${formattedCases.length} cases from ${camera}`);
+          }
         } else {
-          setError('No images found on local server');
-          setImages([]);
+          console.warn(`⚠️ No violations found for ${camera} on ${date}`);
         }
-      } else {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      } catch (cameraError) {
+        console.warn(`⚠️ Failed to load violations for ${camera}:`, cameraError);
       }
+      
+      // Sort by event timestamp (newest first)
+      allCases.sort((a, b) => b.verdict.event_ts - a.verdict.event_ts);
+      
+      setViolationCases(allCases);
+      setIsConnected(true);
+      setConnectionMode('violation_system');
+      updateViolationStats(allCases);
+      
+      console.log(`✅ Loaded ${allCases.length} total violation cases`);
+      
     } catch (error: any) {
-      console.error('❌ Failed to load fresh images:');
-      console.error('   Error name:', error.name || 'Unknown');
-      console.error('   Error message:', error.message || 'No message');
-      console.error('   Error type:', typeof error);
-      console.error('   Full error:', error);
-      setError(`Failed to connect to local image server: ${error instanceof Error ? error.message : 'Network error'}`);
+      console.error('❌ Failed to load violation cases:', error);
+      setError(`Failed to load violation cases: ${error.message}`);
       setIsConnected(false);
       setConnectionMode('disconnected');
-      setImages([]);
+      setViolationCases([]);
     } finally {
       setLoading(false);
     }
@@ -266,15 +186,14 @@ const FinesImagesMonitor: React.FC = () => {
 
   // Initialize data loading
   useEffect(() => {
-    // Simple initialization - load data directly
+    // Load available dates and violation cases
     loadAvailableDates();
-    loadFreshImages();
+    loadViolationCases('2025-10-05', 'camera002'); // Load with specific date and camera
     
     // Set up auto-refresh every 30 seconds
     const autoRefreshInterval = setInterval(() => {
-      console.log('🔄 Auto-refresh: Loading fresh images');
-      loadFreshImages();
-      loadAvailableDates();
+      console.log('🔄 Auto-refresh: Loading violation cases');
+      loadViolationCases();
     }, 30000);
     
     return () => {
@@ -284,234 +203,132 @@ const FinesImagesMonitor: React.FC = () => {
 
   useEffect(() => {
     applyFilters();
-  }, [images, filters]);
+  }, [violationCases, filters]);
 
-  // Simple stats calculation
-  const updateStats = (imageList: PlateRecognitionImage[]) => {
+  // Stats calculation for violation cases
+  const updateViolationStats = (cases: ViolationCase[]) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const todayImages = imageList.filter(img => 
-      new Date(img.timestamp) >= today
+    const todayCases = cases.filter(c => 
+      new Date(c.verdict.event_ts * 1000) >= today
     );
 
+    const cameraStats = {
+      camera001: cases.filter(c => c.cameraId === 'camera001').length,
+      camera002: cases.filter(c => c.cameraId === 'camera002').length,
+      camera003: cases.filter(c => c.cameraId === 'camera003').length
+    };
+
     setStats({
-      total: imageList.length,
-      pending: imageList.filter(img => img.processingStatus === 'pending').length,
-      processing: imageList.filter(img => img.processingStatus === 'processing').length,
-      completed: imageList.filter(img => img.processingStatus === 'completed').length,
-      failed: imageList.filter(img => img.processingStatus === 'failed').length,
-      todayCount: todayImages.length
+      total: cases.length,
+      violations: cases.filter(c => c.verdict.decision === 'violation').length,
+      noViolations: cases.filter(c => c.verdict.decision === 'no_violation').length,
+      camera001: cameraStats.camera001,
+      camera002: cameraStats.camera002,
+      camera003: cameraStats.camera003,
+      todayCount: todayCases.length
     });
   };
 
 
   const applyFilters = () => {
-    let filtered = [...images];
+    let filtered = [...violationCases];
 
-    // Status filter
+    // Status filter (violation/no_violation)
     if (filters.status !== 'all') {
-      filtered = filtered.filter(img => img.processingStatus === filters.status);
+      filtered = filtered.filter(c => c.verdict.decision === filters.status);
     }
 
-    // Date range filter - only apply for relative date ranges, not specific dates
-    // Specific dates (like "2025-09-30") are handled by the API call
-    if (filters.dateRange !== 'all' && !filters.dateRange.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      const now = new Date();
-      let cutoffDate = new Date();
-      
-      switch (filters.dateRange) {
-        case 'today':
-          cutoffDate.setHours(0, 0, 0, 0);
-          break;
-        case 'week':
-          cutoffDate.setDate(now.getDate() - 7);
-          break;
-        case 'month':
-          cutoffDate.setMonth(now.getMonth() - 1);
-          break;
-      }
-      
-      filtered = filtered.filter(img => new Date(img.timestamp) >= cutoffDate);
+    // Case filter (by event ID)
+    if (filters.caseFilter && filters.caseFilter.trim() !== '') {
+      filtered = filtered.filter(c => c.eventId.toLowerCase().includes(filters.caseFilter.toLowerCase()));
     }
 
     // Search filter
-    if (filters.search) {
+    if (filters.search && filters.search.trim() !== '') {
       const searchLower = filters.search.toLowerCase();
-      filtered = filtered.filter(img => 
-        img.filename.toLowerCase().includes(searchLower) ||
-        (img.plateNumber && img.plateNumber.toLowerCase().includes(searchLower)) ||
-        (img.vehicleType && img.vehicleType.toLowerCase().includes(searchLower))
+      filtered = filtered.filter(c => 
+        c.eventId.toLowerCase().includes(searchLower) ||
+        c.verdict.src_ip.includes(searchLower)
       );
     }
 
-    setFilteredImages(filtered);
+    setFilteredCases(filtered);
   };
 
   const handleRefresh = () => {
     setError(null);
-    // Force fresh data load from local server
-    loadFreshImages();
+    // Force fresh data load from violation system
+    loadViolationCases();
     loadAvailableDates();
   };
 
   const handleClearCache = () => {
-    setImages([]);
-    setFilteredImages([]);
+    setViolationCases([]);
+    setFilteredCases([]);
     setStats({
       total: 0,
-      pending: 0,
-      processing: 0,
-      completed: 0,
-      failed: 0,
+      violations: 0,
+      noViolations: 0,
+      camera001: 0,
+      camera002: 0,
+      camera003: 0,
       todayCount: 0
     });
     // Reload fresh data
     setTimeout(() => {
-      loadFreshImages();
+      loadViolationCases();
       loadAvailableDates();
     }, 500);
   };
 
   const handleDateFilterChange = async (selectedDate: string) => {
     console.log(`🔍 Date filter changed to: ${selectedDate}`);
-    setLoading(true);
-    setError(null);
     setFilters(prev => ({ ...prev, dateRange: selectedDate }));
     
-    try {
-      const cacheBuster = Date.now();
-      const apiUrl = selectedDate === 'all' 
-        ? `/api/ftp-images/list?camera=192.168.1.54&date=all&_t=${cacheBuster}`
-        : `/api/ftp-images/list?camera=192.168.1.54&date=${selectedDate}&_t=${cacheBuster}`;
-      
-      console.log(`🌐 Loading images for: ${selectedDate === 'all' ? 'all dates' : selectedDate}`);
-      
-      const response = await fetch(apiUrl);
-      
-      if (response.ok) {
-        const data = await response.json();
-        
-        if (data.success && data.files) {
-          const formattedImages = data.files.map((file: any) => {
-            // Generate random speed for each image (30-77 km/h)
-            const randomSpeed = Math.floor(Math.random() * (77 - 30 + 1)) + 30;
-            const speedLimit = 30;
-            const isViolation = randomSpeed > speedLimit;
-            
-            // Calculate fine amount based on speed
-            let fineAmount = null;
-            if (isViolation) {
-              const speedOver = randomSpeed - speedLimit;
-              if (speedOver <= 10) fineAmount = 100;
-              else if (speedOver <= 20) fineAmount = 200;
-              else if (speedOver <= 30) fineAmount = 300;
-              else fineAmount = 500;
-            }
-
-            return {
-              id: file.filename,
-              filename: file.filename,
-              timestamp: file.timestamp,
-              size: file.size,
-              url: `${file.url}`,
-              imageUrl: `${file.url}`,
-              thumbnailUrl: `${file.url}`,
-              plateNumber: 'Processing...',
-              confidence: 0,
-              status: 'pending' as const,
-              processingStatus: 'completed' as const,
-              processed: true,
-              // Add random speed data
-              speed: randomSpeed,
-              speedLimit: speedLimit,
-              isViolation: isViolation,
-              radarId: 1,
-              fineAmount: fineAmount
-            };
-          });
-          
-          setImages(formattedImages);
-          setIsConnected(true);
-          setConnectionMode('local_server');
-          updateStats(formattedImages);
-          
-          console.log(`✅ Successfully loaded ${formattedImages.length} images for ${selectedDate === 'all' ? 'all dates' : selectedDate}`);
-        } else {
-          setImages([]);
-          setError(`No images found for ${selectedDate === 'all' ? 'any date' : selectedDate}`);
-        }
-      } else {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-    } catch (error) {
-      console.error('❌ Failed to filter images by date:', error);
-      setError(`Failed to load images: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      setImages([]);
-      setIsConnected(false);
-      setConnectionMode('disconnected');
-    } finally {
-      setLoading(false);
+    if (selectedDate === 'all') {
+      // Load all available dates - for now just load today
+      loadViolationCases();
+    } else {
+      // Load specific date
+      loadViolationCases(selectedDate);
     }
   };
 
-  const handleViewImage = (image: PlateRecognitionImage) => {
-    setSelectedImage(image);
-    setImageDialogOpen(true);
+  const handleViewCase = (violationCase: ViolationCase) => {
+    setSelectedCase(violationCase);
+    setCaseDialogOpen(true);
   };
 
-  const handleDeleteImage = (imageId: string) => {
-    if (window.confirm('Are you sure you want to delete this image?')) {
+  const handleDeleteCase = (eventId: string) => {
+    if (window.confirm('Are you sure you want to delete this violation case?')) {
       // Remove from local state
-      const updatedImages = images.filter(img => img.id !== imageId);
-      setImages(updatedImages);
-      updateStats(updatedImages);
+      const updatedCases = violationCases.filter(c => c.eventId !== eventId);
+      setViolationCases(updatedCases);
+      updateViolationStats(updatedCases);
     }
   };
 
-  const handleReprocessImage = (imageId: string) => {
-    // Simulate reprocessing by updating the image status
-    const updatedImages = images.map(img => 
-      img.id === imageId 
-        ? { ...img, processingStatus: 'processing' as const }
-        : img
-    );
-    setImages(updatedImages);
-    updateStats(updatedImages);
-    
-    // Simulate completion after 2 seconds
-    setTimeout(() => {
-      const finalImages = images.map(img => 
-        img.id === imageId 
-          ? { 
-              ...img, 
-              processingStatus: 'completed' as const,
-              plateNumber: `ABC${Math.floor(Math.random() * 1000)}`,
-              confidence: Math.floor(Math.random() * 30) + 70
-            }
-          : img
-      );
-      setImages(finalImages);
-      updateStats(finalImages);
-    }, 2000);
+  const handleReprocessCase = (eventId: string) => {
+    // In a real system, this would trigger reprocessing on the server
+    console.log(`🔄 Reprocessing case: ${eventId}`);
+    // For now, just refresh the data
+    loadViolationCases();
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed': return 'success';
-      case 'failed': return 'error';
-      case 'processing': return 'warning';
-      case 'pending': return 'info';
+  const getStatusColor = (decision: string) => {
+    switch (decision) {
+      case 'violation': return 'error';
+      case 'no_violation': return 'success';
       default: return 'default';
     }
   };
 
   const getConnectionLabel = () => {
     switch (connectionMode) {
+      case 'violation_system': return 'Violation System';
       case 'local_server': return 'Local Server';
-      case 'ftp_websocket': return 'FTP WebSocket';
-      case 'ftp_http_api': return 'FTP Connected';
-      case 'ftp_auth_failed': return 'Auth Failed';
       case 'disconnected': return 'Disconnected';
       default: return isConnected ? 'Connected' : 'Disconnected';
     }
@@ -519,10 +336,8 @@ const FinesImagesMonitor: React.FC = () => {
 
   const getConnectionColor = (): 'success' | 'error' | 'warning' | 'info' => {
     switch (connectionMode) {
+      case 'violation_system': return 'success';
       case 'local_server': return 'info';
-      case 'ftp_websocket': return 'success';
-      case 'ftp_http_api': return 'success';
-      case 'ftp_auth_failed': return 'error';
       case 'disconnected': return 'error';
       default: return isConnected ? 'success' : 'error';
     }
@@ -530,24 +345,22 @@ const FinesImagesMonitor: React.FC = () => {
 
   const getLoadingMessage = () => {
     switch (connectionMode) {
+      case 'violation_system': return 'Connected to violation system - Loading cases...';
       case 'local_server': return 'Connected to local server - Loading images...';
-      case 'ftp_websocket': return 'Connected to FTP WebSocket - Fetching file list';
-      case 'ftp_http_api': return 'Connected to FTP HTTP API - Loading real images...';
-      case 'ftp_auth_failed': return 'FTP authentication failed - Using local fallback';
       case 'disconnected': return 'Attempting connection... Will fallback to local server';
-      default: return isConnected ? 'Connected - Fetching file list' : 'Connecting...';
+      default: return isConnected ? 'Connected - Loading violation cases' : 'Connecting...';
     }
   };
 
-  if (loading && images.length === 0) {
+  if (loading && violationCases.length === 0) {
     return (
       <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center" minHeight="400px">
         <CircularProgress />
         <Typography variant="h6" sx={{ ml: 2, mt: 2 }}>
-          Loading images from local server...
+          Loading violation cases...
         </Typography>
         <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
-          Local Image Server: localhost:3003
+          Violation System: localhost:3003
         </Typography>
       </Box>
     );
@@ -561,10 +374,10 @@ const FinesImagesMonitor: React.FC = () => {
           <CloudUpload sx={{ fontSize: '2rem', color: isConnected ? 'success.main' : 'error.main' }} />
           <Box>
             <Typography variant="h4" component="h1">
-              Fines Images Monitor
+              Violation Cases Monitor - 3 Photos Per Car
             </Typography>
             <Typography variant="subtitle1" color="textSecondary">
-              Local Image Server: localhost:3003
+              {selectedCamera.toUpperCase()} - Each Case = One Car
             </Typography>
           </Box>
           <Chip 
@@ -603,40 +416,28 @@ const FinesImagesMonitor: React.FC = () => {
 
       {/* Statistics Cards */}
       <Box display="flex" flexWrap="wrap" gap={2} sx={{ mb: 3 }}>
-        <Card sx={{ flex: '1 1 calc(16.66% - 8px)', minWidth: 150 }}>
+        <Card sx={{ flex: '1 1 calc(25% - 8px)', minWidth: 150 }}>
           <CardContent>
-            <Typography color="textSecondary" gutterBottom variant="body2">Total Files</Typography>
+            <Typography color="textSecondary" gutterBottom variant="body2">Total Cars</Typography>
             <Typography variant="h4">{stats.total}</Typography>
           </CardContent>
         </Card>
-        <Card sx={{ flex: '1 1 calc(16.66% - 8px)', minWidth: 150 }}>
+        <Card sx={{ flex: '1 1 calc(25% - 8px)', minWidth: 150 }}>
           <CardContent>
             <Typography color="textSecondary" gutterBottom variant="body2">Today</Typography>
             <Typography variant="h4">{stats.todayCount}</Typography>
           </CardContent>
         </Card>
-        <Card sx={{ flex: '1 1 calc(16.66% - 8px)', minWidth: 150 }}>
+        <Card sx={{ flex: '1 1 calc(25% - 8px)', minWidth: 150 }}>
           <CardContent>
-            <Typography color="textSecondary" gutterBottom variant="body2">Completed</Typography>
-            <Typography variant="h4" color="success.main">{stats.completed}</Typography>
+            <Typography color="textSecondary" gutterBottom variant="body2">Violations</Typography>
+            <Typography variant="h4" color="error.main">{stats.violations}</Typography>
           </CardContent>
         </Card>
-        <Card sx={{ flex: '1 1 calc(16.66% - 8px)', minWidth: 150 }}>
+        <Card sx={{ flex: '1 1 calc(25% - 8px)', minWidth: 150 }}>
           <CardContent>
-            <Typography color="textSecondary" gutterBottom variant="body2">Processing</Typography>
-            <Typography variant="h4" color="warning.main">{stats.processing}</Typography>
-          </CardContent>
-        </Card>
-        <Card sx={{ flex: '1 1 calc(16.66% - 8px)', minWidth: 150 }}>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom variant="body2">Pending</Typography>
-            <Typography variant="h4" color="info.main">{stats.pending}</Typography>
-          </CardContent>
-        </Card>
-        <Card sx={{ flex: '1 1 calc(16.66% - 8px)', minWidth: 150 }}>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom variant="body2">Failed</Typography>
-            <Typography variant="h4" color="error.main">{stats.failed}</Typography>
+            <Typography color="textSecondary" gutterBottom variant="body2">No Violations</Typography>
+            <Typography variant="h4" color="success.main">{stats.noViolations}</Typography>
           </CardContent>
         </Card>
       </Box>
@@ -651,17 +452,35 @@ const FinesImagesMonitor: React.FC = () => {
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
             <TextField
               select
-              label="Status"
+              label="Camera"
+              value={selectedCamera}
+              onChange={(e) => {
+                const newCamera = e.target.value;
+                setSelectedCamera(newCamera);
+                // Clear current data and reload for new camera
+                setViolationCases([]);
+                setFilteredCases([]);
+                loadViolationCases(undefined, newCamera);
+              }}
+              sx={{ minWidth: 150 }}
+              size="small"
+              helperText="Select camera"
+            >
+              <MenuItem value="camera001">Camera 001</MenuItem>
+              <MenuItem value="camera002">Camera 002</MenuItem>
+              <MenuItem value="camera003">Camera 003</MenuItem>
+            </TextField>
+            <TextField
+              select
+              label="Decision Status"
               value={filters.status}
               onChange={(e) => setFilters({ ...filters, status: e.target.value })}
               sx={{ minWidth: 150 }}
               size="small"
             >
-              <MenuItem value="all">All Status</MenuItem>
-              <MenuItem value="pending">Pending</MenuItem>
-              <MenuItem value="processing">Processing</MenuItem>
-              <MenuItem value="completed">Completed</MenuItem>
-              <MenuItem value="failed">Failed</MenuItem>
+              <MenuItem value="all">All Cases</MenuItem>
+              <MenuItem value="violation">Violation</MenuItem>
+              <MenuItem value="no_violation">No Violation</MenuItem>
             </TextField>
             <TextField
               select
@@ -685,7 +504,7 @@ const FinesImagesMonitor: React.FC = () => {
             </TextField>
             <TextField
               label="Search"
-              placeholder="Search filename, plate number..."
+              placeholder="Search by case ID, IP address..."
               value={filters.search}
               onChange={(e) => setFilters({ ...filters, search: e.target.value })}
               InputProps={{
@@ -694,119 +513,113 @@ const FinesImagesMonitor: React.FC = () => {
               sx={{ minWidth: 250 }}
               size="small"
             />
+            <TextField
+              label="Car Filter"
+              placeholder="e.g. case001, case002..."
+              value={filters.caseFilter}
+              onChange={(e) => setFilters({ ...filters, caseFilter: e.target.value })}
+              sx={{ minWidth: 200 }}
+              size="small"
+              helperText="Type car case ID to filter"
+            />
           </Box>
         </CardContent>
       </Card>
 
-      {/* Images Table */}
+      {/* Violation Cases Table */}
       <Card>
         <CardContent>
           <Typography variant="h6" gutterBottom>
-            Image Files ({filteredImages.length})
+            Car Violation Cases - {selectedCamera.toUpperCase()} ({filteredCases.length})
           </Typography>
-          {filteredImages.length > 0 ? (
+          {filteredCases.length > 0 ? (
             <TableContainer component={Paper} sx={{ maxHeight: 600 }}>
               <Table stickyHeader>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Preview</TableCell>
-                    <TableCell>Filename</TableCell>
-                    <TableCell>Plate Number</TableCell>
-                    <TableCell>Confidence</TableCell>
+                    <TableCell>Case ID (Car)</TableCell>
                     <TableCell>Speed Detection</TableCell>
-                    <TableCell>Status</TableCell>
+                    <TableCell>Decision</TableCell>
+                    <TableCell>Photos (3)</TableCell>
                     <TableCell>Timestamp</TableCell>
                     <TableCell>Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {filteredImages.map((image) => (
-                    <TableRow key={image.id} hover>
-                      <TableCell>
-                        <Avatar
-                          src={image.thumbnailUrl || image.imageUrl || image.url}
-                          variant="rounded"
-                          sx={{ width: 60, height: 40 }}
-                        >
-                          <ImageIcon />
-                        </Avatar>
-                      </TableCell>
-                      <TableCell>{image.filename}</TableCell>
+                  {filteredCases.map((violationCase) => (
+                    <TableRow key={violationCase.eventId} hover>
                       <TableCell>
                         <Typography variant="body2" fontWeight="bold">
-                          {image.plateNumber || 'Processing...'}
+                          {violationCase.eventId}
+                        </Typography>
+                        <Typography variant="caption" color="textSecondary">
+                          {violationCase.verdict.src_ip}
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        {image.confidence ? `${image.confidence}%` : '-'}
-                      </TableCell>
-                      <TableCell>
-                        <Box>
-                          {image.speed ? (
-                            <>
-                              <Typography 
-                                variant="body2" 
-                                fontWeight="bold"
-                                color={image.isViolation ? 'error.main' : 'success.main'}
-                              >
-                                {image.speed} km/h
-                              </Typography>
-                              <Typography variant="caption" color="textSecondary">
-                                Limit: {image.speedLimit} km/h
-                              </Typography>
-                              {image.isViolation && (
-                                <Chip 
-                                  label={`VIOLATION - $${image.fineAmount || 'TBD'}`} 
-                                  color="error" 
-                                  size="small" 
-                                  sx={{ mt: 0.5, display: 'block' }}
-                                />
-                              )}
-                              {image.radarId && (
-                                <Typography variant="caption" color="primary" sx={{ fontSize: '0.7rem' }}>
-                                  Radar: {image.radarId}
-                                </Typography>
-                              )}
-                            </>
-                          ) : (
-                            <Typography variant="body2" color="textSecondary">
-                              No speed data
-                            </Typography>
-                          )}
-                        </Box>
+                        <Typography 
+                          variant="body2" 
+                          fontWeight="bold"
+                          color={violationCase.verdict.decision === 'violation' ? 'error.main' : 'success.main'}
+                        >
+                          {violationCase.verdict.speed} km/h
+                        </Typography>
+                        <Typography variant="caption" color="textSecondary">
+                          Limit: {violationCase.verdict.limit || 30} km/h
+                        </Typography>
                       </TableCell>
                       <TableCell>
                         <Chip 
-                          label={image.processingStatus} 
-                          color={getStatusColor(image.processingStatus) as any}
+                          label={violationCase.verdict.decision === 'violation' ? 'VIOLATION' : 'NO VIOLATION'} 
+                          color={getStatusColor(violationCase.verdict.decision) as any}
                           size="small"
                         />
                       </TableCell>
                       <TableCell>
+                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                          {violationCase.photos.map((photo, index) => (
+                            <Avatar
+                              key={`${violationCase.eventId}-photo-${index}`}
+                              src={photo.exists ? `http://localhost:3003${photo.url}` : undefined}
+                              variant="rounded"
+                              sx={{ 
+                                width: 30, 
+                                height: 20, 
+                                bgcolor: photo.exists ? 'success.light' : 'error.light'
+                              }}
+                            >
+                              {photo.exists ? (index + 1) : '✗'}
+                            </Avatar>
+                          ))}
+                        </Box>
+                        <Typography variant="caption" color="textSecondary">
+                          {violationCase.photos.filter(p => p.exists).length}/3 available
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
                         <Typography variant="body2">
-                          {new Date(image.timestamp).toLocaleString()}
+                          {new Date(violationCase.verdict.event_ts * 1000).toLocaleString('ar-SA')}
                         </Typography>
                       </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', gap: 1 }}>
                           <IconButton 
                             size="small" 
-                            onClick={() => handleViewImage(image)}
+                            onClick={() => handleViewCase(violationCase)}
                             title="View Details"
                           >
                             <Visibility />
                           </IconButton>
                           <IconButton 
                             size="small" 
-                            onClick={() => handleReprocessImage(image.id)}
+                            onClick={() => handleReprocessCase(violationCase.eventId)}
                             title="Reprocess"
-                            disabled={image.processingStatus === 'processing'}
                           >
                             <Refresh />
                           </IconButton>
                           <IconButton 
                             size="small" 
-                            onClick={() => handleDeleteImage(image.id)}
+                            onClick={() => handleDeleteCase(violationCase.eventId)}
                             title="Delete"
                             color="error"
                           >
@@ -821,96 +634,113 @@ const FinesImagesMonitor: React.FC = () => {
             </TableContainer>
           ) : (
             <Alert severity="info">
-              {images.length === 0 ? 'No images found on FTP server' : 'No images match the current filters'}
+              {violationCases.length === 0 ? `No violation cases found in ${selectedCamera.toUpperCase()}` : 'No cases match the current filters'}
             </Alert>
           )}
         </CardContent>
       </Card>
 
-      {/* Image Details Dialog */}
+      {/* Case Details Dialog */}
       <Dialog 
-        open={imageDialogOpen} 
-        onClose={() => setImageDialogOpen(false)} 
-        maxWidth="md" 
+        open={caseDialogOpen} 
+        onClose={() => setCaseDialogOpen(false)} 
+        maxWidth="lg" 
         fullWidth
       >
         <DialogTitle>
           <Box display="flex" alignItems="center" justifyContent="space-between">
-            <Typography variant="h6">Image Details</Typography>
-            <IconButton onClick={() => setImageDialogOpen(false)}>
+            <Typography variant="h6">Car Violation Case Details</Typography>
+            <IconButton onClick={() => setCaseDialogOpen(false)}>
               <Close />
             </IconButton>
           </Box>
         </DialogTitle>
         <DialogContent>
-          {selectedImage && (
+          {selectedCase && (
             <Box>
-              <Box sx={{ display: 'flex', gap: 3, mb: 3 }}>
-                <Box sx={{ flex: 1 }}>
-                  <img 
-                    src={selectedImage.imageUrl || selectedImage.url} 
-                    alt={selectedImage.filename}
-                    style={{ width: '100%', maxHeight: 300, objectFit: 'contain' }}
-                  />
-                </Box>
-                <Box sx={{ flex: 1 }}>
-                  <Typography variant="h6" gutterBottom>Processing Results</Typography>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <Box>
-                      <Typography variant="subtitle2" color="textSecondary">Filename</Typography>
-                      <Typography>{selectedImage.filename}</Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="subtitle2" color="textSecondary">Plate Number</Typography>
-                      <Typography fontWeight="bold">
-                        {selectedImage.plateNumber || 'Not detected'}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="subtitle2" color="textSecondary">Confidence</Typography>
-                      <Typography>{selectedImage.confidence ? `${selectedImage.confidence}%` : 'N/A'}</Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="subtitle2" color="textSecondary">Vehicle Type</Typography>
-                      <Typography>{selectedImage.vehicleType || 'Unknown'}</Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="subtitle2" color="textSecondary">Status</Typography>
-                      <Chip 
-                        label={selectedImage.processingStatus} 
-                        color={getStatusColor(selectedImage.processingStatus) as any}
-                        size="small"
-                      />
-                    </Box>
-                    <Box>
-                      <Typography variant="subtitle2" color="textSecondary">Timestamp</Typography>
-                      <Typography>{new Date(selectedImage.timestamp).toLocaleString()}</Typography>
-                    </Box>
+              {/* Case Info */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="h6" gutterBottom>Case Information</Typography>
+                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2, mb: 3 }}>
+                  <Box>
+                    <Typography variant="subtitle2" color="textSecondary">Event ID</Typography>
+                    <Typography fontWeight="bold">{selectedCase.eventId}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="subtitle2" color="textSecondary">Camera</Typography>
+                    <Typography fontWeight="bold">{selectedCase.cameraId}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="subtitle2" color="textSecondary">Detected Speed</Typography>
+                    <Typography fontWeight="bold" color={selectedCase.verdict.decision === 'violation' ? 'error.main' : 'success.main'}>
+                      {selectedCase.verdict.speed} km/h
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="subtitle2" color="textSecondary">Decision</Typography>
+                    <Chip 
+                      label={selectedCase.verdict.decision === 'violation' ? 'VIOLATION' : 'NO VIOLATION'}
+                      color={getStatusColor(selectedCase.verdict.decision) as any}
+                    />
+                  </Box>
+                  <Box>
+                    <Typography variant="subtitle2" color="textSecondary">Source IP Address</Typography>
+                    <Typography>{selectedCase.verdict.src_ip}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="subtitle2" color="textSecondary">Event Time</Typography>
+                    <Typography>{new Date(selectedCase.verdict.event_ts * 1000).toLocaleString('ar-SA')}</Typography>
                   </Box>
                 </Box>
+              </Box>
+              
+              {/* Photos */}
+              <Typography variant="h6" gutterBottom>Photos (3 Photos Per Car)</Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
+                {selectedCase.photos.map((photo, index) => (
+                  <Box key={`${selectedCase.eventId}-dialog-photo-${index}`} sx={{ textAlign: 'center' }}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      Photo {index + 1}
+                    </Typography>
+                    {photo.exists ? (
+                      <img 
+                        src={`http://localhost:3003${photo.url}`}
+                        alt={photo.filename}
+                        style={{ 
+                          width: '100%', 
+                          height: 200, 
+                          objectFit: 'cover',
+                          borderRadius: 8,
+                          border: '2px solid #e0e0e0'
+                        }}
+                      />
+                    ) : (
+                      <Box 
+                        sx={{ 
+                          width: '100%', 
+                          height: 200, 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center',
+                          bgcolor: 'grey.200',
+                          borderRadius: 2,
+                          border: '2px dashed #ccc'
+                        }}
+                      >
+                        <Typography color="textSecondary">Photo not available</Typography>
+                      </Box>
+                    )}
+                    <Typography variant="caption" color="textSecondary">
+                      {photo.filename} ({photo.size} bytes)
+                    </Typography>
+                  </Box>
+                ))}
               </Box>
             </Box>
           )}
         </DialogContent>
         <DialogActions>
-          {selectedImage && (
-            <>
-              <Button 
-                onClick={() => handleReprocessImage(selectedImage.id)}
-                startIcon={<Refresh />}
-                disabled={selectedImage.processingStatus === 'processing'}
-              >
-                Reprocess
-              </Button>
-              <Button 
-                onClick={() => window.open(selectedImage.imageUrl || selectedImage.url, '_blank')}
-                startIcon={<Download />}
-              >
-                Download
-              </Button>
-            </>
-          )}
-          <Button onClick={() => setImageDialogOpen(false)}>Close</Button>
+          <Button onClick={() => setCaseDialogOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>

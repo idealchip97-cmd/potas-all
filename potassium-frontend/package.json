@@ -17,6 +17,7 @@
     "@types/react-dom": "^19.1.9",
     "axios": "^1.12.2",
     "basic-ftp": "^5.0.5",
+    "chokidar": "^4.0.3",
     "cors": "^2.8.5",
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.3",

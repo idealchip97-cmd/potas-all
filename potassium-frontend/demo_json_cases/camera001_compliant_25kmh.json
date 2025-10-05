@@ -1,0 +1,8 @@
+{
+  "camera_id": "camera001",
+  "velocity": 25,
+  "src_ip": "192.168.1.55",
+  "timestamp": "2025-10-05T12:25:02.327Z",
+  "decision": "compliant",
+  "location": "School Zone"
+}

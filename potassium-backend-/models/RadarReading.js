@@ -67,6 +67,11 @@ const RadarReading = sequelize.define('RadarReading', {
     allowNull: false,
     defaultValue: false,
     comment: 'Whether this reading has been processed for violations'
+  },
+  eventId: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    comment: 'Event ID for new processing system (links to 3-photo folders)'
   }
 }, {
   tableName: 'radar_readings',

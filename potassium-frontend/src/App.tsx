@@ -12,6 +12,7 @@ import Fines from './pages/Fines';
 import Reports from './pages/Reports';
 import PlateRecognition from './pages/PlateRecognition';
 import FinesImagesMonitor from './pages/FinesImagesMonitor';
+import ViolationMonitorSimple from './pages/ViolationMonitorSimple';
 import RadarInfoMonitor from './pages/RadarInfoMonitor';
 import AuthTest from './pages/AuthTest';
 
@@ -80,6 +81,16 @@ function App() {
                 <ProtectedRoute>
                   <Layout>
                     <FinesImagesMonitor />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/violation-monitor"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <ViolationMonitorSimple />
                   </Layout>
                 </ProtectedRoute>
               }

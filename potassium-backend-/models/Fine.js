@@ -70,6 +70,16 @@ const Fine = sequelize.define('Fine', {
   processedAt: {
     type: DataTypes.DATE,
     allowNull: true
+  },
+  eventId: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    comment: 'Event ID for new processing system (links to 3-photo folders)'
+  },
+  violationFolderPath: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    comment: 'Path to 3-photo violation folder'
   }
 }, {
   tableName: 'fines',

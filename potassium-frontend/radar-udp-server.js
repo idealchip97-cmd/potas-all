@@ -7,6 +7,9 @@ const backendPath = path.join(__dirname, '..', 'potassium-backend-');
 const { Fine, Radar, RadarReading } = require(path.join(backendPath, 'models'));
 const sequelize = require(path.join(backendPath, 'config', 'database'));
 
+// Import the new three photo processor
+const ThreePhotoProcessor = require('./three-photo-processor');
+
 // Configuration
 const UDP_PORT = 17081;
 const WS_PORT = 18081;
@@ -19,6 +22,7 @@ class RadarUDPServer {
     this.mysqlConnection = null;
     this.connectedClients = new Set();
     this.processedFines = new Map(); // To prevent duplicates
+    this.threePhotoProcessor = new ThreePhotoProcessor(); // New 3-photo system
     
     this.setupUDPServer();
     this.setupWebSocketServer();
@@ -107,26 +111,38 @@ class RadarUDPServer {
       // Step 1: Save ALL radar readings to database (persistent storage)
       const radarReading = await this.saveRadarReading(radarData, message, rinfo);
       
-      // Step 2: Check for camera image correlation within 2-second window
-      const correlatedImages = await this.findCorrelatedImages(radarData.violationTime);
-      
-      if (correlatedImages.length > 0) {
-        console.log(`📷 Found ${correlatedImages.length} correlated images within 2-second window`);
-        // Update radar reading with correlated images
-        await radarReading.update({ correlatedImages: correlatedImages });
-      }
-
-      // Step 3: Check if speed exceeds limit and create fine
+      // Step 2: Check if speed exceeds limit and process with new 3-photo system
       let fine = null;
+      let violationResult = null;
+      
       if (radarData.speed > SPEED_LIMIT) {
-        fine = await this.createSpeedingFine(radarData, rinfo, correlatedImages);
+        console.log(`🚨 SPEED VIOLATION: ${radarData.speed} km/h (limit: ${SPEED_LIMIT} km/h)`);
+        
+        // Process violation with new 3-photo system
+        const violationData = {
+          cameraId: `camera${String(radarData.id).padStart(3, '0')}`, // camera001, camera002, etc.
+          speed: radarData.speed,
+          detectionTime: radarData.violationTime
+        };
+        
+        violationResult = await this.threePhotoProcessor.processViolation(violationData, rinfo.address);
+        
+        if (violationResult.success) {
+          console.log(`📁 Created violation folder: ${violationResult.folderPath}`);
+          console.log(`📄 Event ID: ${violationResult.eventId}`);
+        }
+        
+        // Also create traditional fine for database compatibility
+        fine = await this.createSpeedingFine(radarData, rinfo, []);
         
         // Link the fine to the radar reading
         if (fine) {
           await radarReading.update({ 
             fineId: fine.id, 
             isViolation: true,
-            processed: true 
+            processed: true,
+            violationFolderPath: violationResult?.folderPath,
+            eventId: violationResult?.eventId
           });
         }
       } else {
@@ -134,7 +150,7 @@ class RadarUDPServer {
         await radarReading.update({ processed: true });
       }
 
-      // Step 4: Broadcast to WebSocket clients with reading ID
+      // Step 3: Broadcast to WebSocket clients with new violation data
       this.broadcastToClients({
         type: 'radar_reading',
         data: {
@@ -146,11 +162,31 @@ class RadarUDPServer {
           speedLimit: SPEED_LIMIT,
           violation: radarData.speed > SPEED_LIMIT,
           fineId: fine ? fine.id : null,
-          correlatedImages: correlatedImages,
+          eventId: violationResult?.eventId,
+          violationFolderPath: violationResult?.folderPath,
+          photoCount: violationResult?.photoCount || 0,
           sourceIP: rinfo.address
         },
         timestamp: new Date().toISOString()
       });
+
+      // Broadcast violation-specific data if it's a violation
+      if (violationResult && violationResult.success) {
+        this.broadcastToClients({
+          type: 'violation_created',
+          data: {
+            eventId: violationResult.eventId,
+            cameraId: violationResult.violationData.camera_id,
+            speed: violationResult.violationData.speed,
+            limit: violationResult.violationData.limit,
+            decision: violationResult.violationData.decision,
+            folderPath: violationResult.folderPath,
+            photoCount: violationResult.photoCount,
+            carFilter: this.threePhotoProcessor.generateCarFilter(radarData.speed, SPEED_LIMIT)
+          },
+          timestamp: new Date().toISOString()
+        });
+      }
 
     } catch (error) {
       console.error('❌ Error processing radar data:', error);
@@ -419,6 +455,70 @@ class RadarUDPServer {
     } catch (error) {
       console.error('❌ Error fetching radar readings:', error);
       return [];
+    }
+  }
+
+  // New methods for 3-photo violation system
+  async getViolations(cameraId, date) {
+    try {
+      return await this.threePhotoProcessor.listViolations(cameraId, date);
+    } catch (error) {
+      console.error('❌ Error fetching violations:', error);
+      return [];
+    }
+  }
+
+  async getViolationDetails(cameraId, date, eventId) {
+    try {
+      return await this.threePhotoProcessor.getViolationDetails(cameraId, date, eventId);
+    } catch (error) {
+      console.error('❌ Error fetching violation details:', error);
+      throw error;
+    }
+  }
+
+  async getViolationStats() {
+    try {
+      // Get today's date
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Get violations for all cameras today
+      const cameras = ['camera001', 'camera002', 'camera003']; // Add more as needed
+      let totalViolations = 0;
+      let totalCompliant = 0;
+      
+      for (const cameraId of cameras) {
+        const violations = await this.getViolations(cameraId, today);
+        totalViolations += violations.length;
+      }
+      
+      // Get total readings from database
+      const totalReadings = await RadarReading.count({
+        where: {
+          detectionTime: {
+            [require('sequelize').Op.gte]: new Date(today + 'T00:00:00')
+          }
+        }
+      });
+      
+      totalCompliant = totalReadings - totalViolations;
+      
+      return {
+        totalViolations,
+        totalCompliant,
+        totalReadings,
+        complianceRate: totalReadings > 0 ? ((totalCompliant / totalReadings) * 100).toFixed(1) : 100,
+        date: today
+      };
+    } catch (error) {
+      console.error('❌ Error fetching violation stats:', error);
+      return {
+        totalViolations: 0,
+        totalCompliant: 0,
+        totalReadings: 0,
+        complianceRate: 100,
+        date: new Date().toISOString().split('T')[0]
+      };
     }
   }
 }

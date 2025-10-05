@@ -58,6 +58,8 @@ const carRoutes = require('./routes/cars');
 const violationRoutes = require('./routes/violations');
 // const externalDataRoutes = require('./routes/externalData'); // Disabled FTP routes
 const udpReadingsRoutes = require('./routes/udpReadings');
+const speedingCarProcessorRoutes = require('./routes/speedingCarProcessor');
+const enhancedFtpRoutes = require('./routes/enhancedFtp');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -258,6 +260,8 @@ app.use('/api/cars', carRoutes);
 app.use('/api/violations', violationRoutes);
 // app.use('/api/external-data', externalDataRoutes); // Disabled FTP routes
 app.use('/api/udp-readings', udpReadingsRoutes);
+app.use('/api/speeding-car-processor', speedingCarProcessorRoutes);
+app.use('/api/enhanced-ftp', enhancedFtpRoutes);
 
 // Root route - redirect to dashboard
 app.get('/', (req, res) => {
@@ -308,45 +312,15 @@ const startServer = async () => {
         console.warn('⚠️ Failed to start WebSocket service:', error.message);
       }
 
-      // Always auto-start persistent UDP listener
-      try {
-        console.log('🔄 Auto-starting persistent UDP listener...');
-        await udpListener.start();
-        console.log('✅ Persistent UDP listener started - Ready to save radar data to MySQL');
-        
-        // Setup event handlers for real-time updates
-        udpListener.on('radarReading', (data) => {
-          console.log(`📊 Real-time: Radar reading saved, Speed: ${data.reading.speedDetected} km/h, Violation: ${data.violation}`);
-          // Broadcast to WebSocket clients if needed
-          if (websocketService.isRunning) {
-            websocketService.broadcast('radarReading', data);
-          }
-        });
-        
-        udpListener.on('error', (error) => {
-          console.error('❌ UDP Listener error:', error.message);
-        });
-        
-      } catch (error) {
-        console.error('❌ CRITICAL: Failed to start persistent UDP listener:', error.message);
-        console.log('🔧 Retrying UDP listener startup in 5 seconds...');
-        setTimeout(async () => {
-          try {
-            await udpListener.start();
-            console.log('✅ UDP listener started on retry');
-          } catch (retryError) {
-            console.error('❌ UDP listener failed on retry:', retryError.message);
-          }
-        }, 5000);
-      }
+      // UDP listener disabled - now using JSON case file processing
+      console.log('📄 UDP listener disabled - system now uses JSON case file processing');
+      console.log('💡 Use JSON files in FTP directories for radar data input');
     });
   } catch (error) {
     console.error('Unable to start server:', error);
     process.exit(1);
   }
 };
-
-startServer();
 
 // Graceful shutdown handling
 process.on('SIGTERM', async () => {

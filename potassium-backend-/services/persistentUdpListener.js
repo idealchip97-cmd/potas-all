@@ -3,6 +3,7 @@ const EventEmitter = require('events');
 const { RadarReading, Fine, Radar } = require('../models');
 const sequelize = require('../config/database');
 const { getRadarConfig, calculateFineAmount, SYSTEM_CONSTANTS } = require('../config/systemConstants');
+const SpeedingCarProcessorService = require('./speedingCarProcessorService');
 
 class PersistentUdpListener extends EventEmitter {
     constructor() {
@@ -13,7 +14,7 @@ class PersistentUdpListener extends EventEmitter {
         const radarConfig = getRadarConfig();
         this.config = {
             port: radarConfig.UDP_PORT,
-            speedLimit: SYSTEM_CONSTANTS.RADAR.SPEED.DEFAULT_LIMIT
+            speedLimit: 30 // Static speed limit as requested
         };
         this.isListening = false;
         this.stats = {
@@ -25,6 +26,9 @@ class PersistentUdpListener extends EventEmitter {
             errors: 0
         };
         this.processedMessages = new Map(); // Prevent duplicates
+        
+        // Initialize new speeding car processor
+        this.speedingCarProcessor = new SpeedingCarProcessorService();
         
         this.setupEventHandlers();
     }
@@ -95,56 +99,112 @@ class PersistentUdpListener extends EventEmitter {
             // Save UDP reading to MySQL (new dedicated table)
             const udpReading = await this.saveUdpReading(radarData, rinfo);
             
-            // Also save to original RadarReading table for compatibility
-            const reading = await this.saveRadarReading(radarData, rinfo);
-            let fine = null;
-            
-            if (reading) {
-                this.stats.readingsSaved++;
-                console.log(`💾 Saved radar reading ID: ${reading.id}`);
+            // Check for speed violation and use new processing system
+            if (radarData.speed > this.config.speedLimit) {
+                this.stats.violationsDetected++;
+                console.log(`🚨 Speed violation detected: ${radarData.speed} km/h > ${this.config.speedLimit} km/h`);
                 
-                // Check for speed violation
-                if (radarData.speed > this.config.speedLimit) {
-                    this.stats.violationsDetected++;
-                    console.log(`🚨 Speed violation detected: ${radarData.speed} km/h > ${this.config.speedLimit} km/h`);
+                // Create speeding event data for new processor
+                const speedingEvent = {
+                    event_id: `${radarData.radarId || 'camera002'}:${new Date().toISOString()}:${radarData.speed}`,
+                    camera_id: `camera${radarData.radarId || '002'}`,
+                    src_ip: rinfo.address,
+                    event_ts: radarData.timestamp.getTime() / 1000,
+                    arrival_ts: Date.now() / 1000,
+                    decision: 'violation',
+                    speed: radarData.speed,
+                    limit: this.config.speedLimit,
+                    payload: {
+                        decision: 'violation',
+                        limit: this.config.speedLimit,
+                        speed: radarData.speed,
+                        camera_id: `camera${radarData.radarId || '002'}`,
+                        event_ts: new Date().toISOString(),
+                        event_id: `${radarData.radarId || 'camera002'}:${new Date().toISOString()}:${radarData.speed}`
+                    }
+                };
+
+                // Process with new speeding car processor (3 photos + JSON)
+                try {
+                    const processingResult = await this.speedingCarProcessor.processSpeedingCar(speedingEvent);
+                    console.log(`✅ New processing system completed for event: ${speedingEvent.event_id}`);
                     
-                    // Create fine if needed
-                    fine = await this.createFine(radarData, reading, rinfo);
-                    if (fine) {
+                    if (processingResult.dbRecords.fine) {
                         this.stats.finesCreated++;
-                        console.log(`💰 Fine created ID: ${fine.id}, Amount: $${fine.fineAmount}`);
+                        console.log(`💰 Fine created via new system: ID ${processingResult.dbRecords.fine.id}, Amount: $${processingResult.dbRecords.fine.fineAmount}`);
+                    }
+                    
+                    // Update UDP reading with new processing info
+                    if (udpReading) {
+                        await udpReading.update({ 
+                            fineId: processingResult.dbRecords.fine ? processingResult.dbRecords.fine.id : null,
+                            fineCreated: processingResult.dbRecords.fine ? true : false,
+                            processed: true,
+                            processingNotes: `New system: 3 photos + JSON created in ${processingResult.eventFolder}`
+                        });
+                    }
+                    
+                    // Set reading and fine for compatibility
+                    const reading = processingResult.dbRecords.radarReading;
+                    const fine = processingResult.dbRecords.fine;
+                    
+                    if (reading) {
+                        this.stats.readingsSaved++;
+                    }
+                    
+                } catch (processingError) {
+                    console.error('❌ Error with new processing system, falling back to old system:', processingError);
+                    
+                    // Fallback to old system
+                    const reading = await this.saveRadarReading(radarData, rinfo);
+                    let fine = null;
+                    
+                    if (reading) {
+                        this.stats.readingsSaved++;
+                        console.log(`💾 Saved radar reading ID: ${reading.id} (fallback)`);
                         
-                        // Update reading with fine ID
-                        await reading.update({ fineId: fine.id });
-                        
-                        // Update UDP reading with fine info
-                        if (udpReading) {
-                            await udpReading.update({ 
-                                fineId: fine.id, 
-                                fineCreated: true,
-                                processed: true,
-                                processingNotes: `Fine created: $${fine.fineAmount}`
-                            });
+                        fine = await this.createFine(radarData, reading, rinfo);
+                        if (fine) {
+                            this.stats.finesCreated++;
+                            console.log(`💰 Fine created ID: ${fine.id}, Amount: $${fine.fineAmount} (fallback)`);
+                            
+                            await reading.update({ fineId: fine.id });
+                            
+                            if (udpReading) {
+                                await udpReading.update({ 
+                                    fineId: fine.id, 
+                                    fineCreated: true,
+                                    processed: true,
+                                    processingNotes: `Fallback system: Fine created: $${fine.fineAmount}`
+                                });
+                            }
                         }
                     }
                 }
-                
-                // Mark as processed
-                this.processedMessages.set(duplicateKey, Date.now());
-                
-                // Clean up old processed messages (keep last 1000)
-                if (this.processedMessages.size > 1000) {
-                    const entries = Array.from(this.processedMessages.entries());
-                    entries.slice(0, 500).forEach(([key]) => this.processedMessages.delete(key));
+            } else {
+                // No violation - use old system for non-violations
+                const reading = await this.saveRadarReading(radarData, rinfo);
+                if (reading) {
+                    this.stats.readingsSaved++;
+                    console.log(`💾 Saved radar reading ID: ${reading.id} (no violation)`);
                 }
-                
-                // Emit event for real-time updates
-                this.emit('radarReading', {
-                    reading: reading.toJSON(),
-                    violation: radarData.speed > this.config.speedLimit,
-                    fine: fine ? fine.toJSON() : null
-                });
             }
+                
+            // Mark as processed
+            this.processedMessages.set(duplicateKey, Date.now());
+            
+            // Clean up old processed messages (keep last 1000)
+            if (this.processedMessages.size > 1000) {
+                const entries = Array.from(this.processedMessages.entries());
+                entries.slice(0, 500).forEach(([key]) => this.processedMessages.delete(key));
+            }
+            
+            // Emit event for real-time updates (with default values for compatibility)
+            this.emit('radarReading', {
+                reading: { speedDetected: radarData.speed, isViolation: radarData.speed > this.config.speedLimit },
+                violation: radarData.speed > this.config.speedLimit,
+                fine: null
+            });
         } catch (error) {
             console.error('❌ Error processing radar message:', error);
             this.stats.errors++;

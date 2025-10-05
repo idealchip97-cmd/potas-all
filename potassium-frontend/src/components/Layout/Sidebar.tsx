@@ -25,6 +25,7 @@ import {
   CameraAlt,
   CloudUpload,
   Storage,
+  Warning,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -46,7 +47,8 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onClose }) => {
     { text: 'Radars', icon: <Radar />, path: '/radars' },
     { text: 'Fines', icon: <Receipt />, path: '/fines' },
     { text: 'Plate Recognition', icon: <CameraAlt />, path: '/plate-recognition' },
-    { text: 'Fines Images Monitor', icon: <CloudUpload />, path: '/fines-images-monitor' },
+    { text: '🚨 Violation Monitor', icon: <Warning />, path: '/violation-monitor' },
+    { text: 'Multi-Camera Monitor', icon: <CloudUpload />, path: '/fines-images-monitor' },
     { text: 'Radar Info Monitor', icon: <Storage />, path: '/radar-info-monitor' },
     { text: 'Reports', icon: <Assessment />, path: '/reports' },
     { text: 'Speed Analysis', icon: <Speed />, path: '/speed-analysis' },

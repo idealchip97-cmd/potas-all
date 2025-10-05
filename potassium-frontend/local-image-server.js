@@ -20,6 +20,9 @@ app.use(express.json());
 
 // Local path configuration
 const LOCAL_BASE_PATH = '/srv/camera_uploads/camera001/192.168.1.54';
+const PROCESSING_INBOX_PATH = process.env.NODE_ENV === 'test' ? 
+  require('path').join(__dirname, 'processing_inbox_test') : 
+  '/srv/processing_inbox'; // New 3-photo violation folders
 const BACKEND_API_URL = 'http://localhost:3000/api';
 
 // Helper function to get radar data from backend
@@ -430,6 +433,354 @@ app.post('/api/ftp-test', (req, res) => {
   });
 });
 
+// NEW API ENDPOINTS FOR 3-PHOTO VIOLATION SYSTEM
+
+// API endpoint to list violation folders for a camera and date
+app.get('/api/violations/:cameraId/:date', async (req, res) => {
+  try {
+    const { cameraId, date } = req.params;
+    console.log(`📁 Listing violations for ${cameraId} on ${date}`);
+    
+    const violationPath = path.join(PROCESSING_INBOX_PATH, cameraId, date);
+    
+    const hasAccess = await checkPathAccess(violationPath);
+    if (!hasAccess) {
+      return res.json({
+        success: true,
+        violations: [],
+        total: 0,
+        message: `No violations found for ${cameraId} on ${date}`
+      });
+    }
+    
+    const folders = await fs.readdir(violationPath, { withFileTypes: true });
+    const violations = [];
+    
+    for (const folder of folders) {
+      if (folder.isDirectory()) {
+        const eventPath = path.join(violationPath, folder.name);
+        const verdictPath = path.join(eventPath, 'verdict.json');
+        
+        try {
+          const verdictData = JSON.parse(await fs.readFile(verdictPath, 'utf8'));
+          
+          // Check for photos - try multiple naming patterns
+          const photos = [];
+          
+          for (let i = 1; i <= 3; i++) {
+            let photoFound = false;
+            let photoStats = null;
+            let actualFilename = null;
+            
+            // Try different naming patterns
+            const possibleNames = [`${i}.jpg`, `photo_${i}.jpg`];
+            
+            for (const name of possibleNames) {
+              const photoPath = path.join(eventPath, name);
+              try {
+                photoStats = await fs.stat(photoPath);
+                actualFilename = name;
+                photoFound = true;
+                break;
+              } catch (photoError) {
+                // Continue to next pattern
+              }
+            }
+            
+            // If not found, try to find any jpg files and use them
+            if (!photoFound) {
+              try {
+                const files = await fs.readdir(eventPath);
+                const jpgFiles = files.filter(f => f.toLowerCase().endsWith('.jpg') && f !== 'metadata.json');
+                if (jpgFiles.length >= i) {
+                  const photoPath = path.join(eventPath, jpgFiles[i-1]);
+                  photoStats = await fs.stat(photoPath);
+                  actualFilename = jpgFiles[i-1];
+                  photoFound = true;
+                }
+              } catch (dirError) {
+                // Continue
+              }
+            }
+            
+            if (photoFound && photoStats) {
+              photos.push({
+                filename: actualFilename,
+                size: photoStats.size,
+                exists: true,
+                url: `/api/violations/${cameraId}/${date}/${folder.name}/${actualFilename}`
+              });
+            } else {
+              photos.push({
+                filename: `photo_${i}.jpg`,
+                size: 0,
+                exists: false,
+                url: null
+              });
+            }
+          }
+          
+          violations.push({
+            eventId: folder.name,
+            verdict: verdictData,
+            photos: photos,
+            folderPath: eventPath
+          });
+        } catch (verdictError) {
+          console.warn(`⚠️ Could not read verdict for ${folder.name}:`, verdictError.message);
+        }
+      }
+    }
+    
+    // Sort by event timestamp
+    violations.sort((a, b) => b.verdict.event_ts - a.verdict.event_ts);
+    
+    console.log(`✅ Found ${violations.length} violations for ${cameraId} on ${date}`);
+    
+    res.json({
+      success: true,
+      violations: violations,
+      total: violations.length,
+      cameraId: cameraId,
+      date: date
+    });
+    
+  } catch (error) {
+    console.error('❌ Error listing violations:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      violations: []
+    });
+  }
+});
+
+// API endpoint to get specific violation details
+app.get('/api/violations/:cameraId/:date/:eventId', async (req, res) => {
+  try {
+    const { cameraId, date, eventId } = req.params;
+    console.log(`📄 Getting violation details: ${eventId}`);
+    
+    const eventPath = path.join(PROCESSING_INBOX_PATH, cameraId, date, eventId);
+    const verdictPath = path.join(eventPath, 'verdict.json');
+    
+    const hasAccess = await checkPathAccess(verdictPath);
+    if (!hasAccess) {
+      return res.status(404).json({
+        success: false,
+        error: 'Violation not found'
+      });
+    }
+    
+    const verdictData = JSON.parse(await fs.readFile(verdictPath, 'utf8'));
+    
+    // Get photo details - try multiple naming patterns
+    const photos = [];
+    for (let i = 1; i <= 3; i++) {
+      let photoFound = false;
+      let photoStats = null;
+      let actualFilename = null;
+      let actualPath = null;
+      
+      // Try different naming patterns
+      const possibleNames = [`${i}.jpg`, `photo_${i}.jpg`];
+      
+      for (const name of possibleNames) {
+        const photoPath = path.join(eventPath, name);
+        try {
+          photoStats = await fs.stat(photoPath);
+          actualFilename = name;
+          actualPath = photoPath;
+          photoFound = true;
+          break;
+        } catch (photoError) {
+          // Continue to next pattern
+        }
+      }
+      
+      // If not found, try to find any jpg files and use them
+      if (!photoFound) {
+        try {
+          const files = await fs.readdir(eventPath);
+          const jpgFiles = files.filter(f => f.toLowerCase().endsWith('.jpg') && f !== 'metadata.json');
+          if (jpgFiles.length >= i) {
+            const photoPath = path.join(eventPath, jpgFiles[i-1]);
+            photoStats = await fs.stat(photoPath);
+            actualFilename = jpgFiles[i-1];
+            actualPath = photoPath;
+            photoFound = true;
+          }
+        } catch (dirError) {
+          // Continue
+        }
+      }
+      
+      if (photoFound && photoStats) {
+        photos.push({
+          filename: actualFilename,
+          size: photoStats.size,
+          exists: true,
+          url: `/api/violations/${cameraId}/${date}/${eventId}/${actualFilename}`,
+          path: actualPath
+        });
+      } else {
+        photos.push({
+          filename: `photo_${i}.jpg`,
+          size: 0,
+          exists: false,
+          url: null,
+          path: path.join(eventPath, `photo_${i}.jpg`)
+        });
+      }
+    }
+    
+    res.json({
+      success: true,
+      eventId: eventId,
+      verdict: verdictData,
+      photos: photos,
+      folderPath: eventPath
+    });
+    
+  } catch (error) {
+    console.error('❌ Error getting violation details:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// API endpoint to serve violation photos
+app.get('/api/violations/:cameraId/:date/:eventId/:photoFilename', async (req, res) => {
+  try {
+    const { cameraId, date, eventId, photoFilename } = req.params;
+    
+    console.log(`🖼️ Serving violation photo: ${photoFilename} for event ${eventId}`);
+    
+    const photoPath = path.join(PROCESSING_INBOX_PATH, cameraId, date, eventId, photoFilename);
+    
+    const hasAccess = await checkPathAccess(photoPath);
+    if (!hasAccess) {
+      return res.status(404).json({
+        success: false,
+        error: 'Photo not found'
+      });
+    }
+    
+    const imageBuffer = await fs.readFile(photoPath);
+    
+    res.set({
+      'Content-Type': 'image/jpeg',
+      'Content-Length': imageBuffer.length,
+      'Cache-Control': 'public, max-age=3600',
+      'Access-Control-Allow-Origin': '*',
+      'X-Source': 'violation-folder'
+    });
+    
+    res.send(imageBuffer);
+    
+  } catch (error) {
+    console.error(`❌ Error serving violation photo ${req.params.photoFilename}:`, error.message);
+    res.status(404).json({
+      success: false,
+      error: `Photo not found: ${error.message}`
+    });
+  }
+});
+
+// API endpoint to get violation statistics (with date)
+app.get('/api/violations/stats/:date', async (req, res) => {
+  try {
+    const date = req.params.date;
+    console.log(`📊 Getting violation stats for ${date}`);
+    
+    const cameras = ['camera001', 'camera002', 'camera003'];
+    let totalViolations = 0;
+    let cameraStats = {};
+    
+    for (const cameraId of cameras) {
+      const cameraPath = path.join(PROCESSING_INBOX_PATH, cameraId, date);
+      
+      try {
+        const hasAccess = await checkPathAccess(cameraPath);
+        if (hasAccess) {
+          const folders = await fs.readdir(cameraPath, { withFileTypes: true });
+          const violationCount = folders.filter(f => f.isDirectory()).length;
+          
+          cameraStats[cameraId] = violationCount;
+          totalViolations += violationCount;
+        } else {
+          cameraStats[cameraId] = 0;
+        }
+      } catch (error) {
+        cameraStats[cameraId] = 0;
+      }
+    }
+    
+    res.json({
+      success: true,
+      date: date,
+      totalViolations: totalViolations,
+      cameraStats: cameraStats,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Error getting violation stats:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// API endpoint to get violation statistics (today by default)
+app.get('/api/violations/stats', async (req, res) => {
+  try {
+    const date = new Date().toISOString().split('T')[0];
+    console.log(`📊 Getting violation stats for today: ${date}`);
+    
+    const cameras = ['camera001', 'camera002', 'camera003'];
+    let totalViolations = 0;
+    let cameraStats = {};
+    
+    for (const cameraId of cameras) {
+      const cameraPath = path.join(PROCESSING_INBOX_PATH, cameraId, date);
+      
+      try {
+        const hasAccess = await checkPathAccess(cameraPath);
+        if (hasAccess) {
+          const folders = await fs.readdir(cameraPath, { withFileTypes: true });
+          const violationCount = folders.filter(f => f.isDirectory()).length;
+          
+          cameraStats[cameraId] = violationCount;
+          totalViolations += violationCount;
+        } else {
+          cameraStats[cameraId] = 0;
+        }
+      } catch (error) {
+        cameraStats[cameraId] = 0;
+      }
+    }
+    
+    res.json({
+      success: true,
+      date: date,
+      totalViolations: totalViolations,
+      cameraStats: cameraStats,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Error getting violation stats:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({
@@ -439,12 +790,17 @@ app.get('/health', (req, res) => {
     source: 'local',
     config: {
       basePath: LOCAL_BASE_PATH,
+      processingInboxPath: PROCESSING_INBOX_PATH,
       port: PORT
     },
     endpoints: {
       dates: '/api/ftp-images/dates',
       list: '/api/ftp-images/list?camera=192.168.1.54&date=2025-09-28',
-      image: '/api/ftp-images/camera001/192.168.1.54/2025-09-28/Common/[filename]'
+      image: '/api/ftp-images/camera001/192.168.1.54/2025-09-28/Common/[filename]',
+      violations: '/api/violations/camera002/2025-10-05',
+      violationDetails: '/api/violations/camera002/2025-10-05/[eventId]',
+      violationPhoto: '/api/violations/camera002/2025-10-05/[eventId]/photo_1.jpg',
+      violationStats: '/api/violations/stats/2025-10-05'
     }
   });
 });
