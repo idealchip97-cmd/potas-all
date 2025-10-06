@@ -52,17 +52,18 @@ start_service() {
 
 # Start Backend Server (Node.js)
 echo "1️⃣ Starting Backend Server..."
-BACKEND_DIR="/home/silos/Desktop/radar_system/potassium-backend-"
+BACKEND_DIR="/home/rnd2/Desktop/radar_sys/potassium-backend-"
 if [ -d "$BACKEND_DIR" ]; then
     start_service "Backend Server" "$BACKEND_DIR" "npm start" 3000
 else
     echo "❌ Backend directory not found: $BACKEND_DIR"
+    echo "📝 Please update BACKEND_DIR in this script to match your system"
 fi
 
 # Start Frontend Dashboard (React)
 echo "2️⃣ Starting Frontend Dashboard..."
-FRONTEND_DIR="/home/silos/Desktop/radar_system/potassium-frontend"
-start_service "Frontend Dashboard" "$FRONTEND_DIR" "npm start" 3001
+FRONTEND_DIR="/home/rnd2/Desktop/radar_sys/potassium-frontend"
+start_service "Frontend Dashboard" "$FRONTEND_DIR" "npm start" 3002
 
 echo "=================================================="
 echo "🎯 System Status Summary:"
@@ -71,7 +72,7 @@ echo "=================================================="
 # Check all services
 services=(
     "Backend Server:3000"
-    "Frontend Dashboard:3001"
+    "Frontend Dashboard:3002"
 )
 
 for service in "${services[@]}"; do
@@ -85,7 +86,7 @@ done
 
 echo ""
 echo "🌐 Access URLs:"
-echo "   • Main Dashboard: http://localhost:3001"
+echo "   • Main Dashboard: http://localhost:3002"
 echo "   • Backend API: http://localhost:3000"
 echo ""
 echo "📝 Logs are saved in the respective directories:"
