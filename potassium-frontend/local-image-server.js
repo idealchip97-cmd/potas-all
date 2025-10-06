@@ -464,53 +464,62 @@ app.get('/api/violations/:cameraId/:date', async (req, res) => {
         try {
           const verdictData = JSON.parse(await fs.readFile(verdictPath, 'utf8'));
           
-          // Check for photos - try multiple naming patterns
+          // Check for photos - scan all available photos in the folder
           const photos = [];
           
-          for (let i = 1; i <= 3; i++) {
-            let photoFound = false;
-            let photoStats = null;
-            let actualFilename = null;
+          try {
+            // Get all files in the event folder
+            const files = await fs.readdir(eventPath);
             
-            // Try different naming patterns
-            const possibleNames = [`${i}.jpg`, `photo_${i}.jpg`];
+            // Filter for image files (excluding verdict.json and metadata files)
+            const imageFiles = files.filter(f => 
+              /\.(jpg|jpeg|png|gif|bmp)$/i.test(f) && 
+              f !== 'metadata.json' && 
+              !f.startsWith('.')
+            );
             
-            for (const name of possibleNames) {
-              const photoPath = path.join(eventPath, name);
+            // Sort image files naturally (1.jpg, 2.jpg, etc.)
+            imageFiles.sort((a, b) => {
+              const aNum = parseInt(a.match(/(\d+)/)?.[1] || '0');
+              const bNum = parseInt(b.match(/(\d+)/)?.[1] || '0');
+              return aNum - bNum;
+            });
+            
+            console.log(`📸 Found ${imageFiles.length} photos in ${folder.name}: ${imageFiles.join(', ')}`);
+            
+            // Process all found image files
+            for (const filename of imageFiles) {
               try {
-                photoStats = await fs.stat(photoPath);
-                actualFilename = name;
-                photoFound = true;
-                break;
+                const photoPath = path.join(eventPath, filename);
+                const photoStats = await fs.stat(photoPath);
+                
+                photos.push({
+                  filename: filename,
+                  size: photoStats.size,
+                  exists: true,
+                  url: `/api/violations/${cameraId}/${date}/${folder.name}/${filename}`
+                });
               } catch (photoError) {
-                // Continue to next pattern
+                console.warn(`⚠️ Could not stat photo ${filename}:`, photoError.message);
               }
             }
             
-            // If not found, try to find any jpg files and use them
-            if (!photoFound) {
-              try {
-                const files = await fs.readdir(eventPath);
-                const jpgFiles = files.filter(f => f.toLowerCase().endsWith('.jpg') && f !== 'metadata.json');
-                if (jpgFiles.length >= i) {
-                  const photoPath = path.join(eventPath, jpgFiles[i-1]);
-                  photoStats = await fs.stat(photoPath);
-                  actualFilename = jpgFiles[i-1];
-                  photoFound = true;
-                }
-              } catch (dirError) {
-                // Continue
+            // If no photos found, add placeholder entries for backward compatibility
+            if (photos.length === 0) {
+              for (let i = 1; i <= 3; i++) {
+                photos.push({
+                  filename: `photo_${i}.jpg`,
+                  size: 0,
+                  exists: false,
+                  url: null
+                });
               }
             }
             
-            if (photoFound && photoStats) {
-              photos.push({
-                filename: actualFilename,
-                size: photoStats.size,
-                exists: true,
-                url: `/api/violations/${cameraId}/${date}/${folder.name}/${actualFilename}`
-              });
-            } else {
+          } catch (dirError) {
+            console.warn(`⚠️ Could not read directory ${eventPath}:`, dirError.message);
+            // Fallback to placeholder photos
+            for (let i = 1; i <= 3; i++) {
               photos.push({
                 filename: `photo_${i}.jpg`,
                 size: 0,
@@ -574,56 +583,64 @@ app.get('/api/violations/:cameraId/:date/:eventId', async (req, res) => {
     
     const verdictData = JSON.parse(await fs.readFile(verdictPath, 'utf8'));
     
-    // Get photo details - try multiple naming patterns
+    // Get photo details - scan all available photos in the folder
     const photos = [];
-    for (let i = 1; i <= 3; i++) {
-      let photoFound = false;
-      let photoStats = null;
-      let actualFilename = null;
-      let actualPath = null;
+    
+    try {
+      // Get all files in the event folder
+      const files = await fs.readdir(eventPath);
       
-      // Try different naming patterns
-      const possibleNames = [`${i}.jpg`, `photo_${i}.jpg`];
+      // Filter for image files (excluding verdict.json and metadata files)
+      const imageFiles = files.filter(f => 
+        /\.(jpg|jpeg|png|gif|bmp)$/i.test(f) && 
+        f !== 'metadata.json' && 
+        !f.startsWith('.')
+      );
       
-      for (const name of possibleNames) {
-        const photoPath = path.join(eventPath, name);
+      // Sort image files naturally (1.jpg, 2.jpg, etc.)
+      imageFiles.sort((a, b) => {
+        const aNum = parseInt(a.match(/(\d+)/)?.[1] || '0');
+        const bNum = parseInt(b.match(/(\d+)/)?.[1] || '0');
+        return aNum - bNum;
+      });
+      
+      console.log(`📸 Found ${imageFiles.length} photos in ${eventId}: ${imageFiles.join(', ')}`);
+      
+      // Process all found image files
+      for (const filename of imageFiles) {
         try {
-          photoStats = await fs.stat(photoPath);
-          actualFilename = name;
-          actualPath = photoPath;
-          photoFound = true;
-          break;
+          const photoPath = path.join(eventPath, filename);
+          const photoStats = await fs.stat(photoPath);
+          
+          photos.push({
+            filename: filename,
+            size: photoStats.size,
+            exists: true,
+            url: `/api/violations/${cameraId}/${date}/${eventId}/${filename}`,
+            path: photoPath
+          });
         } catch (photoError) {
-          // Continue to next pattern
+          console.warn(`⚠️ Could not stat photo ${filename}:`, photoError.message);
         }
       }
       
-      // If not found, try to find any jpg files and use them
-      if (!photoFound) {
-        try {
-          const files = await fs.readdir(eventPath);
-          const jpgFiles = files.filter(f => f.toLowerCase().endsWith('.jpg') && f !== 'metadata.json');
-          if (jpgFiles.length >= i) {
-            const photoPath = path.join(eventPath, jpgFiles[i-1]);
-            photoStats = await fs.stat(photoPath);
-            actualFilename = jpgFiles[i-1];
-            actualPath = photoPath;
-            photoFound = true;
-          }
-        } catch (dirError) {
-          // Continue
+      // If no photos found, add placeholder entries for backward compatibility
+      if (photos.length === 0) {
+        for (let i = 1; i <= 3; i++) {
+          photos.push({
+            filename: `photo_${i}.jpg`,
+            size: 0,
+            exists: false,
+            url: null,
+            path: path.join(eventPath, `photo_${i}.jpg`)
+          });
         }
       }
       
-      if (photoFound && photoStats) {
-        photos.push({
-          filename: actualFilename,
-          size: photoStats.size,
-          exists: true,
-          url: `/api/violations/${cameraId}/${date}/${eventId}/${actualFilename}`,
-          path: actualPath
-        });
-      } else {
+    } catch (dirError) {
+      console.warn(`⚠️ Could not read directory ${eventPath}:`, dirError.message);
+      // Fallback to placeholder photos
+      for (let i = 1; i <= 3; i++) {
         photos.push({
           filename: `photo_${i}.jpg`,
           size: 0,
@@ -781,6 +798,241 @@ app.get('/api/violations/stats', async (req, res) => {
   }
 });
 
+// DYNAMIC DISCOVERY ENDPOINTS
+
+// API endpoint to discover available cameras
+app.get('/api/discover/cameras', async (req, res) => {
+  try {
+    console.log('🔍 Discovering available cameras...');
+    
+    const cameras = [];
+    
+    try {
+      const entries = await fs.readdir(PROCESSING_INBOX_PATH, { withFileTypes: true });
+      const cameraFolders = entries.filter(entry => 
+        entry.isDirectory() && entry.name.startsWith('camera')
+      );
+      
+      for (const folder of cameraFolders) {
+        cameras.push(folder.name);
+      }
+      
+      console.log(`✅ Found ${cameras.length} cameras: ${cameras.join(', ')}`);
+    } catch (error) {
+      console.warn('⚠️ Could not read processing inbox:', error.message);
+    }
+    
+    // Sort cameras naturally (camera001, camera002, etc.)
+    cameras.sort((a, b) => {
+      const numA = parseInt(a.replace('camera', ''));
+      const numB = parseInt(b.replace('camera', ''));
+      return numA - numB;
+    });
+    
+    res.json({
+      success: true,
+      cameras: cameras,
+      count: cameras.length,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Error discovering cameras:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to discover cameras',
+      message: error.message
+    });
+  }
+});
+
+// API endpoint to discover available dates for a camera
+app.get('/api/discover/dates/:cameraId', async (req, res) => {
+  try {
+    const { cameraId } = req.params;
+    console.log(`🔍 Discovering available dates for ${cameraId}...`);
+    
+    const dates = [];
+    const cameraPath = path.join(PROCESSING_INBOX_PATH, cameraId);
+    
+    try {
+      const entries = await fs.readdir(cameraPath, { withFileTypes: true });
+      const dateFolders = entries.filter(entry => 
+        entry.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(entry.name)
+      );
+      
+      for (const folder of dateFolders) {
+        // Check if the date folder has any violation cases
+        const datePath = path.join(cameraPath, folder.name);
+        try {
+          const caseEntries = await fs.readdir(datePath, { withFileTypes: true });
+          const caseFolders = caseEntries.filter(entry => entry.isDirectory());
+          
+          if (caseFolders.length > 0) {
+            dates.push({
+              date: folder.name,
+              caseCount: caseFolders.length
+            });
+          }
+        } catch (err) {
+          console.warn(`⚠️ Could not read date folder ${folder.name}:`, err.message);
+        }
+      }
+      
+      console.log(`✅ Found ${dates.length} dates with data for ${cameraId}`);
+    } catch (error) {
+      console.warn(`⚠️ Could not read camera folder ${cameraId}:`, error.message);
+    }
+    
+    // Sort dates (newest first)
+    dates.sort((a, b) => b.date.localeCompare(a.date));
+    
+    res.json({
+      success: true,
+      cameraId: cameraId,
+      dates: dates,
+      count: dates.length,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Error discovering dates:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to discover dates',
+      message: error.message
+    });
+  }
+});
+
+// API endpoint to discover all available dates across all cameras
+app.get('/api/discover/dates', async (req, res) => {
+  try {
+    console.log('🔍 Discovering all available dates across cameras...');
+    
+    const allDates = new Set();
+    const cameraDateMap = {};
+    
+    try {
+      const cameraEntries = await fs.readdir(PROCESSING_INBOX_PATH, { withFileTypes: true });
+      const cameraFolders = cameraEntries.filter(entry => 
+        entry.isDirectory() && entry.name.startsWith('camera')
+      );
+      
+      for (const cameraFolder of cameraFolders) {
+        const cameraId = cameraFolder.name;
+        const cameraPath = path.join(PROCESSING_INBOX_PATH, cameraId);
+        cameraDateMap[cameraId] = [];
+        
+        try {
+          const dateEntries = await fs.readdir(cameraPath, { withFileTypes: true });
+          const dateFolders = dateEntries.filter(entry => 
+            entry.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(entry.name)
+          );
+          
+          for (const dateFolder of dateFolders) {
+            const datePath = path.join(cameraPath, dateFolder.name);
+            try {
+              const caseEntries = await fs.readdir(datePath, { withFileTypes: true });
+              const caseFolders = caseEntries.filter(entry => entry.isDirectory());
+              
+              if (caseFolders.length > 0) {
+                allDates.add(dateFolder.name);
+                cameraDateMap[cameraId].push({
+                  date: dateFolder.name,
+                  caseCount: caseFolders.length
+                });
+              }
+            } catch (err) {
+              console.warn(`⚠️ Could not read date folder ${dateFolder.name}:`, err.message);
+            }
+          }
+        } catch (err) {
+          console.warn(`⚠️ Could not read camera folder ${cameraId}:`, err.message);
+        }
+      }
+      
+      console.log(`✅ Found ${allDates.size} unique dates across ${cameraFolders.length} cameras`);
+    } catch (error) {
+      console.warn('⚠️ Could not read processing inbox:', error.message);
+    }
+    
+    // Convert Set to sorted array (newest first)
+    const sortedDates = Array.from(allDates).sort((a, b) => b.localeCompare(a));
+    
+    res.json({
+      success: true,
+      dates: sortedDates,
+      count: sortedDates.length,
+      cameraDateMap: cameraDateMap,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Error discovering all dates:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to discover dates',
+      message: error.message
+    });
+  }
+});
+
+// API endpoint to discover available case IDs for a camera and date
+app.get('/api/discover/cases/:cameraId/:date', async (req, res) => {
+  try {
+    const { cameraId, date } = req.params;
+    console.log(`🔍 Discovering case IDs for ${cameraId} on ${date}...`);
+    
+    const cases = [];
+    const cameraDatePath = path.join(PROCESSING_INBOX_PATH, cameraId, date);
+    
+    try {
+      const entries = await fs.readdir(cameraDatePath, { withFileTypes: true });
+      const caseFolders = entries.filter(entry => entry.isDirectory());
+      
+      for (const folder of caseFolders) {
+        // Check if folder has verdict.json
+        const verdictPath = path.join(cameraDatePath, folder.name, 'verdict.json');
+        try {
+          await fs.access(verdictPath);
+          cases.push(folder.name);
+        } catch (err) {
+          console.warn(`⚠️ Case ${folder.name} missing verdict.json`);
+        }
+      }
+      
+      console.log(`✅ Found ${cases.length} valid cases for ${cameraId} on ${date}`);
+    } catch (error) {
+      console.warn(`⚠️ Could not read camera/date folder:`, error.message);
+    }
+    
+    // Sort cases naturally (case001, case002, etc.)
+    cases.sort((a, b) => {
+      const numA = parseInt(a.replace(/\D/g, ''));
+      const numB = parseInt(b.replace(/\D/g, ''));
+      return numA - numB;
+    });
+    
+    res.json({
+      success: true,
+      cameraId: cameraId,
+      date: date,
+      cases: cases,
+      count: cases.length,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Error discovering cases:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to discover cases',
+      message: error.message
+    });
+  }
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({
@@ -794,13 +1046,20 @@ app.get('/health', (req, res) => {
       port: PORT
     },
     endpoints: {
+      // Legacy FTP endpoints
       dates: '/api/ftp-images/dates',
       list: '/api/ftp-images/list?camera=192.168.1.54&date=2025-09-28',
       image: '/api/ftp-images/camera001/192.168.1.54/2025-09-28/Common/[filename]',
+      // Violation endpoints
       violations: '/api/violations/camera002/2025-10-05',
       violationDetails: '/api/violations/camera002/2025-10-05/[eventId]',
       violationPhoto: '/api/violations/camera002/2025-10-05/[eventId]/photo_1.jpg',
-      violationStats: '/api/violations/stats/2025-10-05'
+      violationStats: '/api/violations/stats/2025-10-05',
+      // NEW: Dynamic discovery endpoints
+      discoverCameras: '/api/discover/cameras',
+      discoverDates: '/api/discover/dates',
+      discoverDatesForCamera: '/api/discover/dates/[cameraId]',
+      discoverCases: '/api/discover/cases/[cameraId]/[date]'
     }
   });
 });

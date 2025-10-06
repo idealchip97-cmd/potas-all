@@ -59,7 +59,7 @@ const Dashboard: React.FC = () => {
       
       // Fetch data from all 3 cameras
       const cameras = ['camera001', 'camera002', 'camera003'];
-      const date = '2025-10-05';
+      const date = new Date().toISOString().split('T')[0]; // Use today's date
       
       let totalCases = 0;
       let totalViolations = 0;
