@@ -377,8 +377,11 @@ const FinesImagesMonitor: React.FC = () => {
     // Set up auto-refresh every 30 seconds
     const autoRefreshInterval = setInterval(() => {
       console.log('🔄 Auto-refresh: Loading violation cases');
+      console.log(`📡 Auto-refresh with camera: ${selectedCamera}`);
       testConnection(); // Test connection on each refresh
-      loadViolationCases();
+      // Respect current camera and date selection during auto-refresh
+      const cameraParam = selectedCamera === 'all' ? undefined : selectedCamera;
+      loadViolationCases(filters.dateRange, cameraParam);
       loadAvailableDates(); // Also refresh available dates
     }, 30000);
     
@@ -460,12 +463,18 @@ const FinesImagesMonitor: React.FC = () => {
   };
 
   const handleRefresh = () => {
-    setError(null);
+    console.log('🔄 Manual refresh triggered');
+    console.log(`📡 Manual refresh with camera: ${selectedCamera}, date: ${filters.dateRange}`);
+    setLoading(true);
+    
     // Force fresh data load from violation system
     loadAvailableCameras();
     loadAvailableDates();
-    loadViolationCases();
+    // Respect current camera and date selection during manual refresh
+    const cameraParam = selectedCamera === 'all' ? undefined : selectedCamera;
+    loadViolationCases(filters.dateRange, cameraParam);
     loadAvailableCases(selectedCamera, filters.dateRange);
+    setViolationCases([]); // Clear violation cases cache
   };
 
   const handleClearCache = () => {
@@ -489,20 +498,28 @@ const FinesImagesMonitor: React.FC = () => {
     setTimeout(() => {
       loadAvailableCameras();
       loadAvailableDates();
-      loadViolationCases();
+      // Respect current camera and date selection after cache clear
+      const cameraParam = selectedCamera === 'all' ? undefined : selectedCamera;
+      loadViolationCases(filters.dateRange, cameraParam);
     }, 500);
   };
 
   const handleDateFilterChange = async (selectedDate: string) => {
     console.log(`🔍 Date filter changed to: ${selectedDate}`);
+    console.log(`📡 Current camera selection: ${selectedCamera}`);
     setFilters(prev => ({ ...prev, dateRange: selectedDate }));
     
+    // IMPORTANT: Pass the current camera selection to respect camera filter
+    const cameraParam = selectedCamera === 'all' ? undefined : selectedCamera;
+    
     if (selectedDate === 'all') {
-      // Load all available dates
-      loadViolationCases('all');
+      // Load all available dates but respect camera selection
+      console.log(`📡 Loading ALL dates for camera: ${selectedCamera}`);
+      loadViolationCases('all', cameraParam);
     } else {
-      // Load specific date
-      loadViolationCases(selectedDate);
+      // Load specific date but respect camera selection
+      console.log(`📡 Loading date ${selectedDate} for camera: ${selectedCamera}`);
+      loadViolationCases(selectedDate, cameraParam);
     }
   };
 
@@ -523,8 +540,10 @@ const FinesImagesMonitor: React.FC = () => {
   const handleReprocessCase = (eventId: string) => {
     // In a real system, this would trigger reprocessing on the server
     console.log(`🔄 Reprocessing case: ${eventId}`);
-    // For now, just refresh the data
-    loadViolationCases();
+    console.log(`📡 Reprocess with camera: ${selectedCamera}, date: ${filters.dateRange}`);
+    // For now, just refresh the data while respecting current filters
+    const cameraParam = selectedCamera === 'all' ? undefined : selectedCamera;
+    loadViolationCases(filters.dateRange, cameraParam);
   };
 
   const getStatusColor = (decision: string) => {
