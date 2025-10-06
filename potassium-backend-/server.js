@@ -46,7 +46,7 @@ validateEnvironment();
 const { sequelize } = require('./models');
 // const externalDataService = require('./services/externalDataService'); // Disabled FTP service
 const websocketService = require('./services/websocketService');
-const PersistentUdpListener = require('./services/persistentUdpListener');
+// const PersistentUdpListener = require('./services/persistentUdpListener'); // Disabled - using JSON case processing
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -65,8 +65,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const IMAGE_BASE_DIR = process.env.IMAGE_BASE_DIR || '/srv/camera_uploads';
 
-// Initialize persistent UDP listener
-const udpListener = new PersistentUdpListener();
+// UDP listener disabled - using JSON case processing instead
+// const udpListener = new PersistentUdpListener();
 
 // Security middleware
 app.use(helmet());
@@ -125,52 +125,13 @@ app.get('/health', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Health check failed',
-      error: error.message,
       timestamp: new Date().toISOString()
     });
   }
 });
 
-// UDP Listener status endpoint
-app.get('/api/udp/status', async (req, res) => {
-  try {
-    const health = await udpListener.healthCheck();
-    const stats = udpListener.getStats();
-    
-    res.json({
-      success: true,
-      status: health.status,
-      listening: health.listening,
-      address: health.address,
-      stats: stats,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to get UDP status',
-      error: error.message
-    });
-  }
-});
-
-// Reset UDP statistics endpoint
-app.post('/api/udp/reset-stats', (req, res) => {
-  try {
-    udpListener.resetStats();
-    res.json({
-      success: true,
-      message: 'UDP statistics reset successfully',
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to reset UDP statistics',
-      error: error.message
-    });
-  }
-});
+// UDP endpoints disabled - system now uses JSON case processing
+// UDP listener functionality has been replaced with JSON case file processing
 
 // Debug endpoint to test image directory access
 app.get('/debug/images', async (req, res) => {

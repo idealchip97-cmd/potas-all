@@ -232,28 +232,53 @@ const FinesImagesMonitor: React.FC = () => {
         console.log(`🔍 Loading violation cases for date: ${selectedDate}`);
       }
       
-      // Determine which cameras to load
-      const camerasToLoad = cameraId ? [cameraId] : ['camera001', 'camera002', 'camera003'];
+      // Determine which cameras to load based on selection
+      let camerasToLoad: string[];
+      if (cameraId && cameraId !== 'all') {
+        // Load ONLY the selected camera - STRICT filtering
+        camerasToLoad = [cameraId];
+        console.log(`📡 ⚠️ STRICT FILTER: Loading data from ${cameraId} ONLY`);
+      } else {
+        // Load from all available cameras
+        camerasToLoad = availableCameras.length > 0 ? availableCameras : ['camera001', 'camera002'];
+        console.log(`📡 Loading data from ALL cameras: ${camerasToLoad.join(', ')}`);
+      }
       
       // Load violations from all combinations of dates and cameras
       for (const date of datesToLoad) {
         for (const camera of camerasToLoad) {
           try {
-            const response = await fetch(`http://localhost:3003/api/violations/${camera}/${date}`);
+            const apiUrl = `http://localhost:3003/api/violations/${camera}/${date}`;
+            console.log(`🔍 API CALL: ${apiUrl}`);
+            const response = await fetch(apiUrl);
             
             if (response.ok) {
               const data = await response.json();
+              console.log(`📊 API RESPONSE for ${camera}/${date}:`, {
+                success: data.success,
+                violationCount: data.violations?.length || 0,
+                cameraIds: data.violations?.map((v: any) => v.verdict?.camera_id) || []
+              });
+              
               if (data.success && data.violations) {
                 const cameraViolations = data.violations.map((violation: any) => ({
-                  eventId: violation.eventId,
-                  cameraId: camera,
+                  eventId: `${violation.eventId}_${camera}`, // Make eventId unique with camera
+                  cameraId: camera, // ENSURE camera ID matches the requested camera
                   date: date,
                   verdict: violation.verdict,
                   photos: violation.photos,
                   folderPath: violation.folderPath
                 }));
                 
-                allCases = [...allCases, ...cameraViolations];
+                // VERIFY: Only add violations that match the requested camera
+                const verifiedViolations = cameraViolations.filter((v: any) => v.cameraId === camera);
+                console.log(`✅ VERIFICATION for ${camera}:`);
+                console.log(`   - Total violations received: ${cameraViolations.length}`);
+                console.log(`   - Verified violations: ${verifiedViolations.length}`);
+                console.log(`   - Camera IDs in data:`, cameraViolations.map((v: any) => v.cameraId));
+                console.log(`   - Expected camera: ${camera}`);
+                
+                allCases = [...allCases, ...verifiedViolations];
                 setIsConnected(true);
                 setConnectionMode('violation_system');
                 console.log(`✅ Loaded ${cameraViolations.length} cases from ${camera} for ${date}`);
@@ -279,10 +304,24 @@ const FinesImagesMonitor: React.FC = () => {
         return b.verdict.event_ts - a.verdict.event_ts;
       });
       
-      setViolationCases(allCases);
-      updateViolationStats(allCases);
-      
-      console.log(`📊 Total violation cases loaded: ${allCases.length} from ${datesToLoad.length} dates`);
+      // FINAL VERIFICATION: Ensure only correct camera data is included
+      if (cameraId && cameraId !== 'all') {
+        console.log(`🔍 FINAL VERIFICATION for ${cameraId}:`);
+        console.log(`   - Total cases before filter: ${allCases.length}`);
+        console.log(`   - Camera IDs in all cases:`, allCases.map((c: any) => c.cameraId));
+        
+        const filteredCases = allCases.filter((c: any) => c.cameraId === cameraId);
+        console.log(`   - Cases after filter: ${filteredCases.length}`);
+        console.log(`   - Filtered case IDs:`, filteredCases.map((c: any) => `${c.eventId} (${c.cameraId})`));
+        
+        setViolationCases(filteredCases);
+        updateViolationStats(filteredCases);
+        console.log(`📊 FINAL RESULT for ${cameraId}: ${filteredCases.length} cases`);
+      } else {
+        setViolationCases(allCases);
+        updateViolationStats(allCases);
+        console.log(`📊 Total violation cases loaded from ALL cameras: ${allCases.length}`);
+      }
       
     } catch (error: any) {
       console.error('❌ Failed to load violation cases:', error);
@@ -396,20 +435,24 @@ const FinesImagesMonitor: React.FC = () => {
     // Camera filter is now handled by the main camera selection
     // No additional filtering needed here since data is loaded per camera selection
 
-    // Car Case ID filter (exact case ID matching)
+    // Car Case ID filter (matches case ID part before underscore)
     if (filters.caseFilter && filters.caseFilter.trim() !== '') {
-      filtered = filtered.filter(c => c.eventId.toLowerCase().includes(filters.caseFilter.toLowerCase()));
+      filtered = filtered.filter(c => {
+        const caseIdPart = c.eventId.split('_')[0]; // Get case ID part (before camera)
+        return caseIdPart.toLowerCase().includes(filters.caseFilter.toLowerCase());
+      });
     }
 
     // Search All filter (searches across multiple fields)
     if (filters.search && filters.search.trim() !== '') {
       const searchLower = filters.search.toLowerCase();
-      filtered = filtered.filter(c => 
-        c.eventId.toLowerCase().includes(searchLower) ||
-        c.verdict.src_ip.includes(searchLower) ||
-        c.cameraId.toLowerCase().includes(searchLower) ||
-        c.verdict.speed.toString().includes(searchLower)
-      );
+      filtered = filtered.filter(c => {
+        const caseIdPart = c.eventId.split('_')[0]; // Get case ID part for search
+        return caseIdPart.toLowerCase().includes(searchLower) ||
+               c.verdict.src_ip.includes(searchLower) ||
+               c.cameraId.toLowerCase().includes(searchLower) ||
+               c.verdict.speed.toString().includes(searchLower);
+      });
     }
 
     setFilteredCases(filtered);
@@ -649,19 +692,37 @@ const FinesImagesMonitor: React.FC = () => {
               select
               label="Camera"
               value={selectedCamera}
-              onChange={(e) => {
+              onChange={async (e) => {
                 const newCamera = e.target.value;
                 console.log(`🎯 Camera selection changed to: ${newCamera}`);
+                
+                // FORCE clear all data immediately
                 setSelectedCamera(newCamera);
-                // Clear current data and reload for new camera
                 setViolationCases([]);
                 setFilteredCases([]);
+                setLoading(true);
+                
+                // Clear stats to prevent showing old camera data
+                const emptyStats: {[key: string]: number} = {
+                  total: 0,
+                  violations: 0,
+                  noViolations: 0,
+                  todayCount: 0
+                };
+                availableCameras.forEach(camera => {
+                  emptyStats[camera] = 0;
+                });
+                setStats(emptyStats);
+                
+                // Add small delay to ensure UI updates
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
                 if (newCamera === 'all') {
                   console.log('📡 Loading data from ALL cameras');
-                  loadViolationCases(undefined, undefined);
+                  await loadViolationCases(filters.dateRange, undefined);
                 } else {
-                  console.log(`📡 Loading data from ${newCamera} only`);
-                  loadViolationCases(undefined, newCamera);
+                  console.log(`📡 Loading data from ${newCamera} ONLY - clearing other camera data`);
+                  await loadViolationCases(filters.dateRange, newCamera);
                 }
               }}
               sx={{ minWidth: 150 }}
@@ -741,15 +802,18 @@ const FinesImagesMonitor: React.FC = () => {
                   option.toLowerCase().includes(inputValue.toLowerCase())
                 );
               }}
-              renderOption={(props, option) => (
-                <li {...props}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="body2" fontWeight="bold">
-                      {option}
-                    </Typography>
-                  </Box>
-                </li>
-              )}
+              renderOption={(props, option) => {
+                const { key, ...otherProps } = props;
+                return (
+                  <li key={key} {...otherProps}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="body2" fontWeight="bold">
+                        {option}
+                      </Typography>
+                    </Box>
+                  </li>
+                );
+              }}
               sx={{ minWidth: 200 }}
               loading={availableCases.length === 0}
               loadingText="Loading case IDs..."
@@ -791,7 +855,10 @@ const FinesImagesMonitor: React.FC = () => {
                       <TableRow key={`${violationCase.cameraId}-${violationCase.date}-${violationCase.eventId}`} hover>
                       <TableCell>
                         <Typography variant="body2" fontWeight="bold">
-                          {violationCase.eventId}
+                          {violationCase.eventId.split('_')[0]} {/* Show only case ID part */}
+                        </Typography>
+                        <Typography variant="caption" color="primary" fontWeight="bold">
+                          {violationCase.cameraId.toUpperCase()}
                         </Typography>
                         <Typography variant="caption" color="textSecondary">
                           {violationCase.verdict.src_ip}

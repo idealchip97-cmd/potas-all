@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs').promises;
 const axios = require('axios');
+const nodemailer = require('nodemailer');
 
 const app = express();
 const PORT = 3003;
@@ -25,6 +26,56 @@ const PROCESSING_INBOX_PATH = process.env.NODE_ENV === 'test' ?
   '/srv/processing_inbox'; // New 3-photo violation folders
 const BACKEND_API_URL = 'http://localhost:3000/api';
 
+// Email Configuration
+const ADMIN_EMAIL = 'ahmedalhloul@idealchip.com'; // Receiver email
+const EMAIL_CONFIG = {
+  host: 'mail.idealchip.com', // A2 Hosting SMTP server
+  port: 465, // SSL port as shown in cPanel
+  secure: true, // true for 465 SSL
+  auth: {
+    user: process.env.EMAIL_USER || 'fines@idealchip.com', // Sender email account
+    pass: process.env.EMAIL_PASS || 'idealchip123'  // Sender email password
+  },
+  tls: {
+    rejectUnauthorized: false // Allow self-signed certificates if needed
+  }
+};
+
+// Create email transporter
+let emailTransporter = null;
+try {
+  emailTransporter = nodemailer.createTransport(EMAIL_CONFIG);
+  console.log('📧 Email service initialized');
+} catch (error) {
+  console.warn('⚠️ Email service not available:', error.message);
+}
+
+// Track processed cases to avoid duplicate notifications
+const processedCases = new Set();
+const PROCESSED_CASES_FILE = path.join(__dirname, 'processed_cases.json');
+
+// Load previously processed cases from file
+async function loadProcessedCases() {
+  try {
+    const data = await fs.readFile(PROCESSED_CASES_FILE, 'utf8');
+    const cases = JSON.parse(data);
+    cases.forEach(caseKey => processedCases.add(caseKey));
+    console.log(`📋 Loaded ${processedCases.size} previously processed cases`);
+  } catch (error) {
+    console.log('📋 No previous processed cases file found - starting fresh');
+  }
+}
+
+// Save processed cases to file
+async function saveProcessedCases() {
+  try {
+    const cases = Array.from(processedCases);
+    await fs.writeFile(PROCESSED_CASES_FILE, JSON.stringify(cases, null, 2));
+  } catch (error) {
+    console.warn('⚠️ Could not save processed cases:', error.message);
+  }
+}
+
 // Helper function to get radar data from backend
 async function getRadarDataForTimeRange(startTime, endTime) {
   try {
@@ -38,6 +89,318 @@ async function getRadarDataForTimeRange(startTime, endTime) {
   } catch (error) {
     console.warn('⚠️ Could not fetch radar data from backend:', error.message);
     return [];
+  }
+}
+
+// EMAIL NOTIFICATION SYSTEM
+
+// Send email notification for new violation case
+async function sendViolationNotification(cameraId, date, caseData) {
+  if (!emailTransporter) {
+    console.warn('⚠️ Email service not available - skipping notification');
+    return false;
+  }
+
+  try {
+    const { eventId, verdict, photos, folderPath } = caseData;
+    
+    // Create unique case identifier
+    const caseKey = `${cameraId}_${date}_${eventId}`;
+    
+    // Check if we already sent notification for this case
+    if (processedCases.has(caseKey)) {
+      console.log(`📧 Notification already sent for ${caseKey}`);
+      return false;
+    }
+    
+    // Format timestamp
+    const eventTime = new Date(verdict.event_ts * 1000);
+    const formattedTime = eventTime.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      timeZoneName: 'short'
+    });
+    
+    // Determine violation severity
+    const speedOver = verdict.speed - verdict.limit;
+    let severity = 'Minor';
+    if (speedOver >= 20) severity = 'Severe';
+    else if (speedOver >= 10) severity = 'Major';
+    
+    // Create email content
+    const subject = `🚨 NEW VIOLATION DETECTED - ${cameraId.toUpperCase()} - ${severity} (${verdict.speed} km/h)`;
+    
+    const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }
+            .container { max-width: 600px; margin: 0 auto; background-color: white; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+            .header { background: linear-gradient(135deg, #ff4444, #cc0000); color: white; padding: 20px; text-align: center; }
+            .content { padding: 20px; }
+            .alert-badge { display: inline-block; background-color: #ff4444; color: white; padding: 5px 15px; border-radius: 20px; font-weight: bold; margin-bottom: 15px; }
+            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0; }
+            .info-item { background-color: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #007bff; }
+            .info-label { font-weight: bold; color: #495057; font-size: 12px; text-transform: uppercase; }
+            .info-value { font-size: 16px; color: #212529; margin-top: 5px; }
+            .speed-alert { background: linear-gradient(135deg, #ff6b6b, #ee5a52); color: white; padding: 15px; border-radius: 8px; text-align: center; margin: 20px 0; }
+            .photos-section { margin-top: 20px; }
+            .footer { background-color: #f8f9fa; padding: 15px; text-align: center; color: #6c757d; font-size: 12px; }
+            .timestamp { background-color: #e9ecef; padding: 10px; border-radius: 5px; font-family: monospace; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🚨 SPEED VIOLATION DETECTED</h1>
+                <p>Radar Speed Detection System Alert</p>
+            </div>
+            
+            <div class="content">
+                <div class="alert-badge">${severity} Violation</div>
+                
+                <div class="speed-alert">
+                    <h2>⚡ ${verdict.speed} km/h in ${verdict.limit} km/h zone</h2>
+                    <p>Speed exceeded by ${speedOver} km/h</p>
+                </div>
+                
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="info-label">📹 Camera</div>
+                        <div class="info-value">${cameraId.toUpperCase()}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">📅 Date</div>
+                        <div class="info-value">${date}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">🆔 Case ID</div>
+                        <div class="info-value">${eventId}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">🌐 Source IP</div>
+                        <div class="info-value">${verdict.src_ip}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">⚡ Speed Detected</div>
+                        <div class="info-value">${verdict.speed} km/h</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">🚦 Speed Limit</div>
+                        <div class="info-value">${verdict.limit} km/h</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">📊 Violation Level</div>
+                        <div class="info-value">${severity}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">📸 Photos Captured</div>
+                        <div class="info-value">${photos.length} photos</div>
+                    </div>
+                </div>
+                
+                <div class="info-item">
+                    <div class="info-label">⏰ Event Timestamp</div>
+                    <div class="timestamp">${formattedTime}</div>
+                </div>
+                
+                <div class="photos-section">
+                    <h3>📸 Evidence Photos (${photos.length} attached)</h3>
+                    <p><strong>📎 Attached Files:</strong></p>
+                    <ul style="list-style-type: none; padding: 0;">
+                        ${photos.map((photo, index) => `
+                            <li style="background-color: #f8f9fa; margin: 5px 0; padding: 8px; border-radius: 4px; border-left: 3px solid #28a745;">
+                                📷 <strong>${photo.filename}</strong> 
+                                <span style="color: #6c757d; font-size: 12px;">(${(photo.size / 1024).toFixed(1)} KB)</span>
+                            </li>
+                        `).join('')}
+                    </ul>
+                    <p style="background-color: #d4edda; padding: 10px; border-radius: 5px; border-left: 4px solid #28a745;">
+                        <strong>📎 All violation photos are attached to this email for immediate review.</strong>
+                    </p>
+                    <p><strong>Folder Location:</strong> ${folderPath}</p>
+                </div>
+                
+                <div style="margin-top: 20px; padding: 15px; background-color: #d1ecf1; border-radius: 5px; border-left: 4px solid #bee5eb;">
+                    <strong>📋 Next Steps:</strong>
+                    <ul>
+                        <li>Review violation evidence in the monitoring system</li>
+                        <li>Verify vehicle identification and speed measurement</li>
+                        <li>Process violation according to traffic regulations</li>
+                        <li>Archive case data for record keeping</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="footer">
+                <p>🤖 This is an automated notification from the Radar Speed Detection System</p>
+                <p>Generated on ${new Date().toLocaleString()}</p>
+                <p>System: Potassium Radar Monitoring Platform</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+    
+    // Prepare photo attachments
+    const attachments = [];
+    let totalAttachmentSize = 0;
+    const maxAttachmentSize = 25 * 1024 * 1024; // 25MB limit for most email providers
+    
+    for (const photo of photos) {
+      if (photo.exists && photo.path) {
+        // Check if adding this photo would exceed size limit
+        if (totalAttachmentSize + photo.size < maxAttachmentSize) {
+          attachments.push({
+            filename: photo.filename,
+            path: photo.path,
+            cid: photo.filename.replace('.jpg', '') // Content ID for inline images
+          });
+          totalAttachmentSize += photo.size;
+        } else {
+          console.warn(`⚠️ Skipping photo ${photo.filename} - would exceed email size limit`);
+          break;
+        }
+      }
+    }
+    
+    console.log(`📎 Attaching ${attachments.length} photos (${(totalAttachmentSize / 1024 / 1024).toFixed(2)} MB)`);
+    
+    // Send email with attachments
+    const mailOptions = {
+      from: `"Radar Speed System" <${EMAIL_CONFIG.auth.user}>`,
+      to: ADMIN_EMAIL,
+      subject: subject,
+      html: htmlContent,
+      attachments: attachments,
+      priority: 'high',
+      headers: {
+        'X-Priority': '1',
+        'X-MSMail-Priority': 'High',
+        'Importance': 'high'
+      }
+    };
+    
+    const info = await emailTransporter.sendMail(mailOptions);
+    
+    // Mark case as processed
+    processedCases.add(caseKey);
+    
+    // Save to persistent storage
+    await saveProcessedCases();
+    
+    console.log(`📧 ✅ Violation notification sent for ${caseKey}`);
+    console.log(`📧 Message ID: ${info.messageId}`);
+    
+    return true;
+    
+  } catch (error) {
+    console.error('📧 ❌ Failed to send violation notification:', error);
+    return false;
+  }
+}
+
+// Check for new violation cases and send notifications
+async function checkForNewViolations() {
+  try {
+    console.log('🔍 Checking for new violations...');
+    
+    // Get all cameras
+    const cameraEntries = await fs.readdir(PROCESSING_INBOX_PATH, { withFileTypes: true });
+    const cameraFolders = cameraEntries.filter(entry => 
+      entry.isDirectory() && entry.name.startsWith('camera')
+    );
+    
+    for (const cameraFolder of cameraFolders) {
+      const cameraId = cameraFolder.name;
+      const cameraPath = path.join(PROCESSING_INBOX_PATH, cameraId);
+      
+      try {
+        const dateEntries = await fs.readdir(cameraPath, { withFileTypes: true });
+        const dateFolders = dateEntries.filter(entry => 
+          entry.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(entry.name)
+        );
+        
+        for (const dateFolder of dateFolders) {
+          const date = dateFolder.name;
+          const datePath = path.join(cameraPath, date);
+          
+          try {
+            const caseEntries = await fs.readdir(datePath, { withFileTypes: true });
+            const caseFolders = caseEntries.filter(entry => entry.isDirectory());
+            
+            for (const caseFolder of caseFolders) {
+              const eventId = caseFolder.name;
+              const casePath = path.join(datePath, eventId);
+              const verdictPath = path.join(casePath, 'verdict.json');
+              
+              // Check if case has verdict.json and we haven't processed it yet
+              const caseKey = `${cameraId}_${date}_${eventId}`;
+              
+              try {
+                await fs.access(verdictPath);
+                
+                if (!processedCases.has(caseKey)) {
+                  // Read verdict data
+                  const verdictData = JSON.parse(await fs.readFile(verdictPath, 'utf8'));
+                  
+                  // Only send notification for violations (not compliant cases)
+                  if (verdictData.decision === 'violation') {
+                    // Get photos list with full paths
+                    const photoFiles = await fs.readdir(casePath);
+                    const photos = [];
+                    
+                    for (const filename of photoFiles) {
+                      if (filename.toLowerCase().endsWith('.jpg')) {
+                        const photoPath = path.join(casePath, filename);
+                        try {
+                          const photoStats = await fs.stat(photoPath);
+                          photos.push({
+                            filename,
+                            path: photoPath,
+                            size: photoStats.size,
+                            exists: true
+                          });
+                        } catch (err) {
+                          console.warn(`⚠️ Could not access photo ${filename}:`, err.message);
+                        }
+                      }
+                    }
+                    
+                    const caseData = {
+                      eventId,
+                      verdict: verdictData,
+                      photos,
+                      folderPath: casePath
+                    };
+                    
+                    // Send notification
+                    await sendViolationNotification(cameraId, date, caseData);
+                  } else {
+                    // Mark compliant cases as processed without sending email
+                    processedCases.add(caseKey);
+                    await saveProcessedCases();
+                  }
+                }
+              } catch (err) {
+                // Case doesn't have verdict.json or other error - skip
+              }
+            }
+          } catch (err) {
+            console.warn(`⚠️ Could not read date folder ${date}:`, err.message);
+          }
+        }
+      } catch (err) {
+        console.warn(`⚠️ Could not read camera folder ${cameraId}:`, err.message);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error checking for new violations:', error);
   }
 }
 
@@ -1033,6 +1396,97 @@ app.get('/api/discover/cases/:cameraId/:date', async (req, res) => {
   }
 });
 
+// EMAIL NOTIFICATION API ENDPOINTS
+
+// Manual trigger for checking new violations
+app.post('/api/notifications/check', async (req, res) => {
+  try {
+    console.log('📧 Manual violation check triggered');
+    await checkForNewViolations();
+    res.json({
+      success: true,
+      message: 'Violation check completed',
+      processedCases: processedCases.size
+    });
+  } catch (error) {
+    console.error('❌ Manual violation check failed:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check for violations',
+      message: error.message
+    });
+  }
+});
+
+// Get notification status
+app.get('/api/notifications/status', (req, res) => {
+  res.json({
+    success: true,
+    emailService: {
+      enabled: !!emailTransporter,
+      adminEmail: ADMIN_EMAIL,
+      smtpHost: EMAIL_CONFIG.host
+    },
+    processedCases: processedCases.size,
+    lastCheck: new Date().toISOString(),
+    duplicatePrevention: 'enabled',
+    persistentStorage: 'enabled'
+  });
+});
+
+// Test email notification
+app.post('/api/notifications/test', async (req, res) => {
+  try {
+    if (!emailTransporter) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email service not configured'
+      });
+    }
+
+    // Send test email
+    const testMailOptions = {
+      from: `"Radar Speed System" <${EMAIL_CONFIG.auth.user}>`,
+      to: ADMIN_EMAIL,
+      subject: '🧪 Test Email - Radar Speed Detection System',
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f5f5f5;">
+          <div style="max-width: 500px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 10px;">
+            <h2 style="color: #007bff;">📧 Email Test Successful!</h2>
+            <p>This is a test email from the Radar Speed Detection System.</p>
+            <p><strong>System Status:</strong> ✅ Email notifications are working correctly</p>
+            <p><strong>Admin Email:</strong> ${ADMIN_EMAIL}</p>
+            <p><strong>Test Time:</strong> ${new Date().toLocaleString()}</p>
+            <div style="background-color: #d4edda; padding: 10px; border-radius: 5px; margin: 15px 0;">
+              <strong>📎 Photo Attachment Feature:</strong> ✅ Ready<br>
+              <small>When violations occur, all evidence photos will be automatically attached to notification emails.</small>
+            </div>
+            <hr style="margin: 20px 0;">
+            <p style="color: #6c757d; font-size: 12px;">🤖 Automated test from Potassium Radar System</p>
+          </div>
+        </div>
+      `
+    };
+
+    const info = await emailTransporter.sendMail(testMailOptions);
+    
+    res.json({
+      success: true,
+      message: 'Test email sent successfully',
+      messageId: info.messageId,
+      recipient: ADMIN_EMAIL
+    });
+    
+  } catch (error) {
+    console.error('❌ Test email failed:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to send test email',
+      message: error.message
+    });
+  }
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({
@@ -1055,11 +1509,20 @@ app.get('/health', (req, res) => {
       violationDetails: '/api/violations/camera002/2025-10-05/[eventId]',
       violationPhoto: '/api/violations/camera002/2025-10-05/[eventId]/photo_1.jpg',
       violationStats: '/api/violations/stats/2025-10-05',
-      // NEW: Dynamic discovery endpoints
+      // Dynamic discovery endpoints
       discoverCameras: '/api/discover/cameras',
       discoverDates: '/api/discover/dates',
       discoverDatesForCamera: '/api/discover/dates/[cameraId]',
-      discoverCases: '/api/discover/cases/[cameraId]/[date]'
+      discoverCases: '/api/discover/cases/[cameraId]/[date]',
+      // NEW: Email notification endpoints
+      notificationCheck: '/api/notifications/check',
+      notificationStatus: '/api/notifications/status',
+      notificationTest: '/api/notifications/test'
+    },
+    emailService: {
+      enabled: !!emailTransporter,
+      adminEmail: ADMIN_EMAIL,
+      processedCases: processedCases.size
     }
   });
 });
@@ -1073,6 +1536,22 @@ app.use((error, req, res, next) => {
     source: 'local'
   });
 });
+
+// Start automatic violation checking (every 30 seconds)
+setInterval(async () => {
+  try {
+    await checkForNewViolations();
+  } catch (error) {
+    console.error('❌ Automatic violation check failed:', error);
+  }
+}, 30000); // Check every 30 seconds
+
+// Load processed cases and run initial check on startup
+setTimeout(async () => {
+  console.log('🚀 Loading processed cases and running initial violation check...');
+  await loadProcessedCases();
+  await checkForNewViolations();
+}, 5000); // Wait 5 seconds after startup
 
 // Start the server
 app.listen(PORT, () => {
