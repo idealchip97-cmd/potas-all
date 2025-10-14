@@ -19,8 +19,9 @@ app.use(cors({
 // Parse JSON bodies
 app.use(express.json());
 
-// Local path configuration
-const LOCAL_BASE_PATH = '/srv/camera_uploads/camera001/192.168.1.54';
+// Local path configuration - Updated to support multiple cameras
+const CAMERA_BASE_PATH = '/srv/camera_uploads';
+const LOCAL_BASE_PATH = '/srv/camera_uploads/camera001/192.168.1.54'; // Fallback for backward compatibility
 const PROCESSING_INBOX_PATH = process.env.NODE_ENV === 'test' ? 
   require('path').join(__dirname, 'processing_inbox_test') : 
   '/srv/processing_inbox'; // New 3-photo violation folders
@@ -441,74 +442,235 @@ async function checkPathAccess(dirPath) {
   }
 }
 
+// Helper function to get all available cameras
+async function getAllCameras() {
+  const cameras = new Set();
+  
+  // Check processing inbox for cameras
+  try {
+    const processingDirs = await fs.readdir(PROCESSING_INBOX_PATH);
+    for (const dir of processingDirs) {
+      const dirPath = path.join(PROCESSING_INBOX_PATH, dir);
+      const stat = await fs.stat(dirPath);
+      if (stat.isDirectory() && dir.startsWith('camera')) {
+        cameras.add(dir);
+      }
+    }
+  } catch (error) {
+    console.log('No processing inbox found');
+  }
+  
+  // Check FTP uploads for cameras
+  try {
+    const ftpDirs = await fs.readdir(CAMERA_BASE_PATH);
+    for (const dir of ftpDirs) {
+      const dirPath = path.join(CAMERA_BASE_PATH, dir);
+      const stat = await fs.stat(dirPath);
+      if (stat.isDirectory() && dir.startsWith('camera')) {
+        cameras.add(dir);
+      }
+    }
+  } catch (error) {
+    console.log('No FTP uploads found');
+  }
+  
+  return Array.from(cameras);
+}
+
+// Helper function to get dates for a camera
+async function getCameraDates(camera) {
+  const dates = new Set();
+  
+  // Check processing inbox
+  try {
+    const cameraPath = path.join(PROCESSING_INBOX_PATH, camera);
+    const dateDirs = await fs.readdir(cameraPath);
+    for (const dir of dateDirs) {
+      const dirPath = path.join(cameraPath, dir);
+      const stat = await fs.stat(dirPath);
+      if (stat.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(dir)) {
+        dates.add(dir);
+      }
+    }
+  } catch (error) {
+    // No dates in processing inbox
+  }
+  
+  // Check FTP uploads
+  try {
+    const cameraPath = path.join(CAMERA_BASE_PATH, camera);
+    const ipDirs = await fs.readdir(cameraPath);
+    for (const ipDir of ipDirs) {
+      const ipPath = path.join(cameraPath, ipDir);
+      const stat = await fs.stat(ipPath);
+      if (stat.isDirectory()) {
+        try {
+          const dateDirs = await fs.readdir(ipPath);
+          for (const dir of dateDirs) {
+            const dirPath = path.join(ipPath, dir);
+            const stat = await fs.stat(dirPath);
+            if (stat.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(dir)) {
+              dates.add(dir);
+            }
+          }
+        } catch (error) {
+          // Skip this IP directory
+        }
+      }
+    }
+  } catch (error) {
+    // No FTP uploads for this camera
+  }
+  
+  return Array.from(dates).sort();
+}
+
+// Helper function to get cases for a camera and date
+async function getCameraCases(camera, date) {
+  const cases = new Set();
+  
+  // Check processing inbox
+  try {
+    const datePath = path.join(PROCESSING_INBOX_PATH, camera, date);
+    const caseDirs = await fs.readdir(datePath);
+    for (const dir of caseDirs) {
+      const dirPath = path.join(datePath, dir);
+      const stat = await fs.stat(dirPath);
+      if (stat.isDirectory()) {
+        cases.add(dir);
+      }
+    }
+  } catch (error) {
+    // No cases in processing inbox
+  }
+  
+  return Array.from(cases).sort();
+}
+
 // API endpoint to get available cameras
 app.get('/api/ftp-images/cameras', async (req, res) => {
   try {
-    console.log('📷 Getting available cameras from FTP directories...');
+    console.log('📷 Getting available cameras from both FTP and processing directories...');
     
-    const cameraBasePath = '/srv/camera_uploads/camera001';
-    const cameras = [];
+    const cameras = new Set();
     
-    const hasAccess = await checkPathAccess(cameraBasePath);
-    if (hasAccess) {
-      const items = await fs.readdir(cameraBasePath, { withFileTypes: true });
-      for (const item of items) {
-        if (item.isDirectory() && item.name.match(/^\d+\.\d+\.\d+\.\d+$/)) {
-          cameras.push(item.name);
+    // Check processing inbox for camera folders
+    const hasProcessingAccess = await checkPathAccess(PROCESSING_INBOX_PATH);
+    if (hasProcessingAccess) {
+      const processingItems = await fs.readdir(PROCESSING_INBOX_PATH, { withFileTypes: true });
+      for (const item of processingItems) {
+        if (item.isDirectory() && item.name.startsWith('camera')) {
+          cameras.add(item.name);
+          console.log(`📁 Found processing camera: ${item.name}`);
         }
       }
     }
     
-    // Always include default camera if none found
-    if (cameras.length === 0) {
-      cameras.push('192.168.1.54');
+    // Check FTP uploads directory structure
+    const hasFtpAccess = await checkPathAccess(CAMERA_BASE_PATH);
+    if (hasFtpAccess) {
+      const ftpItems = await fs.readdir(CAMERA_BASE_PATH, { withFileTypes: true });
+      for (const item of ftpItems) {
+        if (item.isDirectory() && item.name.startsWith('camera')) {
+          cameras.add(item.name);
+          console.log(`📁 Found FTP camera: ${item.name}`);
+        }
+      }
     }
     
-    console.log(`✅ Found ${cameras.length} camera(s): ${cameras.join(', ')}`);
+    // Convert to array and sort
+    const cameraList = Array.from(cameras).sort();
+    
+    // Always include default cameras if none found
+    if (cameraList.length === 0) {
+      cameraList.push('camera001', 'camera002');
+    }
+    
+    console.log(`✅ Found ${cameraList.length} camera(s): ${cameraList.join(', ')}`);
     
     res.json({
       success: true,
-      cameras: cameras,
-      total: cameras.length,
-      source: 'local',
-      basePath: cameraBasePath
+      cameras: cameraList,
+      total: cameraList.length,
+      source: 'multi-source',
+      processingPath: PROCESSING_INBOX_PATH,
+      ftpPath: CAMERA_BASE_PATH
     });
   } catch (error) {
     console.error('❌ Error getting cameras:', error);
     res.status(500).json({
       success: false,
       error: error.message,
-      cameras: ['192.168.1.54'] // Default fallback
+      cameras: ['camera001', 'camera002'] // Default fallback
     });
   }
 });
 
-// API endpoint to list available dates
+// API endpoint to list available dates for all cameras
 app.get('/api/ftp-images/dates', async (req, res) => {
   try {
-    console.log('📅 Listing available dates from local path...');
+    const { camera } = req.query;
+    console.log(`📅 Listing available dates for camera: ${camera || 'ALL'}`);
     
-    const hasAccess = await checkPathAccess(LOCAL_BASE_PATH);
-    if (!hasAccess) {
-      throw new Error(`Cannot access ${LOCAL_BASE_PATH}. Check permissions.`);
+    const allDates = new Set();
+    
+    // Check processing inbox for dates
+    const hasProcessingAccess = await checkPathAccess(PROCESSING_INBOX_PATH);
+    if (hasProcessingAccess) {
+      if (camera) {
+        // Get dates for specific camera
+        const cameraPath = path.join(PROCESSING_INBOX_PATH, camera);
+        const hasCameraAccess = await checkPathAccess(cameraPath);
+        if (hasCameraAccess) {
+          const cameraDirs = await fs.readdir(cameraPath, { withFileTypes: true });
+          cameraDirs
+            .filter(d => d.isDirectory() && /\d{4}-\d{2}-\d{2}/.test(d.name))
+            .forEach(d => allDates.add(d.name));
+        }
+      } else {
+        // Get dates from all cameras
+        const processingItems = await fs.readdir(PROCESSING_INBOX_PATH, { withFileTypes: true });
+        for (const item of processingItems) {
+          if (item.isDirectory() && item.name.startsWith('camera')) {
+            const cameraPath = path.join(PROCESSING_INBOX_PATH, item.name);
+            try {
+              const cameraDirs = await fs.readdir(cameraPath, { withFileTypes: true });
+              cameraDirs
+                .filter(d => d.isDirectory() && /\d{4}-\d{2}-\d{2}/.test(d.name))
+                .forEach(d => allDates.add(d.name));
+            } catch (err) {
+              console.warn(`⚠️ Could not read camera ${item.name}:`, err.message);
+            }
+          }
+        }
+      }
     }
-
-    const baseDirs = await fs.readdir(LOCAL_BASE_PATH, { withFileTypes: true });
-    const dateDirs = baseDirs
-      .filter(d => d.isDirectory() && /\d{4}-\d{2}-\d{2}/.test(d.name))
-      .map(d => ({
-        date: d.name,
-        modified: new Date().toISOString() // We'll use current time as fallback
+    
+    // Also check legacy FTP path for backward compatibility
+    const hasAccess = await checkPathAccess(LOCAL_BASE_PATH);
+    if (hasAccess) {
+      const baseDirs = await fs.readdir(LOCAL_BASE_PATH, { withFileTypes: true });
+      baseDirs
+        .filter(d => d.isDirectory() && /\d{4}-\d{2}-\d{2}/.test(d.name))
+        .forEach(d => allDates.add(d.name));
+    }
+    
+    // Convert to array and sort
+    const dateDirs = Array.from(allDates)
+      .map(date => ({
+        date: date,
+        modified: new Date().toISOString()
       }))
       .sort((a, b) => b.date.localeCompare(a.date));
     
-    console.log(`✅ Found ${dateDirs.length} date directories`);
+    console.log(`✅ Found ${dateDirs.length} date directories for ${camera || 'all cameras'}`);
     
     res.json({
       success: true,
       dates: dateDirs,
       total: dateDirs.length,
-      source: 'local'
+      source: 'multi-source',
+      camera: camera || 'all'
     });
     
   } catch (error) {
@@ -1846,6 +2008,293 @@ app.post('/api/notifications/test', async (req, res) => {
       success: false,
       error: 'Failed to send test email',
       message: error.message
+    });
+  }
+});
+
+// API endpoint to get cases for specific camera and date
+app.get('/api/ftp-images/cases/:cameraId/:date', async (req, res) => {
+  try {
+    const { cameraId, date } = req.params;
+    console.log(`📁 Getting cases for ${cameraId} on ${date}`);
+    
+    const cameraPath = path.join(PROCESSING_INBOX_PATH, cameraId, date);
+    const cases = [];
+    
+    const hasAccess = await checkPathAccess(cameraPath);
+    if (!hasAccess) {
+      return res.json({
+        success: true,
+        cases: [],
+        total: 0,
+        message: `No cases found for ${cameraId} on ${date}`,
+        cameraId: cameraId,
+        date: date
+      });
+    }
+    
+    const caseEntries = await fs.readdir(cameraPath, { withFileTypes: true });
+    const caseFolders = caseEntries.filter(entry => entry.isDirectory());
+    
+    for (const caseFolder of caseFolders) {
+      const eventId = caseFolder.name;
+      const casePath = path.join(cameraPath, eventId);
+      const verdictPath = path.join(casePath, 'verdict.json');
+      
+      try {
+        // Check if verdict exists
+        const hasVerdict = await checkPathAccess(verdictPath);
+        let verdict = null;
+        
+        if (hasVerdict) {
+          const verdictData = await fs.readFile(verdictPath, 'utf8');
+          verdict = JSON.parse(verdictData);
+        }
+        
+        // Get photos in the case folder
+        const photos = [];
+        const files = await fs.readdir(casePath);
+        const imageFiles = files.filter(f => 
+          /\.(jpg|jpeg|png|gif|bmp)$/i.test(f) && 
+          !f.startsWith('.')
+        );
+        
+        // Sort image files naturally
+        imageFiles.sort((a, b) => {
+          const aNum = parseInt(a.match(/(\d+)/)?.[1] || '0');
+          const bNum = parseInt(b.match(/(\d+)/)?.[1] || '0');
+          return aNum - bNum;
+        });
+        
+        for (const filename of imageFiles) {
+          try {
+            const photoPath = path.join(casePath, filename);
+            const photoStats = await fs.stat(photoPath);
+            
+            photos.push({
+              filename: filename,
+              size: photoStats.size,
+              exists: true,
+              url: `/api/violations/${cameraId}/${date}/${eventId}/${filename}`,
+              thumbnailUrl: `/api/violations/${cameraId}/${date}/${eventId}/${filename}`,
+              imageUrl: `/api/violations/${cameraId}/${date}/${eventId}/${filename}`
+            });
+          } catch (photoError) {
+            console.warn(`⚠️ Could not stat photo ${filename}:`, photoError.message);
+          }
+        }
+        
+        cases.push({
+          eventId: eventId,
+          cameraId: cameraId,
+          date: date,
+          verdict: verdict,
+          photos: photos,
+          photoCount: photos.length,
+          hasVerdict: hasVerdict,
+          folderPath: casePath,
+          isViolation: verdict ? verdict.decision === 'violation' : false,
+          speed: verdict ? verdict.speed : null,
+          speedLimit: verdict ? verdict.limit : null
+        });
+        
+      } catch (caseError) {
+        console.warn(`⚠️ Could not process case ${eventId}:`, caseError.message);
+      }
+    }
+    
+    // Sort by event timestamp if available, otherwise by eventId
+    cases.sort((a, b) => {
+      if (a.verdict && b.verdict && a.verdict.event_ts && b.verdict.event_ts) {
+        return b.verdict.event_ts - a.verdict.event_ts;
+      }
+      return b.eventId.localeCompare(a.eventId);
+    });
+    
+    console.log(`✅ Found ${cases.length} cases for ${cameraId} on ${date}`);
+    
+    res.json({
+      success: true,
+      cases: cases,
+      total: cases.length,
+      cameraId: cameraId,
+      date: date,
+      violations: cases.filter(c => c.isViolation).length,
+      compliant: cases.filter(c => !c.isViolation && c.hasVerdict).length
+    });
+    
+  } catch (error) {
+    console.error('❌ Error getting cases:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      cases: []
+    });
+  }
+});
+
+// API endpoint for AI FTP violations cycle
+app.get('/api/ftp-images/violations-cycle', async (req, res) => {
+  try {
+    const { limit = 50 } = req.query;
+    console.log(`🔄 Getting violation cycles with limit: ${limit}`);
+    
+    // Get all available cameras and dates
+    const cameras = await getAllCameras();
+    const violations = [];
+    let totalPlates = 0;
+    
+    for (const camera of cameras) {
+      const dates = await getCameraDates(camera);
+      
+      for (const date of dates) {
+        const cases = await getCameraCases(camera, date);
+        
+        for (const caseItem of cases) {
+          // Check if this case has AI processing results
+          const aiResultsPath = path.join(PROCESSING_INBOX_PATH, camera, date, caseItem, 'ai', 'results');
+          
+          try {
+            const aiFiles = await fs.readdir(aiResultsPath);
+            const jsonFiles = aiFiles.filter(f => f.endsWith('.json'));
+            
+            for (const jsonFile of jsonFiles) {
+              const resultPath = path.join(aiResultsPath, jsonFile);
+              const resultData = JSON.parse(await fs.readFile(resultPath, 'utf8'));
+              
+              if (resultData.plates_detected > 0) {
+                violations.push({
+                  id: `${camera}_${date}_${caseItem}_${jsonFile}`,
+                  camera,
+                  date,
+                  case: caseItem,
+                  imagePath: resultData.image_path,
+                  imageUrl: `/api/violations/${camera}/${date}/${caseItem}/${path.basename(resultData.image_path)}`,
+                  platesDetected: resultData.plates_detected,
+                  plates: resultData.plates || [],
+                  confidence: resultData.confidence || [],
+                  processingMethod: resultData.processing_method || 'unknown',
+                  processedAt: resultData.processed_at || new Date().toISOString(),
+                  status: 'processed'
+                });
+                
+                totalPlates += resultData.plates_detected;
+              }
+            }
+          } catch (error) {
+            // No AI results for this case, skip silently
+          }
+        }
+      }
+    }
+    
+    // Sort by date and limit results
+    violations.sort((a, b) => new Date(b.date) - new Date(a.date));
+    const limitedViolations = violations.slice(0, parseInt(limit));
+    
+    res.json({
+      success: true,
+      violations: limitedViolations,
+      total: violations.length,
+      limit: parseInt(limit),
+      summary: {
+        totalViolations: violations.length,
+        totalPlates,
+        cameras: [...new Set(violations.map(v => v.camera))],
+        dates: [...new Set(violations.map(v => v.date))]
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error getting violation cycles:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      violations: []
+    });
+  }
+});
+
+// API endpoint for AI processing summary
+app.get('/api/ftp-images/summary', async (req, res) => {
+  try {
+    console.log('📊 Getting AI processing summary...');
+    
+    const cameras = await getAllCameras();
+    let totalCases = 0;
+    let aiEnabledCases = 0;
+    let processedCases = 0;
+    let totalImages = 0;
+    let totalPlates = 0;
+    const processingMethods = {};
+    const dates = new Set();
+    
+    for (const camera of cameras) {
+      const cameraDates = await getCameraDates(camera);
+      
+      for (const date of cameraDates) {
+        dates.add(date);
+        const cases = await getCameraCases(camera, date);
+        totalCases += cases.length;
+        
+        for (const caseItem of cases) {
+          // Check if case has AI folder
+          const aiPath = path.join(PROCESSING_INBOX_PATH, camera, date, caseItem, 'ai');
+          
+          try {
+            await fs.access(aiPath);
+            aiEnabledCases++;
+            
+            // Check for processing results
+            const resultsPath = path.join(aiPath, 'results');
+            try {
+              const resultFiles = await fs.readdir(resultsPath);
+              const jsonFiles = resultFiles.filter(f => f.endsWith('.json'));
+              
+              if (jsonFiles.length > 0) {
+                processedCases++;
+                totalImages += jsonFiles.length;
+                
+                for (const jsonFile of jsonFiles) {
+                  const resultData = JSON.parse(await fs.readFile(path.join(resultsPath, jsonFile), 'utf8'));
+                  totalPlates += resultData.plates_detected || 0;
+                  
+                  const method = resultData.processing_method || 'unknown';
+                  processingMethods[method] = (processingMethods[method] || 0) + 1;
+                }
+              }
+            } catch (error) {
+              // No results yet
+            }
+          } catch (error) {
+            // No AI folder
+          }
+        }
+      }
+    }
+    
+    const averagePlatesPerImage = totalImages > 0 ? (totalPlates / totalImages).toFixed(2) : '0.00';
+    
+    res.json({
+      success: true,
+      summary: {
+        cameras: cameras.length,
+        dates: dates.size,
+        totalCases,
+        aiEnabledCases,
+        processedCases,
+        totalImages,
+        totalPlates,
+        processingMethods
+      },
+      averagePlatesPerImage
+    });
+    
+  } catch (error) {
+    console.error('❌ Error getting processing summary:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
     });
   }
 });

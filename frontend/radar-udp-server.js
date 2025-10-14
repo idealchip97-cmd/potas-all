@@ -3,7 +3,7 @@ const WebSocket = require('ws');
 const path = require('path');
 
 // Import backend models
-const backendPath = path.join(__dirname, '..', 'potassium-backend-');
+const backendPath = path.join(__dirname, '..', 'backend');
 const { Fine, Radar, RadarReading } = require(path.join(backendPath, 'models'));
 const sequelize = require(path.join(backendPath, 'config', 'database'));
 
