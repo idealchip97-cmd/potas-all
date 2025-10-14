@@ -2162,23 +2162,28 @@ app.get('/api/ftp-images/violations-cycle', async (req, res) => {
               const resultPath = path.join(aiResultsPath, jsonFile);
               const resultData = JSON.parse(await fs.readFile(resultPath, 'utf8'));
               
-              if (resultData.plates_detected > 0) {
-                violations.push({
-                  id: `${camera}_${date}_${caseItem}_${jsonFile}`,
-                  camera,
-                  date,
-                  case: caseItem,
-                  imagePath: resultData.image_path,
-                  imageUrl: `/api/violations/${camera}/${date}/${caseItem}/${path.basename(resultData.image_path)}`,
-                  platesDetected: resultData.plates_detected,
-                  plates: resultData.plates || [],
-                  confidence: resultData.confidence || [],
-                  processingMethod: resultData.processing_method || 'unknown',
-                  processedAt: resultData.processed_at || new Date().toISOString(),
-                  status: 'processed'
-                });
-                
-                totalPlates += resultData.plates_detected;
+              // Handle both single object and array formats
+              const results = Array.isArray(resultData) ? resultData : [resultData];
+              
+              for (const result of results) {
+                if (result.plates_detected > 0) {
+                  violations.push({
+                    id: `${camera}_${date}_${caseItem}_${jsonFile}_${violations.length}`,
+                    camera,
+                    date,
+                    case: caseItem,
+                    imagePath: result.image_path,
+                    imageUrl: `/api/violations/${camera}/${date}/${caseItem}/${path.basename(result.image_path)}`,
+                    platesDetected: result.plates_detected,
+                    plates: result.plates || [],
+                    confidence: result.confidence_scores || result.confidence || [],
+                    processingMethod: result.method || result.processing_method || 'unknown',
+                    processedAt: result.processed_at || new Date().toISOString(),
+                    status: result.status || 'processed'
+                  });
+                  
+                  totalPlates += result.plates_detected;
+                }
               }
             }
           } catch (error) {

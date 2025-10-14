@@ -55,7 +55,7 @@ const RealTimePlateRecognition: React.FC = () => {
 
   const loadFTPImages = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:3003/api/ftp-images/list?camera=192.168.1.54&date=all');
+      const response = await fetch('/api/ftp-images/list?camera=192.168.1.54&date=all');
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.files) {
@@ -101,18 +101,28 @@ const RealTimePlateRecognition: React.FC = () => {
 
   const loadViolationCycleData = useCallback(async () => {
     try {
-      // Try to get real violation cycle data from backend
-      const response = await fetch('http://localhost:3001/api/plate-recognition/violations-cycle');
+      // Try to get AI violation cycle data from enhanced FTP server
+      const response = await fetch('/api/ftp-images/violations-cycle?limit=20');
       if (response.ok) {
         const data = await response.json();
-        if (data.success && data.data.length > 0) {
-          setViolations(data.data);
-          console.log(`🎯 Loaded ${data.data.length} real violation cycle records`);
+        if (data.success && data.violations.length > 0) {
+          // Convert AI violations to expected format
+          const convertedViolations = data.violations.map((violation: any) => ({
+            id: violation.id,
+            plateNumber: violation.plates.length > 0 ? violation.plates[0].detected_characters : 'DETECTED',
+            confidence: violation.plates.length > 0 ? violation.plates[0].confidence : 0,
+            imageUrl: violation.imageUrl,
+            timestamp: violation.processedAt,
+            camera: violation.camera,
+            status: violation.status
+          }));
+          setViolations(convertedViolations);
+          console.log(`🎯 Loaded ${convertedViolations.length} AI violation records`);
           return;
         }
       }
     } catch (error) {
-      console.log('Backend not available, using FTP images only');
+      console.log('AI FTP Server not available, using regular FTP images');
     }
     
     // Fallback to FTP images
@@ -269,7 +279,7 @@ const RealTimePlateRecognition: React.FC = () => {
                       <TableCell>
                         {violation.hasImage && violation.imagePath ? (
                           <img
-                            src={`http://localhost:3003${violation.imagePath}`}
+                            src={`${violation.imagePath}`}
                             alt="Violation"
                             style={{ width: 60, height: 40, objectFit: 'cover', borderRadius: 4 }}
                           />

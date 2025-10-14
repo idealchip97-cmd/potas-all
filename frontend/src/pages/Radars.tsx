@@ -55,7 +55,7 @@ const Radars: React.FC = () => {
         
         try {
           // Fetch real violation data for each camera
-          const response = await fetch(`http://localhost:3003/api/violations/${cameraId}/${date}`);
+          const response = await fetch(`/api/violations/${cameraId}/${date}`);
           if (response.ok) {
             const data = await response.json();
             if (data.success && data.violations) {

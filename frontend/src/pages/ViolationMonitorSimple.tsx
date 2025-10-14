@@ -71,7 +71,7 @@ const ViolationMonitorSimple: React.FC = () => {
     setError(null);
     
     try {
-      const response = await fetch(`http://localhost:3003/api/violations/${selectedCamera}/${selectedDate}`);
+      const response = await fetch(`/api/violations/${selectedCamera}/${selectedDate}`);
       const data = await response.json();
       
       if (data.success) {
@@ -271,7 +271,7 @@ const ViolationMonitorSimple: React.FC = () => {
                       }}
                       onClick={() => {
                         if (photo.exists && photo.url) {
-                          window.open(`http://localhost:3003${photo.url}`, '_blank');
+                          window.open(`${photo.url}`, '_blank');
                         }
                       }}
                     >
