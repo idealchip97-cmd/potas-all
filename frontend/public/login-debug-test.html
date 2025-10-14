@@ -1,0 +1,116 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login Debug Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+        .success { background: #d4edda; }
+        .error { background: #f8d7da; }
+        button { padding: 10px 20px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Login System Debug</h1>
+    
+    <div class="test">
+        <h3>1. Clear All Browser Data</h3>
+        <button onclick="clearAll()">Clear LocalStorage + Cookies</button>
+        <div id="clear-result"></div>
+    </div>
+    
+    <div class="test">
+        <h3>2. Test Mock Login Logic</h3>
+        <button onclick="testMockLogin()">Test Admin Login</button>
+        <div id="login-result"></div>
+    </div>
+    
+    <div class="test">
+        <h3>3. Check Services</h3>
+        <button onclick="checkServices()">Check Backend + Frontend</button>
+        <div id="services-result"></div>
+    </div>
+    
+    <div class="test">
+        <h3>4. Manual Login Test</h3>
+        <p>After clearing data, go to: <a href="http://localhost:3001/login" target="_blank">http://localhost:3001/login</a></p>
+        <p>Use: <strong>admin@potasfactory.com</strong> / <strong>admin123</strong></p>
+    </div>
+    
+    <script>
+        function clearAll() {
+            localStorage.clear();
+            sessionStorage.clear();
+            document.cookie.split(";").forEach(c => {
+                document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+            });
+            document.getElementById('clear-result').innerHTML = '<span style="color: green;">✅ All data cleared!</span>';
+        }
+        
+        function testMockLogin() {
+            const demoAccounts = [
+                { email: 'admin@potasfactory.com', password: 'admin123', role: 'Admin' },
+                { email: 'operator@potasfactory.com', password: 'operator123', role: 'Operator' },
+                { email: 'viewer@potasfactory.com', password: 'viewer123', role: 'Viewer' },
+            ];
+            
+            const testEmail = 'admin@potasfactory.com';
+            const testPassword = 'admin123';
+            
+            const account = demoAccounts.find(acc => acc.email === testEmail && acc.password === testPassword);
+            
+            if (account) {
+                const mockToken = 'mock_token_' + Date.now();
+                const mockUser = {
+                    id: 1,
+                    email: account.email,
+                    firstName: account.role,
+                    lastName: 'User',
+                    role: account.role.toLowerCase(),
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                };
+                
+                localStorage.setItem('authToken', mockToken);
+                localStorage.setItem('user', JSON.stringify(mockUser));
+                
+                document.getElementById('login-result').innerHTML = 
+                    '<span style="color: green;">✅ Mock login successful!</span><br>' +
+                    'Token: ' + mockToken.substring(0, 20) + '...<br>' +
+                    'User: ' + JSON.stringify(mockUser, null, 2);
+            } else {
+                document.getElementById('login-result').innerHTML = '<span style="color: red;">❌ Mock login failed!</span>';
+            }
+        }
+        
+        async function checkServices() {
+            let result = '';
+            
+            try {
+                const backendResponse = await fetch('http://localhost:3000/health');
+                if (backendResponse.ok) {
+                    result += '<span style="color: green;">✅ Backend (3000): Running</span><br>';
+                } else {
+                    result += '<span style="color: red;">❌ Backend (3000): Error</span><br>';
+                }
+            } catch (e) {
+                result += '<span style="color: red;">❌ Backend (3000): Not accessible</span><br>';
+            }
+            
+            try {
+                const frontendResponse = await fetch('http://localhost:3001');
+                if (frontendResponse.ok) {
+                    result += '<span style="color: green;">✅ Frontend (3001): Running</span><br>';
+                } else {
+                    result += '<span style="color: red;">❌ Frontend (3001): Error</span><br>';
+                }
+            } catch (e) {
+                result += '<span style="color: red;">❌ Frontend (3001): Not accessible</span><br>';
+            }
+            
+            document.getElementById('services-result').innerHTML = result;
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Auth</title>
+</head>
+<body>
+    <h1>Debug Authentication</h1>
+    <div id="debug-info"></div>
+    
+    <script>
+        // Check localStorage
+        const token = localStorage.getItem('authToken');
+        const user = localStorage.getItem('user');
+        
+        const debugInfo = document.getElementById('debug-info');
+        debugInfo.innerHTML = `
+            <h2>LocalStorage Debug</h2>
+            <p><strong>Token:</strong> ${token || 'Not found'}</p>
+            <p><strong>User:</strong> ${user || 'Not found'}</p>
+            
+            <h2>Actions</h2>
+            <button onclick="clearAuth()">Clear Auth</button>
+            <button onclick="setMockAuth()">Set Mock Auth</button>
+            <button onclick="checkAuth()">Check Auth</button>
+            
+            <h2>Test Login</h2>
+            <input type="email" id="email" placeholder="Email" value="admin@potasfactory.com">
+            <input type="password" id="password" placeholder="Password" value="admin123">
+            <button onclick="testLogin()">Test Login</button>
+            
+            <div id="result"></div>
+        `;
+        
+        function clearAuth() {
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('user');
+            document.getElementById('result').innerHTML = '<p style="color: green;">Auth cleared</p>';
+            location.reload();
+        }
+        
+        function setMockAuth() {
+            const mockToken = 'mock_token_' + Date.now();
+            const mockUser = {
+                id: 1,
+                email: 'admin@potasfactory.com',
+                firstName: 'Admin',
+                lastName: 'User',
+                role: 'admin',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+            
+            localStorage.setItem('authToken', mockToken);
+            localStorage.setItem('user', JSON.stringify(mockUser));
+            document.getElementById('result').innerHTML = '<p style="color: green;">Mock auth set</p>';
+            location.reload();
+        }
+        
+        function checkAuth() {
+            const token = localStorage.getItem('authToken');
+            const user = localStorage.getItem('user');
+            const isAuthenticated = !!(token && user);
+            
+            document.getElementById('result').innerHTML = `
+                <p><strong>Is Authenticated:</strong> ${isAuthenticated}</p>
+                <p><strong>Token exists:</strong> ${!!token}</p>
+                <p><strong>User exists:</strong> ${!!user}</p>
+            `;
+        }
+        
+        function testLogin() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            // Mock the login logic
+            const demoAccounts = [
+                { email: 'admin@potasfactory.com', password: 'admin123', role: 'Admin' },
+                { email: 'operator@potasfactory.com', password: 'operator123', role: 'Operator' },
+                { email: 'viewer@potasfactory.com', password: 'viewer123', role: 'Viewer' },
+            ];
+            
+            const account = demoAccounts.find(acc => acc.email === email && acc.password === password);
+            
+            if (account) {
+                const mockToken = 'mock_token_' + Date.now();
+                const mockUser = {
+                    id: 1,
+                    email: account.email,
+                    firstName: account.role,
+                    lastName: 'User',
+                    role: account.role.toLowerCase(),
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                };
+                
+                localStorage.setItem('authToken', mockToken);
+                localStorage.setItem('user', JSON.stringify(mockUser));
+                
+                document.getElementById('result').innerHTML = '<p style="color: green;">Login successful! Redirecting...</p>';
+                
+                setTimeout(() => {
+                    window.location.href = 'http://localhost:3001/dashboard';
+                }, 1000);
+            } else {
+                document.getElementById('result').innerHTML = '<p style="color: red;">Login failed - invalid credentials</p>';
+            }
+        }
+    </script>
+</body>
+</html>

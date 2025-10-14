@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Login - React App Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+        .test-box { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 15px 0; }
+        button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Debug Login Issues</h1>
+    
+    <div class="test-box">
+        <h3>1. Test localStorage</h3>
+        <button onclick="testLocalStorage()">Test localStorage</button>
+        <div id="localStorage-result"></div>
+    </div>
+    
+    <div class="test-box">
+        <h3>2. Set Demo Credentials</h3>
+        <button onclick="setDemoCredentials()">Set Admin Credentials</button>
+        <div id="credentials-result"></div>
+    </div>
+    
+    <div class="test-box">
+        <h3>3. Check React App</h3>
+        <button onclick="openReactApp()">Open React App</button>
+        <button onclick="openReactLogin()">Open React Login</button>
+        <button onclick="openReactDashboard()">Open React Dashboard</button>
+    </div>
+    
+    <div class="test-box">
+        <h3>4. Clear All Data</h3>
+        <button onclick="clearAll()" style="background: #dc3545;">Clear Everything</button>
+        <div id="clear-result"></div>
+    </div>
+    
+    <div class="test-box info">
+        <h3>📋 Instructions:</h3>
+        <ol>
+            <li>Click "Test localStorage" to verify browser storage works</li>
+            <li>Click "Set Admin Credentials" to save login data</li>
+            <li>Click "Open React App" to test if it recognizes the login</li>
+            <li>If still not working, check browser console for errors</li>
+        </ol>
+    </div>
+    
+    <script>
+        function testLocalStorage() {
+            const result = document.getElementById('localStorage-result');
+            try {
+                // Test if localStorage works
+                localStorage.setItem('test', 'working');
+                const test = localStorage.getItem('test');
+                localStorage.removeItem('test');
+                
+                if (test === 'working') {
+                    result.innerHTML = '<div class="success">✅ localStorage is working!</div>';
+                } else {
+                    result.innerHTML = '<div class="error">❌ localStorage test failed</div>';
+                }
+            } catch (error) {
+                result.innerHTML = `<div class="error">❌ localStorage error: ${error.message}</div>`;
+            }
+        }
+        
+        function setDemoCredentials() {
+            const result = document.getElementById('credentials-result');
+            try {
+                // Set the exact same credentials that React app expects
+                const token = `token_${Date.now()}_debug`;
+                const user = {
+                    id: 1,
+                    email: 'admin@potasfactory.com',
+                    firstName: 'Admin',
+                    lastName: 'User',
+                    role: 'admin',
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                };
+                
+                localStorage.setItem('authToken', token);
+                localStorage.setItem('user', JSON.stringify(user));
+                
+                result.innerHTML = `
+                    <div class="success">
+                        ✅ Credentials saved!<br>
+                        Token: ${token}<br>
+                        User: ${user.email} (${user.role})
+                    </div>
+                `;
+                
+                console.log('🔐 Debug: Credentials saved to localStorage');
+                console.log('Token:', token);
+                console.log('User:', user);
+                
+            } catch (error) {
+                result.innerHTML = `<div class="error">❌ Error saving credentials: ${error.message}</div>`;
+            }
+        }
+        
+        function openReactApp() {
+            window.open('http://localhost:3001', '_blank');
+        }
+        
+        function openReactLogin() {
+            window.open('http://localhost:3001/login', '_blank');
+        }
+        
+        function openReactDashboard() {
+            window.open('http://localhost:3001/dashboard', '_blank');
+        }
+        
+        function clearAll() {
+            const result = document.getElementById('clear-result');
+            localStorage.clear();
+            sessionStorage.clear();
+            result.innerHTML = '<div class="success">🧹 All storage cleared!</div>';
+            console.log('🧹 All storage cleared');
+        }
+        
+        // Check current state on load
+        window.onload = function() {
+            const token = localStorage.getItem('authToken');
+            const user = localStorage.getItem('user');
+            
+            if (token && user) {
+                document.getElementById('credentials-result').innerHTML = `
+                    <div class="info">
+                        ℹ️ Existing credentials found:<br>
+                        Token: ${token.substring(0, 20)}...<br>
+                        User: ${JSON.parse(user).email}
+                    </div>
+                `;
+            }
+        };
+    </script>
+</body>
+</html>

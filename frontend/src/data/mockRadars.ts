@@ -1,0 +1,267 @@
+// Mock data for 12 radars - radar001 is currently active
+export const mockRadars = [
+  {
+    id: 1,
+    name: 'Radar001',
+    location: 'Main Gate Entry',
+    status: 'active' as const,
+    speedLimit: 30,
+    latitude: 31.2001,
+    longitude: 29.9187,
+    serialNumber: 'RDR001-2024',
+    ipAddress: '192.168.1.54',
+    installationDate: '2024-01-15T00:00:00.000Z',
+    lastMaintenance: '2024-09-01T00:00:00.000Z',
+    ftpPath: '/camera_uploads/camera001/192.168.1.54',
+    statistics: {
+      totalFines: 0,
+      pendingFines: 0,
+      averageSpeed: 25,
+      uptime: 98.5
+    },
+    createdAt: '2024-01-15T00:00:00.000Z',
+    updatedAt: '2024-09-30T00:00:00.000Z'
+  },
+  {
+    id: 2,
+    name: 'Radar002',
+    location: 'Production Area A',
+    status: 'inactive' as const,
+    speedLimit: 30,
+    latitude: 31.2002,
+    longitude: 29.9188,
+    serialNumber: 'RDR002-2024',
+    ipAddress: '192.168.1.55',
+    installationDate: '2024-01-16T00:00:00.000Z',
+    lastMaintenance: '2024-08-15T00:00:00.000Z',
+    ftpPath: '/camera_uploads/camera002/192.168.1.55',
+    statistics: {
+      totalFines: 0,
+      pendingFines: 0,
+      averageSpeed: 0,
+      uptime: 0
+    },
+    createdAt: '2024-01-16T00:00:00.000Z',
+    updatedAt: '2024-09-30T00:00:00.000Z'
+  },
+  {
+    id: 3,
+    name: 'Radar003',
+    location: 'Warehouse Zone',
+    status: 'inactive' as const,
+    speedLimit: 30,
+    latitude: 31.2003,
+    longitude: 29.9189,
+    serialNumber: 'RDR003-2024',
+    ipAddress: '192.168.1.56',
+    installationDate: '2024-01-17T00:00:00.000Z',
+    lastMaintenance: '2024-08-20T00:00:00.000Z',
+    ftpPath: '/camera_uploads/camera003/192.168.1.56',
+    statistics: {
+      totalFines: 0,
+      pendingFines: 0,
+      averageSpeed: 0,
+      uptime: 0
+    },
+    createdAt: '2024-01-17T00:00:00.000Z',
+    updatedAt: '2024-09-30T00:00:00.000Z'
+  },
+  {
+    id: 4,
+    name: 'Radar004',
+    location: 'Loading Dock',
+    status: 'inactive' as const,
+    speedLimit: 30,
+    latitude: 31.2004,
+    longitude: 29.9190,
+    serialNumber: 'RDR004-2024',
+    ipAddress: '192.168.1.57',
+    installationDate: '2024-01-18T00:00:00.000Z',
+    lastMaintenance: '2024-08-25T00:00:00.000Z',
+    ftpPath: '/camera_uploads/camera004/192.168.1.57',
+    statistics: {
+      totalFines: 0,
+      pendingFines: 0,
+      averageSpeed: 0,
+      uptime: 0
+    },
+    createdAt: '2024-01-18T00:00:00.000Z',
+    updatedAt: '2024-09-30T00:00:00.000Z'
+  },
+  {
+    id: 5,
+    name: 'Radar005',
+    location: 'Production Area B',
+    status: 'inactive' as const,
+    speedLimit: 30,
+    latitude: 31.2005,
+    longitude: 29.9191,
+    serialNumber: 'RDR005-2024',
+    ipAddress: '192.168.1.58',
+    installationDate: '2024-01-19T00:00:00.000Z',
+    lastMaintenance: '2024-09-05T00:00:00.000Z',
+    ftpPath: '/camera_uploads/camera005/192.168.1.58',
+    statistics: {
+      totalFines: 0,
+      pendingFines: 0,
+      averageSpeed: 0,
+      uptime: 0
+    },
+    createdAt: '2024-01-19T00:00:00.000Z',
+    updatedAt: '2024-09-30T00:00:00.000Z'
+  },
+  {
+    id: 6,
+    name: 'Radar006',
+    location: 'Quality Control Area',
+    status: 'inactive' as const,
+    speedLimit: 30,
+    latitude: 31.2006,
+    longitude: 29.9192,
+    serialNumber: 'RDR006-2024',
+    ipAddress: '192.168.1.59',
+    installationDate: '2024-01-20T00:00:00.000Z',
+    lastMaintenance: '2024-09-10T00:00:00.000Z',
+    ftpPath: '/camera_uploads/camera006/192.168.1.59',
+    statistics: {
+      totalFines: 0,
+      pendingFines: 0,
+      averageSpeed: 0,
+      uptime: 0
+    },
+    createdAt: '2024-01-20T00:00:00.000Z',
+    updatedAt: '2024-09-30T00:00:00.000Z'
+  },
+  {
+    id: 7,
+    name: 'Radar007',
+    location: 'Packaging Area',
+    status: 'inactive' as const,
+    speedLimit: 30,
+    latitude: 31.2007,
+    longitude: 29.9193,
+    serialNumber: 'RDR007-2024',
+    ipAddress: '192.168.1.60',
+    installationDate: '2024-01-21T00:00:00.000Z',
+    lastMaintenance: '2024-09-15T00:00:00.000Z',
+    ftpPath: '/camera_uploads/camera007/192.168.1.60',
+    statistics: {
+      totalFines: 0,
+      pendingFines: 0,
+      averageSpeed: 0,
+      uptime: 0
+    },
+    createdAt: '2024-01-21T00:00:00.000Z',
+    updatedAt: '2024-09-30T00:00:00.000Z'
+  },
+  {
+    id: 8,
+    name: 'Radar008',
+    location: 'Storage Area',
+    status: 'inactive' as const,
+    speedLimit: 30,
+    latitude: 31.2008,
+    longitude: 29.9194,
+    serialNumber: 'RDR008-2024',
+    ipAddress: '192.168.1.61',
+    installationDate: '2024-01-22T00:00:00.000Z',
+    lastMaintenance: '2024-09-20T00:00:00.000Z',
+    ftpPath: '/camera_uploads/camera008/192.168.1.61',
+    statistics: {
+      totalFines: 0,
+      pendingFines: 0,
+      averageSpeed: 0,
+      uptime: 0
+    },
+    createdAt: '2024-01-22T00:00:00.000Z',
+    updatedAt: '2024-09-30T00:00:00.000Z'
+  },
+  {
+    id: 9,
+    name: 'Radar009',
+    location: 'Maintenance Area',
+    status: 'inactive' as const,
+    speedLimit: 30,
+    latitude: 31.2009,
+    longitude: 29.9195,
+    serialNumber: 'RDR009-2024',
+    ipAddress: '192.168.1.62',
+    installationDate: '2024-01-23T00:00:00.000Z',
+    lastMaintenance: '2024-09-25T00:00:00.000Z',
+    ftpPath: '/camera_uploads/camera009/192.168.1.62',
+    statistics: {
+      totalFines: 0,
+      pendingFines: 0,
+      averageSpeed: 0,
+      uptime: 0
+    },
+    createdAt: '2024-01-23T00:00:00.000Z',
+    updatedAt: '2024-09-30T00:00:00.000Z'
+  },
+  {
+    id: 10,
+    name: 'Radar010',
+    location: 'Office Complex',
+    status: 'inactive' as const,
+    speedLimit: 30,
+    latitude: 31.2010,
+    longitude: 29.9196,
+    serialNumber: 'RDR010-2024',
+    ipAddress: '192.168.1.63',
+    installationDate: '2024-01-24T00:00:00.000Z',
+    lastMaintenance: '2024-09-30T00:00:00.000Z',
+    ftpPath: '/camera_uploads/camera010/192.168.1.63',
+    statistics: {
+      totalFines: 0,
+      pendingFines: 0,
+      averageSpeed: 0,
+      uptime: 0
+    },
+    createdAt: '2024-01-24T00:00:00.000Z',
+    updatedAt: '2024-09-30T00:00:00.000Z'
+  },
+  {
+    id: 11,
+    name: 'Radar011',
+    location: 'Emergency Exit',
+    status: 'inactive' as const,
+    speedLimit: 30,
+    latitude: 31.2011,
+    longitude: 29.9197,
+    serialNumber: 'RDR011-2024',
+    ipAddress: '192.168.1.64',
+    installationDate: '2024-01-25T00:00:00.000Z',
+    lastMaintenance: '2024-08-30T00:00:00.000Z',
+    ftpPath: '/camera_uploads/camera011/192.168.1.64',
+    statistics: {
+      totalFines: 0,
+      pendingFines: 0,
+      averageSpeed: 0,
+      uptime: 0
+    },
+    createdAt: '2024-01-25T00:00:00.000Z',
+    updatedAt: '2024-09-30T00:00:00.000Z'
+  },
+  {
+    id: 12,
+    name: 'Radar012',
+    location: 'Secondary Gate',
+    status: 'inactive' as const,
+    speedLimit: 30,
+    latitude: 31.2012,
+    longitude: 29.9198,
+    serialNumber: 'RDR012-2024',
+    ipAddress: '192.168.1.65',
+    installationDate: '2024-01-26T00:00:00.000Z',
+    lastMaintenance: '2024-08-28T00:00:00.000Z',
+    ftpPath: '/camera_uploads/camera012/192.168.1.65',
+    statistics: {
+      totalFines: 0,
+      pendingFines: 0,
+      averageSpeed: 0,
+      uptime: 0
+    },
+    createdAt: '2024-01-26T00:00:00.000Z',
+    updatedAt: '2024-09-30T00:00:00.000Z'
+  }
+];

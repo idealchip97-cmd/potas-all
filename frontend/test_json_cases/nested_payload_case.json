@@ -1,0 +1,14 @@
+{
+  "camera_id": "camera002",
+  "src_ip": "192.168.1.60",
+  "timestamp": "2025-10-05T16:11:19.680Z",
+  "payload": {
+    "speed": 45,
+    "camera_id": "camera002",
+    "event_ts": "2025-10-05T16:11:19.680Z"
+  },
+  "metadata": {
+    "version": "1.0",
+    "source": "radar_sensor"
+  }
+}

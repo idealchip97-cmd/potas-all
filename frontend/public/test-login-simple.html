@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Login Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; }
+        .container { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 10px 0; }
+        .success { background: #d4edda; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; border: 1px solid #bee5eb; }
+        input { padding: 10px; margin: 5px; width: 200px; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 10px 20px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .result { margin: 10px 0; padding: 10px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <h1>🔐 LOGIN SYSTEM EMERGENCY TEST</h1>
+    
+    <div class="container info">
+        <h3>🎯 WORKING CREDENTIALS</h3>
+        <p><strong>Admin:</strong> admin@potasfactory.com / admin123</p>
+        <p><strong>Operator:</strong> operator@potasfactory.com / operator123</p>
+        <p><strong>Viewer:</strong> viewer@potasfactory.com / viewer123</p>
+    </div>
+    
+    <div class="container">
+        <h3>🧪 Test Login Logic</h3>
+        <div>
+            <input type="email" id="email" placeholder="Email" value="admin@potasfactory.com">
+            <input type="password" id="password" placeholder="Password" value="admin123">
+            <button onclick="testLogin()">Test Login</button>
+            <button onclick="clearStorage()">Clear Storage</button>
+        </div>
+        <div id="loginResult"></div>
+    </div>
+    
+    <div class="container">
+        <h3>🌐 Frontend Status</h3>
+        <button onclick="checkFrontend()">Check Frontend</button>
+        <button onclick="checkBackend()">Check Backend</button>
+        <div id="statusResult"></div>
+    </div>
+    
+    <div class="container">
+        <h3>🔗 Direct Links</h3>
+        <button onclick="openLogin()">Open Login Page</button>
+        <button onclick="openDashboard()">Open Dashboard</button>
+        <button onclick="openRoot()">Open Root Page</button>
+    </div>
+    
+    <div id="logs"></div>
+    
+    <script>
+        function log(message, type = 'info') {
+            const logs = document.getElementById('logs');
+            const div = document.createElement('div');
+            div.className = `result container ${type}`;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${message}`;
+            logs.appendChild(div);
+            console.log(message);
+        }
+        
+        function testLogin() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('loginResult');
+            
+            log('🔐 Testing login logic...', 'info');
+            
+            // Test the exact same logic as SimpleAuthContext
+            const accounts = [
+                { email: 'admin@potasfactory.com', password: 'admin123', role: 'admin' },
+                { email: 'operator@potasfactory.com', password: 'operator123', role: 'operator' },
+                { email: 'viewer@potasfactory.com', password: 'viewer123', role: 'viewer' },
+            ];
+            
+            const account = accounts.find(acc => 
+                acc.email.toLowerCase() === email.toLowerCase() && 
+                acc.password === password
+            );
+            
+            if (account) {
+                const authToken = `token_${Date.now()}`;
+                const userData = {
+                    id: 1,
+                    email: account.email,
+                    firstName: account.role.charAt(0).toUpperCase() + account.role.slice(1),
+                    lastName: 'User',
+                    role: account.role,
+                };
+                
+                // Save to localStorage (same as SimpleAuthContext)
+                localStorage.setItem('authToken', authToken);
+                localStorage.setItem('user', JSON.stringify(userData));
+                
+                resultDiv.innerHTML = `<div class="result success">✅ Login SUCCESS for ${account.role}<br>Token: ${authToken.substring(0, 20)}...</div>`;
+                log(`✅ Login test successful for ${account.role}`, 'success');
+            } else {
+                resultDiv.innerHTML = `<div class="result error">❌ Login FAILED - Invalid credentials</div>`;
+                log('❌ Login test failed - Invalid credentials', 'error');
+            }
+        }
+        
+        async function checkFrontend() {
+            const resultDiv = document.getElementById('statusResult');
+            log('🌐 Checking frontend status...', 'info');
+            
+            try {
+                // Test root page
+                const rootResponse = await fetch('http://localhost:3001');
+                const rootStatus = rootResponse.ok ? '✅' : '❌';
+                
+                // Test login page (will likely 404 but that's expected for SPA)
+                const loginResponse = await fetch('http://localhost:3001/login');
+                const loginStatus = loginResponse.status;
+                
+                resultDiv.innerHTML = `
+                    <div class="result ${rootResponse.ok ? 'success' : 'error'}">
+                        ${rootStatus} Root (3001): ${rootResponse.status}<br>
+                        📄 Login page: ${loginStatus} (404 is normal for React SPA)
+                    </div>
+                `;
+                
+                if (rootResponse.ok) {
+                    log('✅ Frontend is accessible on port 3001', 'success');
+                } else {
+                    log('❌ Frontend not accessible', 'error');
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="result error">❌ Frontend error: ${error.message}</div>`;
+                log(`❌ Frontend error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function checkBackend() {
+            log('🔧 Checking backend status...', 'info');
+            
+            try {
+                const response = await fetch('http://localhost:3000/health');
+                if (response.ok) {
+                    const data = await response.json();
+                    log('✅ Backend is running and healthy', 'success');
+                } else {
+                    log('❌ Backend not responding properly', 'error');
+                }
+            } catch (error) {
+                log(`❌ Backend not accessible: ${error.message}`, 'error');
+            }
+        }
+        
+        function clearStorage() {
+            localStorage.clear();
+            sessionStorage.clear();
+            log('🧹 Browser storage cleared', 'info');
+        }
+        
+        function openLogin() {
+            window.open('http://localhost:3001/login', '_blank');
+        }
+        
+        function openDashboard() {
+            window.open('http://localhost:3001/dashboard', '_blank');
+        }
+        
+        function openRoot() {
+            window.open('http://localhost:3001', '_blank');
+        }
+        
+        // Auto-run tests on load
+        window.onload = function() {
+            log('🚀 Login test tool loaded', 'info');
+            checkFrontend();
+            checkBackend();
+        };
+    </script>
+</body>
+</html>

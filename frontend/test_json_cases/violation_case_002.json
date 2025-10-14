@@ -1,0 +1,10 @@
+{
+  "camera_id": "camera001",
+  "radar_speed": 35,
+  "source_ip": "192.168.1.55",
+  "created_at": "2025-10-05T16:11:19.680Z",
+  "decision": "violation",
+  "payload": {
+    "additional_data": "test"
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "event_id": "camera002:2025-10-05T12:01:20.497Z:45",
+  "camera_id": "camera002",
+  "src_ip": "192.168.1.60",
+  "event_ts": 1759665680.497,
+  "arrival_ts": 1759665680.6439595,
+  "decision": "violation",
+  "speed": 45,
+  "limit": 30,
+  "car_filter": "moderate_violation",
+  "payload": {
+    "decision": "violation",
+    "limit": 30,
+    "speed": 45,
+    "camera_id": "camera002",
+    "event_ts": "2025-10-05T12:01:20.497Z",
+    "event_id": "camera002:2025-10-05T12:01:20.497Z:45"
+  },
+  "photos": [
+    {
+      "filename": "photo_1.jpg",
+      "sequence": 1,
+      "timestamp": "2025-10-05T12:01:20.498Z",
+      "size": 0,
+      "status": "placeholder"
+    },
+    {
+      "filename": "photo_2.jpg",
+      "sequence": 2,
+      "timestamp": "2025-10-05T12:01:20.498Z",
+      "size": 0,
+      "status": "placeholder"
+    },
+    {
+      "filename": "photo_3.jpg",
+      "sequence": 3,
+      "timestamp": "2025-10-05T12:01:20.498Z",
+      "size": 0,
+      "status": "placeholder"
+    }
+  ],
+  "created_at": "2025-10-05T12:01:20.498Z",
+  "processing_status": "pending"
+}

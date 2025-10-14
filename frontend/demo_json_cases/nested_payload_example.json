@@ -1,0 +1,14 @@
+{
+  "camera_id": "camera001",
+  "timestamp": "2025-10-05T12:25:02.327Z",
+  "payload": {
+    "speed": 55,
+    "camera_id": "camera001",
+    "event_ts": "2025-10-05T12:25:02.327Z",
+    "metadata": {
+      "weather": "clear",
+      "visibility": "good"
+    }
+  },
+  "src_ip": "192.168.1.55"
+}
