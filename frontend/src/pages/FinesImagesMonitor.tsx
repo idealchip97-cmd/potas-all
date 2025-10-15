@@ -154,7 +154,7 @@ const FinesImagesMonitor: React.FC = () => {
       console.log('📁 Scanning /srv/processing_inbox for camera directories...');
       
       // API call to dynamically discover cameras from filesystem
-      const response = await fetch('/api/cameras');
+      const response = await fetch('http://localhost:3003/api/discover/cameras');
       const data = await response.json();
       
       if (data.success && data.cameras && Array.isArray(data.cameras)) {
@@ -182,7 +182,7 @@ const FinesImagesMonitor: React.FC = () => {
   const loadAvailableDates = async () => {
     try {
       console.log('🔍 Loading available dates from AI FTP server...');
-      const response = await fetch('/api/ftp-images/dates');
+      const response = await fetch('http://localhost:3003/api/ftp-images/dates');
       const data = await response.json();
       
       if (data.success && data.dates && Array.isArray(data.dates)) {
@@ -212,9 +212,10 @@ const FinesImagesMonitor: React.FC = () => {
     console.log('📝 loadAvailableCases disabled - using direct violation loading');
   };
   /**
-   * MULTI-CAMERA VIOLATION CASE LOADING
+   * MULTI-CAMERA SPEED VIOLATION CASE LOADING
    * 
-   * This function loads violation cases from multiple cameras dynamically.
+   * This function loads speed violation cases from multiple cameras dynamically.
+   * ONLY loads cases that have valid verdict.json files with speed data.
    * It respects the camera selection (individual camera or "all cameras").
    * 
    * Camera Selection Logic:
@@ -223,17 +224,18 @@ const FinesImagesMonitor: React.FC = () => {
    * - Uses dynamically detected camera list from loadAvailableCameras()
    * 
    * Data Sources:
-   * - /srv/processing_inbox/camera001/2025-10-15/case001/
-   * - /srv/processing_inbox/camera002/2025-10-15/case001/
-   * - /srv/processing_inbox/camera003/2025-10-15/case001/ (auto-detected)
+   * - /srv/processing_inbox/camera001/2025-10-15/case001/verdict.json
+   * - /srv/processing_inbox/camera002/2025-10-15/case001/verdict.json
+   * - /srv/processing_inbox/camera003/2025-10-15/case001/verdict.json (auto-detected)
    * 
    * API Endpoints Used:
-   * - /api/cameras/{camera}/dates/{date}/cases - Get cases for specific camera/date
-   * - /api/cameras/{camera}/dates/{date}/cases/{case}/results - Get AI results
+   * - /api/ftp-images/cases/{camera}/{date} - Get cases with verdict.json for specific camera/date
+   * 
+   * IMPORTANT: Cases without verdict.json files are automatically filtered out
    */
   const loadViolationCases = async (selectedDate?: string, cameraId?: string) => {
     try {
-      console.log('🚀 Starting loadViolationCases with AI processing data:', { selectedDate, cameraId });
+      console.log('🚀 Starting loadViolationCases for speed monitoring:', { selectedDate, cameraId });
       console.log('📅 Available dates:', availableDates);
       console.log('📡 Available cameras (dynamically detected):', availableCameras);
       setLoading(true);
@@ -270,8 +272,9 @@ const FinesImagesMonitor: React.FC = () => {
       for (const camera of camerasToLoad) {
         for (const date of datesToLoad) {
           try {
-            const apiUrl = `/api/cameras/${camera}/dates/${date}/cases`;
-            console.log(`🔍 API CALL: ${apiUrl}`);
+            // Use the correct API endpoint that already filters for verdict.json files
+            const apiUrl = `http://localhost:3003/api/ftp-images/cases/${camera}/${date}`;
+            console.log(`🔍 API CALL (Speed Monitor): ${apiUrl}`);
             const response = await fetch(apiUrl);
             
             if (response.ok) {
@@ -279,77 +282,49 @@ const FinesImagesMonitor: React.FC = () => {
               console.log(`📊 API RESPONSE for ${camera}/${date}:`, {
                 success: data.success,
                 caseCount: data.cases?.length || 0,
-                summary: data.summary
+                violations: data.violations || 0,
+                compliant: data.compliant || 0
               });
               
               if (data.success && data.cases && data.cases.length > 0) {
-                // Process each case with AI data
+                // Process each case - the API already filtered for cases with verdict.json
                 for (const caseData of data.cases) {
-                  let aiResults = null;
-                  
-                  // If case has AI processing, fetch the detailed results
-                  if (caseData.processed && caseData.hasAI) {
-                    try {
-                      const resultsUrl = `/api/cameras/${camera}/dates/${date}/cases/${caseData.name}/results`;
-                      const resultsResponse = await fetch(resultsUrl);
-                      if (resultsResponse.ok) {
-                        const resultsData = await resultsResponse.json();
-                        if (resultsData.success) {
-                          aiResults = resultsData.statistics;
-                          console.log(`🤖 AI Results for ${caseData.name}:`, aiResults);
-                        }
-                      }
-                    } catch (aiError) {
-                      console.warn(`⚠️ Failed to load AI results for ${caseData.name}:`, aiError);
-                    }
+                  // SKIP cases without valid verdict data (double-check)
+                  if (!caseData.hasVerdict || !caseData.verdict || !caseData.verdict.speed || !caseData.verdict.limit) {
+                    console.log(`❌ Skipping ${caseData.eventId} - no valid verdict.json with speed data`);
+                    continue; // Skip this case entirely
                   }
                   
-                  // Create violation case with AI data
+                  console.log(`✅ Processing case ${caseData.eventId} with speed: ${caseData.verdict.speed} km/h, limit: ${caseData.verdict.limit} km/h`);
+                  
+                  // Create violation case with verdict data from the API
                   const violationCase: ViolationCase = {
-                    eventId: caseData.name,
+                    eventId: caseData.eventId,
                     cameraId: camera,
                     date: date,
-                    verdict: null, // No verdict data from processing inbox
-                    photos: [], // Will be populated from image files
-                    folderPath: caseData.path,
-                    // AI Processing Data
-                    hasAI: caseData.hasAI,
-                    processed: caseData.processed,
-                    imageCount: caseData.imageCount,
-                    platesDetected: caseData.platesDetected,
-                    processingMethod: caseData.processingMethod,
-                    aiResults: aiResults
+                    verdict: caseData.verdict, // Contains actual verdict data from verdict.json
+                    photos: (caseData.photos || []).map((photo: any) => ({
+                      ...photo,
+                      url: photo.url ? `http://localhost:3003${photo.url}` : null,
+                      thumbnailUrl: photo.thumbnailUrl ? `http://localhost:3003${photo.thumbnailUrl}` : null,
+                      imageUrl: photo.imageUrl ? `http://localhost:3003${photo.imageUrl}` : null
+                    })), // Fix photo URLs to be absolute
+                    folderPath: caseData.folderPath,
+                    // Set AI processing data to defaults since we're focusing on speed
+                    hasAI: false,
+                    processed: true,
+                    imageCount: caseData.photoCount || caseData.photos?.length || 0,
+                    platesDetected: 0, // Not relevant for speed monitoring
+                    processingMethod: 'speed_detection',
+                    aiResults: undefined
                   };
-                  
-                  // Get image files for this case
-                  try {
-                    const imageFiles = await fetch(`/api/ftp-images/list?date=${date}&camera=${camera}`);
-                    if (imageFiles.ok) {
-                      const imageData = await imageFiles.json();
-                      if (imageData.success && imageData.files) {
-                        // Filter images that belong to this case
-                        const caseImages = imageData.files.filter((file: any) => 
-                          file.case === caseData.name || file.url?.includes(caseData.name)
-                        );
-                        
-                        violationCase.photos = caseImages.map((img: any) => ({
-                          filename: img.filename,
-                          size: img.size,
-                          exists: true,
-                          url: img.url
-                        }));
-                      }
-                    }
-                  } catch (imgError) {
-                    console.warn(`⚠️ Failed to load images for ${caseData.name}:`, imgError);
-                  }
                   
                   allCases.push(violationCase);
                 }
                 
                 setIsConnected(true);
                 setConnectionMode('local_server');
-                console.log(`✅ Loaded ${data.cases.length} cases with AI data for ${camera}/${date}`);
+                console.log(`✅ Loaded ${data.cases.length} speed violation cases for ${camera}/${date}`);
               }
             } else {
               console.warn(`⚠️ Failed to fetch cases for ${camera}/${date}: ${response.status}`);
@@ -369,7 +344,7 @@ const FinesImagesMonitor: React.FC = () => {
       
       setViolationCases(allCases);
       updateViolationStats(allCases);
-      console.log(`📊 Total cases loaded with AI data: ${allCases.length}`);
+      console.log(`📊 Total speed violation cases loaded: ${allCases.length}`);
       
       if (allCases.length > 0) {
         setIsConnected(true);
@@ -380,8 +355,8 @@ const FinesImagesMonitor: React.FC = () => {
       }
       
     } catch (error: any) {
-      console.error('❌ Failed to load cases with AI data:', error);
-      setError(`Failed to load cases: ${error.message || 'Unknown error'}`);
+      console.error('❌ Failed to load speed violation cases:', error);
+      setError(`Failed to load speed violation cases: ${error.message || 'Unknown error'}`);
       setIsConnected(false);
       setConnectionMode('disconnected');
       setViolationCases([]);
@@ -394,7 +369,7 @@ const FinesImagesMonitor: React.FC = () => {
   const testConnection = async () => {
     try {
       console.log('🔍 Testing connection to local image server...');
-      const response = await fetch('/health');
+      const response = await fetch('http://localhost:3003/health');
       console.log('📡 Response status:', response.status);
       
       if (!response.ok) {
@@ -440,7 +415,7 @@ const FinesImagesMonitor: React.FC = () => {
         if (connected) {
           await loadAvailableCameras();
           await loadAvailableDates();
-          await loadViolationCases('2025-10-06', undefined); // Load from AI processed data
+          await loadViolationCases('2025-10-06', undefined); // Load from date with verdict.json files
         } else {
           // If connection fails, stop loading after 5 seconds
           setTimeout(() => {
@@ -700,10 +675,10 @@ const FinesImagesMonitor: React.FC = () => {
           <CloudUpload sx={{ fontSize: '2rem', color: isConnected ? 'success.main' : 'error.main' }} />
           <Box>
             <Typography variant="h4" component="h1">
-              Violation Cases Monitor - Multi-Photo System
+              Speed Violation Monitor - Radar Detection System
             </Typography>
             <Typography variant="subtitle1" color="textSecondary">
-              {selectedCamera === 'all' ? 'ALL CAMERAS' : selectedCamera.toUpperCase()} - Each Case = One Car
+              {selectedCamera === 'all' ? 'ALL CAMERAS' : selectedCamera.toUpperCase()} - Speed Limit Enforcement
             </Typography>
           </Box>
           <Chip 
@@ -762,55 +737,57 @@ const FinesImagesMonitor: React.FC = () => {
         </Card>
         <Card sx={{ flex: '1 1 calc(20% - 8px)', minWidth: 120 }}>
           <CardContent>
-            <Typography color="textSecondary" gutterBottom variant="body2">AI Enabled</Typography>
-            <Typography variant="h4" color="info.main">{stats.aiEnabled || 0}</Typography>
+            <Typography color="textSecondary" gutterBottom variant="body2">🚨 Violations</Typography>
+            <Typography variant="h4" color="error.main">{stats.violations || 0}</Typography>
           </CardContent>
         </Card>
         <Card sx={{ flex: '1 1 calc(20% - 8px)', minWidth: 120 }}>
           <CardContent>
-            <Typography color="textSecondary" gutterBottom variant="body2">AI Processed</Typography>
-            <Typography variant="h4" color="success.main">{stats.aiProcessed || 0}</Typography>
+            <Typography color="textSecondary" gutterBottom variant="body2">✅ Compliant</Typography>
+            <Typography variant="h4" color="success.main">{stats.noViolations || 0}</Typography>
           </CardContent>
         </Card>
         <Card sx={{ flex: '1 1 calc(20% - 8px)', minWidth: 120 }}>
           <CardContent>
-            <Typography color="textSecondary" gutterBottom variant="body2">Plates Detected</Typography>
-            <Typography variant="h4" color="warning.main">{stats.totalPlatesDetected || 0}</Typography>
+            <Typography color="textSecondary" gutterBottom variant="body2">📊 Violation Rate</Typography>
+            <Typography variant="h4" color="warning.main">
+              {stats.total > 0 ? Math.round((stats.violations / stats.total) * 100) : 0}%
+            </Typography>
           </CardContent>
         </Card>
         <Card sx={{ flex: '1 1 calc(20% - 8px)', minWidth: 120 }}>
           <CardContent>
-            <Typography color="textSecondary" gutterBottom variant="body2">Total Images</Typography>
+            <Typography color="textSecondary" gutterBottom variant="body2">📷 Total Images</Typography>
             <Typography variant="h4">{stats.totalImages || 0}</Typography>
           </CardContent>
         </Card>
       </Box>
 
-      {/* AI Processing Summary */}
+      {/* Speed Violation Summary */}
       {stats.total > 0 && (
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Typography variant="h6" gutterBottom>
-              🤖 AI Processing Summary
+              🚗 Speed Violation Summary
             </Typography>
             <Box display="flex" flexWrap="wrap" gap={2} sx={{ mb: 2 }}>
               <Chip 
-                label={`${stats.aiEnabled || 0}/${stats.total} AI Enabled`}
-                color={stats.aiEnabled > 0 ? 'success' : 'default'}
+                label={`${stats.violations || 0} Speed Violations`}
+                color={stats.violations > 0 ? 'error' : 'default'}
                 size="small"
               />
               <Chip 
-                label={`${stats.aiProcessed || 0} Processed`}
-                color={stats.aiProcessed > 0 ? 'info' : 'default'}
+                label={`${stats.noViolations || 0} Compliant Vehicles`}
+                color={stats.noViolations > 0 ? 'success' : 'default'}
                 size="small"
               />
               <Chip 
-                label={`${stats.totalPlatesDetected || 0} Plates Found`}
-                color={stats.totalPlatesDetected > 0 ? 'warning' : 'default'}
+                label={`${stats.total > 0 ? Math.round((stats.violations / stats.total) * 100) : 0}% Violation Rate`}
+                color={stats.total > 0 && (stats.violations / stats.total) > 0.3 ? 'warning' : 'info'}
                 size="small"
               />
               <Chip 
-                label={`${stats.totalImages || 0} Images`}
+                label={`${stats.totalImages || 0} Evidence Photos`}
                 color="default"
                 size="small"
               />
@@ -1006,7 +983,7 @@ const FinesImagesMonitor: React.FC = () => {
         <CardContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6">
-              🚗 Cases with AI Processing - {selectedCamera === 'all' ? 'ALL CAMERAS' : selectedCamera.toUpperCase()} ({filteredCases.length})
+              🚗 Speed Violation Cases - {selectedCamera === 'all' ? 'ALL CAMERAS' : selectedCamera.toUpperCase()} ({filteredCases.length})
             </Typography>
             <Typography variant="body2" color="textSecondary">
               Page {page} of {Math.ceil(filteredCases.length / rowsPerPage)} • {rowsPerPage} per page
@@ -1020,10 +997,10 @@ const FinesImagesMonitor: React.FC = () => {
                     <TableRow>
                       <TableCell>Case ID</TableCell>
                       <TableCell>Camera/Date</TableCell>
-                      <TableCell>AI Processing</TableCell>
-                      <TableCell>Plates Detected</TableCell>
+                      <TableCell><strong>Speed Limit</strong></TableCell>
+                      <TableCell><strong>Detected Speed</strong></TableCell>
+                      <TableCell><strong>Violation Status</strong></TableCell>
                       <TableCell>Images</TableCell>
-                      <TableCell>Processing Method</TableCell>
                       <TableCell>Actions</TableCell>
                     </TableRow>
                   </TableHead>
@@ -1059,30 +1036,59 @@ const FinesImagesMonitor: React.FC = () => {
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                          <Chip 
-                            label={violationCase.hasAI ? 'AI Enabled' : 'No AI'} 
-                            color={violationCase.hasAI ? 'success' : 'default'}
-                            size="small"
-                          />
-                          <Chip 
-                            label={violationCase.processed ? 'Processed' : 'Not Processed'} 
-                            color={violationCase.processed ? 'info' : 'warning'}
-                            size="small"
-                          />
-                        </Box>
+                        <Typography 
+                          variant="h5" 
+                          fontWeight="bold"
+                          color="primary.main"
+                          sx={{ fontSize: '1.5rem' }}
+                        >
+                          {violationCase.verdict?.limit || 'N/A'}
+                        </Typography>
+                        <Typography variant="caption" color="textSecondary">
+                          km/h limit
+                        </Typography>
                       </TableCell>
                       <TableCell>
                         <Typography 
-                          variant="h6" 
+                          variant="h5" 
                           fontWeight="bold"
-                          color={violationCase.platesDetected > 0 ? 'warning.main' : 'text.secondary'}
+                          color={
+                            violationCase.verdict?.speed && violationCase.verdict?.limit && 
+                            violationCase.verdict.speed > violationCase.verdict.limit 
+                              ? 'error.main' 
+                              : 'success.main'
+                          }
+                          sx={{ fontSize: '1.5rem' }}
                         >
-                          {violationCase.platesDetected || 0}
+                          {violationCase.verdict?.speed || 'N/A'}
                         </Typography>
                         <Typography variant="caption" color="textSecondary">
-                          plates found
+                          km/h detected
                         </Typography>
+                      </TableCell>
+                      <TableCell>
+                        {violationCase.verdict ? (
+                          <Chip 
+                            label={violationCase.verdict.decision === 'violation' ? 'VIOLATION' : 'NO VIOLATION'}
+                            color={violationCase.verdict.decision === 'violation' ? 'error' : 'success'}
+                            size="medium"
+                            sx={{ fontWeight: 'bold', fontSize: '0.9rem' }}
+                          />
+                        ) : (
+                          <Chip 
+                            label="NO DATA"
+                            color="default"
+                            size="medium"
+                          />
+                        )}
+                        {violationCase.verdict?.speed && violationCase.verdict?.limit && (
+                          <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 0.5 }}>
+                            {violationCase.verdict.speed > violationCase.verdict.limit 
+                              ? `+${violationCase.verdict.speed - violationCase.verdict.limit} km/h over`
+                              : `${violationCase.verdict.limit - violationCase.verdict.speed} km/h under`
+                            }
+                          </Typography>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2" fontWeight="bold">
@@ -1110,16 +1116,6 @@ const FinesImagesMonitor: React.FC = () => {
                             </Typography>
                           )}
                         </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {violationCase.processingMethod || 'None'}
-                        </Typography>
-                        {violationCase.aiResults && (
-                          <Typography variant="caption" color="textSecondary">
-                            {violationCase.aiResults.successfulDetections}/{violationCase.aiResults.totalImages} success
-                          </Typography>
-                        )}
                       </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', gap: 1 }}>
@@ -1239,7 +1235,7 @@ const FinesImagesMonitor: React.FC = () => {
                   </Box>
                   <Box>
                     <Typography variant="subtitle2" color="textSecondary">Event Time</Typography>
-                    <Typography>{selectedCase.verdict?.event_ts ? new Date(selectedCase.verdict.event_ts * 1000).toLocaleString('ar-SA') : 'N/A'}</Typography>
+                    <Typography>{selectedCase.verdict?.event_ts ? new Date(selectedCase.verdict.event_ts * 1000).toLocaleString('en-US') : 'N/A'}</Typography>
                   </Box>
                 </Box>
               </Box>

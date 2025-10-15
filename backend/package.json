@@ -20,6 +20,7 @@
   "license": "MIT",
   "dependencies": {
     "aws-sdk": "^2.1692.0",
+    "axios": "^1.12.2",
     "bcryptjs": "^2.4.3",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
@@ -40,6 +41,7 @@
     "openai": "^5.23.0",
     "sequelize": "^6.32.1",
     "sharp": "^0.34.4",
+    "sqlite3": "^5.1.7",
     "tesseract.js": "^6.0.1",
     "uuid": "^13.0.0"
   },

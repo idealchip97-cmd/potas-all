@@ -77,7 +77,7 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
       // Test AI FTP server connection first
       const isConnected = await aiFtpService.testConnection();
       if (!isConnected) {
-        throw new Error('خادم AI FTP غير متاح');
+        throw new Error('AI FTP Server not available');
       }
 
       // Get violations with pagination
@@ -100,13 +100,13 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
           dates: response.summary.dates,
         });
 
-        console.log(`✅ تم تحميل ${paginatedViolations.length} مخالفة (الصفحة ${page})`);
+        console.log(`✅ Loaded ${paginatedViolations.length} violations (page ${page})`);
       } else {
-        setError('فشل في تحميل بيانات المخالفات');
+        setError('Failed to load violation data');
       }
     } catch (err: any) {
-      console.error('❌ خطأ في تحميل المخالفات:', err);
-      setError(err.message || 'فشل في تحميل البيانات');
+      console.error('❌ Error loading violations:', err);
+      setError(err.message || 'Failed to load data');
     } finally {
       setLoading(false);
     }
@@ -145,25 +145,25 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
 
       if (data.success) {
         setFinesCreated(data.data.createdFines);
-        console.log(`✅ تم إنشاء ${data.data.createdFines} غرامة من المخالفات المكتشفة`);
+        console.log(`✅ Created ${data.data.createdFines} fines from detected violations`);
         
         // Show success message for a few seconds
         setTimeout(() => {
           setFinesCreated(null);
         }, 5000);
       } else {
-        throw new Error(data.message || 'فشل في إنشاء الغرامات');
+        throw new Error(data.message || 'Failed to create fines');
       }
     } catch (err: any) {
-      console.error('❌ خطأ في إنشاء الغرامات:', err);
-      setError(err.message || 'فشل في إنشاء الغرامات');
+      console.error('❌ Error creating fines:', err);
+      setError(err.message || 'Failed to create fines');
     } finally {
       setCreatingFines(false);
     }
   };
 
   const formatTimestamp = (timestamp: string) => {
-    return new Date(timestamp).toLocaleString('ar-SA', {
+    return new Date(timestamp).toLocaleString('en-US', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -182,7 +182,7 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
         <CircularProgress />
         <Typography variant="h6" sx={{ ml: 2 }}>
-          جاري تحميل المخالفات المكتشفة...
+          Loading detected violations...
         </Typography>
       </Box>
     );
@@ -191,7 +191,7 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
   if (error) {
     return (
       <Alert severity="error" sx={{ mb: 2 }}>
-        <Typography variant="h6">خطأ في التحميل</Typography>
+        <Typography variant="h6">Loading Error</Typography>
         <Typography>{error}</Typography>
         <Button 
           variant="contained" 
@@ -199,7 +199,7 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
           sx={{ mt: 1 }}
           startIcon={<Refresh />}
         >
-          إعادة المحاولة
+          Retry
         </Button>
       </Alert>
     );
@@ -216,7 +216,7 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
               <Box>
                 <Typography variant="h4">{stats.totalViolations}</Typography>
                 <Typography variant="body2" color="text.secondary">
-                  إجمالي المخالفات
+                  Total Violations
                 </Typography>
               </Box>
             </Box>
@@ -230,7 +230,7 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
               <Box>
                 <Typography variant="h4">{stats.totalPlates}</Typography>
                 <Typography variant="body2" color="text.secondary">
-                  اللوحات المكتشفة
+                  Detected Plates
                 </Typography>
               </Box>
             </Box>
@@ -244,7 +244,7 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
               <Box>
                 <Typography variant="h4">{stats.cameras.length}</Typography>
                 <Typography variant="body2" color="text.secondary">
-                  الكاميرات النشطة
+                  Active Cameras
                 </Typography>
               </Box>
             </Box>
@@ -258,7 +258,7 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
               <Box>
                 <Typography variant="h4">{stats.dates.length}</Typography>
                 <Typography variant="body2" color="text.secondary">
-                  الأيام المغطاة
+                  Days Covered
                 </Typography>
               </Box>
             </Box>
@@ -271,7 +271,7 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
         <CardContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6">
-              المخالفات المكتشفة بالذكاء الاصطناعي ({totalViolations} إجمالي)
+              AI-Detected Violations ({totalViolations} Total)
             </Typography>
             <Box sx={{ display: 'flex', gap: 1 }}>
               <Button
@@ -281,14 +281,14 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
                 onClick={handleCreateFines}
                 disabled={creatingFines || violations.length === 0}
               >
-                {creatingFines ? 'جاري الإنشاء...' : 'إنشاء غرامات'}
+                {creatingFines ? 'Creating...' : 'Create Fines'}
               </Button>
               <Button
                 variant="outlined"
                 startIcon={<Refresh />}
                 onClick={loadViolationCycles}
               >
-                تحديث
+                Refresh
               </Button>
             </Box>
           </Box>
@@ -296,14 +296,14 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
           {/* Success/Error Messages */}
           {finesCreated !== null && (
             <Alert severity="success" sx={{ mb: 2 }}>
-              <Typography variant="h6">تم إنشاء الغرامات بنجاح!</Typography>
-              <Typography>تم إنشاء {finesCreated} غرامة من المخالفات المكتشفة</Typography>
+              <Typography variant="h6">Fines Created Successfully!</Typography>
+              <Typography>Created {finesCreated} fines from detected violations</Typography>
             </Alert>
           )}
 
           {error && (
             <Alert severity="error" sx={{ mb: 2 }}>
-              <Typography variant="h6">خطأ في العملية</Typography>
+              <Typography variant="h6">Operation Error</Typography>
               <Typography>{error}</Typography>
             </Alert>
           )}
@@ -311,10 +311,10 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
           {violations.length === 0 ? (
             <Box sx={{ textAlign: 'center', py: 4 }}>
               <Typography variant="h6" color="text.secondary">
-                لا توجد مخالفات مكتشفة
+                No Violations Detected
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                سيتم عرض المخالفات هنا عند اكتشاف لوحات جديدة
+                Violations will appear here when new license plates are detected
               </Typography>
             </Box>
           ) : (
@@ -323,14 +323,14 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
                 <Table>
                   <TableHead>
                     <TableRow>
-                      <TableCell>الصورة</TableCell>
-                      <TableCell>الكاميرا</TableCell>
-                      <TableCell>التاريخ</TableCell>
-                      <TableCell>الحالة</TableCell>
-                      <TableCell>رقم اللوحة</TableCell>
-                      <TableCell>عدد اللوحات</TableCell>
-                      <TableCell>أعلى ثقة</TableCell>
-                      <TableCell>الإجراءات</TableCell>
+                      <TableCell>Image</TableCell>
+                      <TableCell>Camera</TableCell>
+                      <TableCell>Date</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>Plate Number</TableCell>
+                      <TableCell>Plate Count</TableCell>
+                      <TableCell>Highest Confidence</TableCell>
+                      <TableCell>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -379,7 +379,7 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
                               />
                             ) : (
                               <Chip 
-                                label="لا توجد لوحات"
+                                label="No Plates"
                                 color="default"
                                 size="small"
                               />
@@ -388,7 +388,7 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
                         </TableCell>
                         <TableCell>
                           <Chip 
-                            label={`${violation.platesDetected} لوحة`} 
+                            label={`${violation.platesDetected} plates`} 
                             color="success" 
                             size="small"
                           />
@@ -403,7 +403,7 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
                           )}
                         </TableCell>
                         <TableCell>
-                          <Tooltip title="عرض التفاصيل والصورة الكاملة">
+                          <Tooltip title="View details and full image">
                             <IconButton
                               size="small"
                               onClick={() => handleViewDetails(violation)}
@@ -429,8 +429,8 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
                   showLastButton
                 />
                 <Typography variant="body2" sx={{ ml: 2, alignSelf: 'center' }}>
-                  صفحة {page} من {Math.ceil(totalViolations / itemsPerPage)} | 
-                  عرض 5 مخالفات لكل صفحة
+                  Page {page} of {Math.ceil(totalViolations / itemsPerPage)} | 
+                  Showing 5 violations per page
                 </Typography>
               </Box>
             </>
@@ -448,7 +448,7 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
         <DialogTitle>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="h6">
-              تفاصيل المخالفة - {selectedViolation?.camera} - {selectedViolation?.case}
+              Violation Details - {selectedViolation?.camera} - {selectedViolation?.case}
             </Typography>
             <IconButton onClick={handleCloseDialog}>
               <Close />
@@ -464,7 +464,7 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
                   <CardMedia
                     component="img"
                     image={getImageUrl(selectedViolation)}
-                    alt="صورة المخالفة"
+                    alt="Violation Image"
                     sx={{ maxHeight: 500, objectFit: 'contain' }}
                   />
                 </Card>
@@ -473,12 +473,12 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
               {/* Details */}
               <Box sx={{ flex: 1, p: 2 }}>
                 <Typography variant="h6" gutterBottom>
-                  معلومات المخالفة
+                  Violation Information
                 </Typography>
                 
                 <Box sx={{ mb: 2 }}>
                   <Typography variant="body2" color="text.secondary">
-                    الكاميرا:
+                    Camera:
                   </Typography>
                   <Typography variant="body1">
                     {selectedViolation.camera}
@@ -487,7 +487,7 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
                 
                 <Box sx={{ mb: 2 }}>
                   <Typography variant="body2" color="text.secondary">
-                    التاريخ:
+                    Date:
                   </Typography>
                   <Typography variant="body1">
                     {selectedViolation.date}
@@ -496,7 +496,7 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
                 
                 <Box sx={{ mb: 2 }}>
                   <Typography variant="body2" color="text.secondary">
-                    الحالة:
+                    Status:
                   </Typography>
                   <Typography variant="body1">
                     {selectedViolation.case}
@@ -505,7 +505,7 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
                 
                 <Box sx={{ mb: 2 }}>
                   <Typography variant="body2" color="text.secondary">
-                    طريقة المعالجة:
+                    Processing Method:
                   </Typography>
                   <Typography variant="body1">
                     {selectedViolation.processingMethod}
@@ -514,7 +514,7 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
                 
                 <Box sx={{ mb: 2 }}>
                   <Typography variant="body2" color="text.secondary">
-                    وقت المعالجة:
+                    Processing Time:
                   </Typography>
                   <Typography variant="body1">
                     {formatTimestamp(selectedViolation.processedAt)}
@@ -522,25 +522,25 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
                 </Box>
                 
                 <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
-                  اللوحات المكتشفة ({selectedViolation.platesDetected})
+                  Detected Plates ({selectedViolation.platesDetected})
                 </Typography>
                 
                 {selectedViolation.plates.map((plate, index) => (
                   <Card key={index} sx={{ mb: 2, p: 2, bgcolor: 'background.default' }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                      اللوحة {index + 1}: {plate.detected_characters}
+                      Plate {index + 1}: {plate.detected_characters}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      <strong>الثقة:</strong> {(plate.confidence * 100).toFixed(1)}%
+                      <strong>Confidence:</strong> {(plate.confidence * 100).toFixed(1)}%
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      <strong>المساحة:</strong> {plate.area} بكسل
+                      <strong>Area:</strong> {plate.area} pixels
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      <strong>نسبة العرض للارتفاع:</strong> {plate.aspect_ratio}
+                      <strong>Aspect Ratio:</strong> {plate.aspect_ratio}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      <strong>الموقع:</strong> [{plate.bbox.join(', ')}]
+                      <strong>Location:</strong> [{plate.bbox.join(', ')}]
                     </Typography>
                   </Card>
                 ))}
@@ -550,7 +550,7 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog} variant="contained">
-            إغلاق
+            Close
           </Button>
         </DialogActions>
       </Dialog>

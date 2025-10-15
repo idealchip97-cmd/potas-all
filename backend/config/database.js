@@ -1,7 +1,7 @@
 const { Sequelize } = require('sequelize');
 require('dotenv').config();
 
-// MySQL-only configuration (SQLite disabled)
+// MySQL configuration
 const sequelize = new Sequelize(
   process.env.DB_NAME || 'potassium_backend',
   process.env.DB_USER || 'root',

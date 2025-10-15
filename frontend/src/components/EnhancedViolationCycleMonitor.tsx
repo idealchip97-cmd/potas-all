@@ -158,7 +158,7 @@ const EnhancedViolationCycleMonitor: React.FC<EnhancedViolationCycleMonitorProps
   };
 
   const formatTimestamp = (timestamp: string) => {
-    return new Date(timestamp).toLocaleString('ar-SA', {
+    return new Date(timestamp).toLocaleString('en-US', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -169,7 +169,11 @@ const EnhancedViolationCycleMonitor: React.FC<EnhancedViolationCycleMonitorProps
   };
 
   const getImageUrl = (violation: AIViolation) => {
-    return `${violation.imageUrl}`;
+    // Fix image URL to be absolute
+    if (violation.imageUrl && violation.imageUrl.startsWith('/')) {
+      return `http://localhost:3003${violation.imageUrl}`;
+    }
+    return violation.imageUrl || '';
   };
 
   if (loading) {
@@ -177,7 +181,7 @@ const EnhancedViolationCycleMonitor: React.FC<EnhancedViolationCycleMonitorProps
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
         <CircularProgress />
         <Typography variant="h6" sx={{ ml: 2 }}>
-          جاري تحميل المخالفات المكتشفة...
+          Loading detected violations...
         </Typography>
       </Box>
     );
@@ -186,7 +190,7 @@ const EnhancedViolationCycleMonitor: React.FC<EnhancedViolationCycleMonitorProps
   if (error) {
     return (
       <Alert severity="error" sx={{ mb: 2 }}>
-        <Typography variant="h6">خطأ في التحميل</Typography>
+        <Typography variant="h6">Loading Error</Typography>
         <Typography>{error}</Typography>
         <Button 
           variant="contained" 
@@ -194,7 +198,7 @@ const EnhancedViolationCycleMonitor: React.FC<EnhancedViolationCycleMonitorProps
           sx={{ mt: 1 }}
           startIcon={<Refresh />}
         >
-          إعادة المحاولة
+          Retry
         </Button>
       </Alert>
     );
@@ -211,7 +215,7 @@ const EnhancedViolationCycleMonitor: React.FC<EnhancedViolationCycleMonitorProps
               <Box>
                 <Typography variant="h4">{stats.totalViolations}</Typography>
                 <Typography variant="body2" color="text.secondary">
-                  إجمالي المخالفات
+                  Total Violations
                 </Typography>
               </Box>
             </Box>
@@ -225,7 +229,7 @@ const EnhancedViolationCycleMonitor: React.FC<EnhancedViolationCycleMonitorProps
               <Box>
                 <Typography variant="h4">{stats.totalPlates}</Typography>
                 <Typography variant="body2" color="text.secondary">
-                  إجمالي اللوحات
+                  Total Plates
                 </Typography>
               </Box>
             </Box>
@@ -239,7 +243,7 @@ const EnhancedViolationCycleMonitor: React.FC<EnhancedViolationCycleMonitorProps
               <Box>
                 <Typography variant="h4">{stats.cameras.length}</Typography>
                 <Typography variant="body2" color="text.secondary">
-                  الكاميرات النشطة
+                  Active Cameras
                 </Typography>
               </Box>
             </Box>
@@ -255,7 +259,7 @@ const EnhancedViolationCycleMonitor: React.FC<EnhancedViolationCycleMonitorProps
                   {((stats.totalPlates / Math.max(violations.length, 1)) * 100).toFixed(1)}%
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  متوسط الثقة
+                  Average Confidence
                 </Typography>
               </Box>
             </Box>
@@ -268,24 +272,24 @@ const EnhancedViolationCycleMonitor: React.FC<EnhancedViolationCycleMonitorProps
         <CardContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6">
-              المخالفات المكتشفة بالذكاء الاصطناعي
+              AI-Detected Violations ({violations.length} Total)
             </Typography>
             <Button
               variant="outlined"
               startIcon={<Refresh />}
               onClick={loadViolationCycles}
             >
-              تحديث
+              Refresh
             </Button>
           </Box>
 
           {violations.length === 0 ? (
             <Box sx={{ textAlign: 'center', py: 4 }}>
               <Typography variant="h6" color="text.secondary">
-                لا توجد مخالفات مكتشفة
+                No Violations Detected
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                سيتم عرض المخالفات هنا عند اكتشاف لوحات جديدة
+                Violations will appear here when new license plates are detected
               </Typography>
             </Box>
           ) : (
@@ -294,14 +298,14 @@ const EnhancedViolationCycleMonitor: React.FC<EnhancedViolationCycleMonitorProps
                 <Table>
                   <TableHead>
                     <TableRow>
-                      <TableCell>الصورة</TableCell>
-                      <TableCell>الكاميرا</TableCell>
-                      <TableCell>التاريخ</TableCell>
-                      <TableCell>الحالة</TableCell>
-                      <TableCell>اللوحات المكتشفة</TableCell>
-                      <TableCell>مستوى الثقة</TableCell>
-                      <TableCell>وقت المعالجة</TableCell>
-                      <TableCell>الإجراءات</TableCell>
+                      <TableCell>Image</TableCell>
+                      <TableCell>Camera</TableCell>
+                      <TableCell>Date</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>Plates Detected</TableCell>
+                      <TableCell>Confidence Level</TableCell>
+                      <TableCell>Processing Time</TableCell>
+                      <TableCell>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -347,7 +351,7 @@ const EnhancedViolationCycleMonitor: React.FC<EnhancedViolationCycleMonitorProps
                           </Typography>
                         </TableCell>
                         <TableCell>
-                          <Tooltip title="عرض التفاصيل">
+                          <Tooltip title="View Details">
                             <IconButton
                               size="small"
                               onClick={() => handleViewDetails(violation)}
@@ -388,7 +392,7 @@ const EnhancedViolationCycleMonitor: React.FC<EnhancedViolationCycleMonitorProps
         <DialogTitle>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="h6">
-              تفاصيل المخالفة - {selectedViolation?.camera}
+              Violation Details - {selectedViolation?.camera}
             </Typography>
             <IconButton onClick={handleCloseDialog}>
               <Close />
@@ -404,7 +408,7 @@ const EnhancedViolationCycleMonitor: React.FC<EnhancedViolationCycleMonitorProps
                   <CardMedia
                     component="img"
                     image={getImageUrl(selectedViolation)}
-                    alt="صورة المخالفة"
+                    alt="Violation Image"
                     sx={{ maxHeight: 400, objectFit: 'contain' }}
                   />
                 </Card>
@@ -414,12 +418,12 @@ const EnhancedViolationCycleMonitor: React.FC<EnhancedViolationCycleMonitorProps
               <Box sx={{ flex: 1 }}>
                 <Box sx={{ p: 2 }}>
                   <Typography variant="h6" gutterBottom>
-                    معلومات المخالفة
+                    Violation Information
                   </Typography>
                   
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="body2" color="text.secondary">
-                      الكاميرا:
+                      Camera:
                     </Typography>
                     <Typography variant="body1">
                       {selectedViolation.camera}
@@ -428,7 +432,7 @@ const EnhancedViolationCycleMonitor: React.FC<EnhancedViolationCycleMonitorProps
                   
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="body2" color="text.secondary">
-                      التاريخ:
+                      Date:
                     </Typography>
                     <Typography variant="body1">
                       {selectedViolation.date}
@@ -437,7 +441,7 @@ const EnhancedViolationCycleMonitor: React.FC<EnhancedViolationCycleMonitorProps
                   
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="body2" color="text.secondary">
-                      الحالة:
+                      Status:
                     </Typography>
                     <Typography variant="body1">
                       {selectedViolation.case}
@@ -446,7 +450,7 @@ const EnhancedViolationCycleMonitor: React.FC<EnhancedViolationCycleMonitorProps
                   
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="body2" color="text.secondary">
-                      طريقة المعالجة:
+                      Processing Method:
                     </Typography>
                     <Typography variant="body1">
                       {selectedViolation.processingMethod}
@@ -454,18 +458,18 @@ const EnhancedViolationCycleMonitor: React.FC<EnhancedViolationCycleMonitorProps
                   </Box>
                   
                   <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
-                    اللوحات المكتشفة ({selectedViolation.platesDetected})
+                    Detected Plates ({selectedViolation.platesDetected})
                   </Typography>
                   
                   {selectedViolation.plates.map((plate, index) => (
                     <Card key={index} sx={{ mb: 1, p: 1 }}>
                       <Typography variant="body2">
-                        <strong>اللوحة {index + 1}:</strong> {plate.detected_characters}
+                        <strong>Plate {index + 1}:</strong> {plate.detected_characters}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        الثقة: {(plate.confidence * 100).toFixed(1)}% | 
-                        المساحة: {plate.area} | 
-                        النسبة: {plate.aspect_ratio}
+                        Confidence: {(plate.confidence * 100).toFixed(1)}% | 
+                        Area: {plate.area} | 
+                        Ratio: {plate.aspect_ratio}
                       </Typography>
                     </Card>
                   ))}
@@ -475,7 +479,7 @@ const EnhancedViolationCycleMonitor: React.FC<EnhancedViolationCycleMonitorProps
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>إغلاق</Button>
+          <Button onClick={handleCloseDialog}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>
