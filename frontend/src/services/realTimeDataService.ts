@@ -140,29 +140,29 @@ class RealTimeDataService extends EventEmitter {
     });
 
     // Subscribe to real-time data updates
-    const unsubscribeRadarData = websocketClient.onRadarData((data) => {
+    const unsubscribeRadarData = websocketClient.onRadarData((data: any) => {
       console.log('📡 Real-time radar data received:', data);
       this.dataSyncStatus.lastRadarUpdate = new Date().toISOString();
       this.notifySyncStatusListeners();
     });
 
-    const unsubscribeFineData = websocketClient.onFineData((data) => {
+    const unsubscribeFineData = websocketClient.onFineData((data: any) => {
       console.log('🚨 Real-time fine data received:', data);
       this.dataSyncStatus.lastFineUpdate = new Date().toISOString();
       this.notifySyncStatusListeners();
     });
 
-    const unsubscribeImageCorrelation = websocketClient.onImageCorrelation((data) => {
+    const unsubscribeImageCorrelation = websocketClient.onImageCorrelation((data: any) => {
       console.log('📸 Real-time image correlation received:', data);
       this.dataSyncStatus.lastImageUpdate = new Date().toISOString();
       this.notifySyncStatusListeners();
     });
 
-    const unsubscribePlateRecognition = websocketClient.onPlateRecognition((data) => {
+    const unsubscribePlateRecognition = websocketClient.onPlateRecognition((data: any) => {
       console.log('🔍 Real-time plate recognition received:', data);
     });
 
-    const unsubscribeCorrelationCycle = websocketClient.onCorrelationCycle((data) => {
+    const unsubscribeCorrelationCycle = websocketClient.onCorrelationCycle((data: any) => {
       console.log('🎯 Complete correlation cycle received:', data);
       // This represents a complete radar → database → frontend → plate recognition cycle
       this.emit('correlationCycleComplete', data);
