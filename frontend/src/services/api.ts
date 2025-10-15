@@ -18,6 +18,7 @@ import {
 class ApiService {
   private api: AxiosInstance;
   private baseURL = 'http://localhost:3001/api';
+  private isDevelopmentMode = process.env.NODE_ENV === 'development';
 
   constructor() {
     this.api = axios.create({
@@ -65,6 +66,33 @@ class ApiService {
 
   // Authentication endpoints
   async login(email: string, password: string): Promise<AuthResponse> {
+    // Development mode bypass
+    if (this.isDevelopmentMode) {
+      console.log('🔧 Development mode: Bypassing authentication');
+      const mockResponse: AuthResponse = {
+        success: true,
+        message: 'Development login successful',
+        data: {
+          token: 'dev-token-' + Date.now(),
+          user: {
+            id: 1,
+            email: email,
+            firstName: 'Development',
+            lastName: 'User',
+            role: 'admin',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          }
+        }
+      };
+      
+      // Store in localStorage for consistency
+      localStorage.setItem('authToken', mockResponse.data.token);
+      localStorage.setItem('user', JSON.stringify(mockResponse.data.user));
+      
+      return mockResponse;
+    }
+    
     const response: AxiosResponse<AuthResponse> = await this.api.post('/auth/signin', {
       email,
       password,

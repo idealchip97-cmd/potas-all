@@ -57,6 +57,9 @@ const violationRoutes = require('./routes/violations');
 const externalDataRoutes = require('./routes/externalData');
 const speedingCarProcessorRoutes = require('./routes/speedingCarProcessor');
 const enhancedFtpRoutes = require('./routes/enhancedFtp');
+const aiSyncRoutes = require('./routes/aiSync');
+const aiFinesRoutes = require('./routes/aiFines');
+const plateRecognitionSyncRoutes = require('./routes/plateRecognitionSync');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -72,6 +75,12 @@ app.use(cors({
     'http://127.0.0.1:3000',
     'http://localhost:3002',
     'http://127.0.0.1:3002',
+    'http://localhost:3004',
+    'http://127.0.0.1:3004',
+    'http://127.0.0.1:38185', // Plate recognition frontend
+    'http://localhost:38185',
+    'http://127.0.0.1:34777', // Browser preview proxy
+    'http://localhost:34777',
     'http://127.0.0.1:42503', // Browser preview proxy
     'http://localhost:42503',
     'http://127.0.0.1:36555', // Current browser preview proxy
@@ -225,6 +234,9 @@ app.use('/api/violations', violationRoutes);
 app.use('/api/external-data', externalDataRoutes);
 app.use('/api/speeding-car-processor', speedingCarProcessorRoutes);
 app.use('/api/enhanced-ftp', enhancedFtpRoutes);
+app.use('/api/ai-sync', aiSyncRoutes);
+app.use('/api/ai-fines', aiFinesRoutes);
+app.use('/api/plate-recognition-sync', plateRecognitionSyncRoutes);
 
 // Root route - redirect to dashboard
 app.get('/', (req, res) => {

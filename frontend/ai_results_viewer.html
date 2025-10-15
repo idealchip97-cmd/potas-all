@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI License Plate Detection Results - Radar System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .main-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            margin: 20px auto;
+            max-width: 1400px;
+            padding: 30px;
+        }
+        
+        .header-section {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: linear-gradient(45deg, #007bff, #0056b3);
+            color: white;
+            border-radius: 15px;
+        }
+        
+        .stats-card {
+            background: linear-gradient(45deg, #28a745, #20c997);
+            color: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin: 10px 0;
+            box-shadow: 0 5px 15px rgba(40,167,69,0.3);
+        }
+        
+        .case-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 5px solid #007bff;
+        }
+        
+        .case-card.violation {
+            border-left-color: #dc3545;
+        }
+        
+        .case-card.compliant {
+            border-left-color: #28a745;
+        }
+        
+        .image-container {
+            position: relative;
+            display: inline-block;
+            margin: 10px;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .detection-image {
+            max-width: 300px;
+            max-height: 200px;
+            border-radius: 10px;
+            transition: transform 0.3s ease;
+        }
+        
+        .detection-image:hover {
+            transform: scale(1.05);
+        }
+        
+        .plate-overlay {
+            position: absolute;
+            background: rgba(255, 193, 7, 0.9);
+            color: #000;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+        
+        .plate-number {
+            font-size: 1.2rem;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            letter-spacing: 1px;
+            color: #007bff;
+        }
+        
+        .confidence-badge {
+            background: linear-gradient(45deg, #28a745, #20c997);
+            color: white;
+            padding: 3px 8px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            margin-left: 10px;
+        }
+        
+        .violation-info {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 50px;
+        }
+        
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #007bff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .filter-section {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .btn-ai {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-ai:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+            color: white;
+        }
+        
+        .modal-xl {
+            max-width: 90%;
+        }
+        
+        .image-gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .detection-method-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 123, 255, 0.9);
+            color: white;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+        }
+        
+        .simulation-badge {
+            background: rgba(255, 193, 7, 0.9) !important;
+            color: #000 !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="main-container">
+            <!-- Header -->
+            <div class="header-section">
+                <h1><i class="fas fa-robot"></i> AI License Plate Detection Results</h1>
+                <p class="mb-0">Automatic License Plate Recognition for Radar Violation Cases</p>
+            </div>
+            
+            <!-- Statistics -->
+            <div id="stats-section" class="row">
+                <div class="col-md-12">
+                    <div class="loading">
+                        <div class="loading-spinner"></div>
+                        <p>Loading AI statistics...</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Filters -->
+            <div class="filter-section">
+                <div class="row">
+                    <div class="col-md-3">
+                        <label for="cameraFilter" class="form-label">Camera</label>
+                        <select id="cameraFilter" class="form-select">
+                            <option value="">All Cameras</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="dateFilter" class="form-label">Date</label>
+                        <input type="date" id="dateFilter" class="form-control">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="statusFilter" class="form-label">Status</label>
+                        <select id="statusFilter" class="form-select">
+                            <option value="">All Cases</option>
+                            <option value="violation">Violations</option>
+                            <option value="compliant">Compliant</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">&nbsp;</label>
+                        <div>
+                            <button id="refreshBtn" class="btn btn-ai">
+                                <i class="fas fa-sync-alt"></i> Refresh
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Cases -->
+            <div id="cases-section">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                    <p>Loading AI processed cases...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Case Detail Modal -->
+    <div class="modal fade" id="caseModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Case Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="modalBody">
+                    <!-- Case details will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const API_BASE = 'http://localhost:3004';
+        let allCases = [];
+        let filteredCases = [];
+        
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            loadStats();
+            loadCases();
+            setupEventListeners();
+        });
+        
+        function setupEventListeners() {
+            document.getElementById('refreshBtn').addEventListener('click', function() {
+                loadStats();
+                loadCases();
+            });
+            
+            document.getElementById('cameraFilter').addEventListener('change', applyFilters);
+            document.getElementById('dateFilter').addEventListener('change', applyFilters);
+            document.getElementById('statusFilter').addEventListener('change', applyFilters);
+        }
+        
+        async function loadStats() {
+            try {
+                const response = await fetch(`${API_BASE}/api/ai-stats`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayStats(data.stats);
+                } else {
+                    console.error('Failed to load stats:', data.error);
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+                document.getElementById('stats-section').innerHTML = `
+                    <div class="col-12">
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            Error loading statistics. Please check if the AI Results API is running on port 3004.
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        function displayStats(stats) {
+            const html = `
+                <div class="col-md-3">
+                    <div class="stats-card">
+                        <h4><i class="fas fa-folder"></i> ${stats.totalCases}</h4>
+                        <p class="mb-0">Total Cases</p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stats-card">
+                        <h4><i class="fas fa-robot"></i> ${stats.processedCases}</h4>
+                        <p class="mb-0">AI Processed</p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stats-card">
+                        <h4><i class="fas fa-images"></i> ${stats.totalImages}</h4>
+                        <p class="mb-0">Images Analyzed</p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stats-card">
+                        <h4><i class="fas fa-car"></i> ${stats.totalPlatesDetected}</h4>
+                        <p class="mb-0">Plates Detected</p>
+                    </div>
+                </div>
+            `;
+            document.getElementById('stats-section').innerHTML = html;
+        }
+        
+        async function loadCases() {
+            try {
+                const response = await fetch(`${API_BASE}/api/ai-cases`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    allCases = data.cases;
+                    filteredCases = [...allCases];
+                    displayCases(filteredCases);
+                    populateFilters();
+                } else {
+                    console.error('Failed to load cases:', data.error);
+                }
+            } catch (error) {
+                console.error('Error loading cases:', error);
+                document.getElementById('cases-section').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Error loading cases. Please check if the AI Results API is running on port 3004.
+                    </div>
+                `;
+            }
+        }
+        
+        function populateFilters() {
+            // Populate camera filter
+            const cameras = [...new Set(allCases.map(c => c.camera))];
+            const cameraFilter = document.getElementById('cameraFilter');
+            cameraFilter.innerHTML = '<option value="">All Cameras</option>';
+            cameras.forEach(camera => {
+                cameraFilter.innerHTML += `<option value="${camera}">${camera.toUpperCase()}</option>`;
+            });
+        }
+        
+        function applyFilters() {
+            const cameraFilter = document.getElementById('cameraFilter').value;
+            const dateFilter = document.getElementById('dateFilter').value;
+            const statusFilter = document.getElementById('statusFilter').value;
+            
+            filteredCases = allCases.filter(case_ => {
+                let matches = true;
+                
+                if (cameraFilter && case_.camera !== cameraFilter) {
+                    matches = false;
+                }
+                
+                if (dateFilter && case_.date !== dateFilter) {
+                    matches = false;
+                }
+                
+                if (statusFilter) {
+                    const decision = case_.originalData.decision || '';
+                    if (statusFilter === 'violation' && decision !== 'violation') {
+                        matches = false;
+                    }
+                    if (statusFilter === 'compliant' && decision === 'violation') {
+                        matches = false;
+                    }
+                }
+                
+                return matches;
+            });
+            
+            displayCases(filteredCases);
+        }
+        
+        function displayCases(cases) {
+            if (cases.length === 0) {
+                document.getElementById('cases-section').innerHTML = `
+                    <div class="alert alert-info text-center">
+                        <i class="fas fa-info-circle"></i>
+                        No AI processed cases found matching the current filters.
+                    </div>
+                `;
+                return;
+            }
+            
+            const html = cases.map(case_ => {
+                const isViolation = case_.originalData.decision === 'violation';
+                const speed = case_.originalData.speed || 'N/A';
+                const limit = case_.originalData.limit || 'N/A';
+                
+                return `
+                    <div class="case-card ${isViolation ? 'violation' : 'compliant'}">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <h5>
+                                    <i class="fas fa-video"></i> ${case_.camera.toUpperCase()} - ${case_.caseName}
+                                    <span class="badge ${isViolation ? 'bg-danger' : 'bg-success'} ms-2">
+                                        ${isViolation ? 'VIOLATION' : 'COMPLIANT'}
+                                    </span>
+                                </h5>
+                                <p class="text-muted mb-2">
+                                    <i class="fas fa-calendar"></i> ${case_.date} | 
+                                    <i class="fas fa-clock"></i> ${new Date(case_.processingTimestamp).toLocaleString()}
+                                </p>
+                                
+                                <div class="violation-info">
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <strong>Speed:</strong> ${speed} km/h
+                                        </div>
+                                        <div class="col-md-4">
+                                            <strong>Limit:</strong> ${limit} km/h
+                                        </div>
+                                        <div class="col-md-4">
+                                            <strong>Images:</strong> ${case_.imagesProcessed}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-3">
+                                    <strong>Detected Plates:</strong>
+                                    ${case_.aiResults.detected_plates.map(plate => `
+                                        <span class="plate-number">${plate.plate_text}</span>
+                                        <span class="confidence-badge">${(plate.confidence * 100).toFixed(1)}%</span>
+                                    `).join(' ')}
+                                </div>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <div class="mb-2">
+                                    <span class="badge bg-primary">
+                                        <i class="fas fa-robot"></i> ${case_.platesDetected} plates detected
+                                    </span>
+                                </div>
+                                <button class="btn btn-ai" onclick="showCaseDetails('${case_.id}')">
+                                    <i class="fas fa-eye"></i> View Details
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            document.getElementById('cases-section').innerHTML = html;
+        }
+        
+        async function showCaseDetails(caseId) {
+            try {
+                const response = await fetch(`${API_BASE}/api/ai-cases/${caseId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayCaseModal(data.case);
+                } else {
+                    alert('Error loading case details: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error loading case details:', error);
+                alert('Error loading case details');
+            }
+        }
+        
+        function displayCaseModal(caseData) {
+            const isViolation = caseData.originalData.decision === 'violation';
+            
+            const modalBody = document.getElementById('modalBody');
+            modalBody.innerHTML = `
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-info-circle"></i> Case Information</h6>
+                        <table class="table table-sm">
+                            <tr><td><strong>Case ID:</strong></td><td>${caseData.case_id}</td></tr>
+                            <tr><td><strong>Camera:</strong></td><td>${caseData.camera.toUpperCase()}</td></tr>
+                            <tr><td><strong>Date:</strong></td><td>${caseData.date}</td></tr>
+                            <tr><td><strong>Status:</strong></td><td><span class="badge ${isViolation ? 'bg-danger' : 'bg-success'}">${isViolation ? 'VIOLATION' : 'COMPLIANT'}</span></td></tr>
+                            <tr><td><strong>Speed:</strong></td><td>${caseData.originalData.speed || 'N/A'} km/h</td></tr>
+                            <tr><td><strong>Limit:</strong></td><td>${caseData.originalData.limit || 'N/A'} km/h</td></tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-robot"></i> AI Processing Results</h6>
+                        <table class="table table-sm">
+                            <tr><td><strong>Processing Time:</strong></td><td>${new Date(caseData.processing_timestamp).toLocaleString()}</td></tr>
+                            <tr><td><strong>Images Processed:</strong></td><td>${caseData.images_processed}</td></tr>
+                            <tr><td><strong>Plates Detected:</strong></td><td>${caseData.total_plates_detected}</td></tr>
+                            <tr><td><strong>Success Rate:</strong></td><td>${caseData.processing_summary.success_count}/${caseData.images_processed}</td></tr>
+                        </table>
+                    </div>
+                </div>
+                
+                <h6><i class="fas fa-images"></i> Processed Images with Plate Detection</h6>
+                <div class="image-gallery">
+                    ${caseData.processedImages.map((img, index) => `
+                        <div class="image-container">
+                            <img src="${API_BASE}${img.processedImageUrl}" 
+                                 alt="Processed Image ${index + 1}" 
+                                 class="detection-image img-fluid"
+                                 onerror="this.src='${API_BASE}${img.originalImageUrl}'">
+                            
+                            <div class="detection-method-badge ${img.alpr_result.processing_status === 'simulation' ? 'simulation-badge' : ''}">
+                                ${img.alpr_result.processing_status === 'simulation' ? 'Simulation' : 'AI Detection'}
+                            </div>
+                            
+                            ${img.plates.map((plate, plateIndex) => `
+                                <div class="plate-overlay" style="bottom: ${plateIndex * 35 + 10}px; left: 10px;">
+                                    ${plate.plate_text} (${(plate.confidence * 100).toFixed(1)}%)
+                                </div>
+                            `).join('')}
+                            
+                            <div class="mt-2 text-center">
+                                <small class="text-muted">${img.filename}</small>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            
+            // Update modal title
+            document.querySelector('#caseModal .modal-title').textContent = 
+                `Case Details: ${caseData.camera.toUpperCase()} - ${caseData.caseName}`;
+            
+            // Show modal
+            const modal = new bootstrap.Modal(document.getElementById('caseModal'));
+            modal.show();
+        }
+    </script>
+</body>
+</html>

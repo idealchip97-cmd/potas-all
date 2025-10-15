@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Connection Test</title>
+</head>
+<body>
+    <h1>Testing AI FTP API Connection</h1>
+    <div id="result"></div>
+    
+    <script>
+        async function testAPI() {
+            const resultDiv = document.getElementById('result');
+            
+            try {
+                console.log('Testing direct connection to AI FTP server...');
+                const response = await fetch('http://localhost:3003/api/ftp-images/violations-cycle?limit=5');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('API Response:', data);
+                
+                resultDiv.innerHTML = `
+                    <h2>✅ Success!</h2>
+                    <p><strong>Total Violations:</strong> ${data.summary.totalViolations}</p>
+                    <p><strong>Total Plates:</strong> ${data.summary.totalPlates}</p>
+                    <p><strong>Cameras:</strong> ${data.summary.cameras.join(', ')}</p>
+                    <p><strong>Dates:</strong> ${data.summary.dates.join(', ')}</p>
+                    <p><strong>Violations Loaded:</strong> ${data.violations.length}</p>
+                `;
+                
+            } catch (error) {
+                console.error('API Test Error:', error);
+                resultDiv.innerHTML = `
+                    <h2>❌ Error</h2>
+                    <p>${error.message}</p>
+                `;
+            }
+        }
+        
+        // Test on page load
+        testAPI();
+    </script>
+</body>
+</html>

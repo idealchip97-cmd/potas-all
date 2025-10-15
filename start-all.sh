@@ -81,8 +81,45 @@ else
     echo "❌ Local Image Server not found: $LOCAL_SERVER_FILE"
 fi
 
+# Start AI Plate Recognition Service
+echo "3️⃣ Starting AI Plate Recognition Service..."
+AI_SERVICE_FILE="$ROOT_DIR/start_ai_service.py"
+if [ -f "$AI_SERVICE_FILE" ]; then
+    echo "🤖 Starting AI License Plate Recognition Service..."
+    cd "$ROOT_DIR"
+    nohup python3 start_ai_service.py > "$ROOT_DIR/ai_plate_service.log" 2>&1 &
+    local ai_pid=$!
+    echo "✅ AI Service started with PID: $ai_pid"
+    sleep 3
+    if kill -0 $ai_pid 2>/dev/null; then
+        echo "🎉 AI Plate Recognition Service is running successfully"
+    else
+        echo "❌ Failed to start AI Plate Recognition Service"
+    fi
+else
+    echo "❌ AI Service script not found: $AI_SERVICE_FILE"
+fi
+
+# Start AI Results API
+echo "4️⃣ Starting AI Results API..."
+AI_API_FILE="$BACKEND_DIR/ai_results_api.js"
+if [ -f "$AI_API_FILE" ]; then
+    start_service "AI Results API" "$BACKEND_DIR" "node ai_results_api.js" 3004
+else
+    echo "❌ AI Results API not found: $AI_API_FILE"
+fi
+
+# Start Plate Recognition Viewer
+echo "5️⃣ Starting Plate Recognition Viewer..."
+PLATE_SERVER_FILE="$FRONTEND_DIR/plate-recognition-server.js"
+if [ -f "$PLATE_SERVER_FILE" ]; then
+    start_service "Plate Recognition Viewer" "$FRONTEND_DIR" "node plate-recognition-server.js" 36555
+else
+    echo "❌ Plate Recognition Server not found: $PLATE_SERVER_FILE"
+fi
+
 # Start Frontend Dashboard
-echo "3️⃣ Starting Frontend Dashboard..."
+echo "6️⃣ Starting Frontend Dashboard..."
 if [ -d "$FRONTEND_DIR" ] && [ -f "$FRONTEND_DIR/package.json" ]; then
     # Install dependencies if needed
     if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
@@ -105,12 +142,22 @@ echo "=================================================="
 services=(
     "Backend Server:3001"
     "Local Image Server:3003"
+    "AI Plate Recognition:AI_SERVICE"
+    "AI Results API:3004"
+    "Plate Recognition Viewer:36555"
     "Frontend Dashboard:3000"
 )
 
 for service in "${services[@]}"; do
     IFS=':' read -r name port <<< "$service"
-    if check_port $port; then
+    if [ "$port" = "AI_SERVICE" ]; then
+        # Check if AI service is running by looking for the process
+        if pgrep -f "ai_plate_recognition_service.py" > /dev/null; then
+            echo "✅ $name - Running (monitoring /srv/processing_inbox)"
+        else
+            echo "❌ $name - Not running"
+        fi
+    elif check_port $port; then
         echo "✅ $name - Running on http://localhost:$port"
     else
         echo "❌ $name - Not running on port $port"
@@ -122,10 +169,13 @@ echo "🌐 Access URLs:"
 echo "   • Main Dashboard: http://localhost:3000"
 echo "   • Backend API: http://localhost:3001"
 echo "   • Local Image Server: http://localhost:3003"
+echo "   • AI Results Viewer: http://localhost:3004"
+echo "   • Plate Recognition Viewer: http://localhost:36555"
 echo ""
 echo "📝 Logs are saved in the root directory:"
 echo "   • backend_server.log"
 echo "   • ftp_image_server.log"
+echo "   • ai_plate_service.log"
 echo "   • frontend_dashboard.log"
 echo ""
 echo "🛑 To stop all services, run: ./stop-all.sh"

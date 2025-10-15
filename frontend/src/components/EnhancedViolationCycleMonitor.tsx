@@ -25,9 +25,9 @@ import {
   Tab,
   Badge,
   Pagination,
-  Grid,
   CardMedia,
   Tooltip,
+  Grid,
 } from '@mui/material';
 import {
   Speed,
@@ -203,71 +203,65 @@ const EnhancedViolationCycleMonitor: React.FC<EnhancedViolationCycleMonitorProps
   return (
     <Box>
       {/* Statistics Cards */}
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <Gavel color="primary" sx={{ mr: 1 }} />
-                <Box>
-                  <Typography variant="h4">{stats.totalViolations}</Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    إجمالي المخالفات
-                  </Typography>
-                </Box>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 3 }}>
+        <Card sx={{ flex: '1 1 calc(25% - 12px)', minWidth: 200 }}>
+          <CardContent>
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Gavel color="primary" sx={{ mr: 1 }} />
+              <Box>
+                <Typography variant="h4">{stats.totalViolations}</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  إجمالي المخالفات
+                </Typography>
               </Box>
-            </CardContent>
-          </Card>
-        </Grid>
+            </Box>
+          </CardContent>
+        </Card>
         
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <CameraAlt color="success" sx={{ mr: 1 }} />
-                <Box>
-                  <Typography variant="h4">{stats.totalPlates}</Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    اللوحات المكتشفة
-                  </Typography>
-                </Box>
+        <Card sx={{ flex: '1 1 calc(25% - 12px)', minWidth: 200 }}>
+          <CardContent>
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Timeline color="info" sx={{ mr: 1 }} />
+              <Box>
+                <Typography variant="h4">{stats.totalPlates}</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  إجمالي اللوحات
+                </Typography>
               </Box>
-            </CardContent>
-          </Card>
-        </Grid>
+            </Box>
+          </CardContent>
+        </Card>
         
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <LocationOn color="info" sx={{ mr: 1 }} />
-                <Box>
-                  <Typography variant="h4">{stats.cameras.length}</Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    الكاميرات النشطة
-                  </Typography>
-                </Box>
+        <Card sx={{ flex: '1 1 calc(25% - 12px)', minWidth: 200 }}>
+          <CardContent>
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <CameraAlt color="success" sx={{ mr: 1 }} />
+              <Box>
+                <Typography variant="h4">{stats.cameras.length}</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  الكاميرات النشطة
+                </Typography>
               </Box>
-            </CardContent>
-          </Card>
-        </Grid>
+            </Box>
+          </CardContent>
+        </Card>
         
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <CheckCircle color="success" sx={{ mr: 1 }} />
-                <Box>
-                  <Typography variant="h4">{(stats.averageConfidence * 100).toFixed(1)}%</Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    متوسط الثقة
-                  </Typography>
-                </Box>
+        <Card sx={{ flex: '1 1 calc(25% - 12px)', minWidth: 200 }}>
+          <CardContent>
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Speed color="warning" sx={{ mr: 1 }} />
+              <Box>
+                <Typography variant="h4">
+                  {((stats.totalPlates / Math.max(violations.length, 1)) * 100).toFixed(1)}%
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  متوسط الثقة
+                </Typography>
               </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+            </Box>
+          </CardContent>
+        </Card>
+      </Box>
 
       {/* Violations Table */}
       <Card>
@@ -403,9 +397,9 @@ const EnhancedViolationCycleMonitor: React.FC<EnhancedViolationCycleMonitorProps
         </DialogTitle>
         <DialogContent>
           {selectedViolation && (
-            <Grid container spacing={2}>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2 }}>
               {/* Image */}
-              <Grid item xs={12} md={6}>
+              <Box sx={{ flex: 1 }}>
                 <Card>
                   <CardMedia
                     component="img"
@@ -414,10 +408,10 @@ const EnhancedViolationCycleMonitor: React.FC<EnhancedViolationCycleMonitorProps
                     sx={{ maxHeight: 400, objectFit: 'contain' }}
                   />
                 </Card>
-              </Grid>
+              </Box>
               
               {/* Details */}
-              <Grid item xs={12} md={6}>
+              <Box sx={{ flex: 1 }}>
                 <Box sx={{ p: 2 }}>
                   <Typography variant="h6" gutterBottom>
                     معلومات المخالفة
@@ -476,8 +470,8 @@ const EnhancedViolationCycleMonitor: React.FC<EnhancedViolationCycleMonitorProps
                     </Card>
                   ))}
                 </Box>
-              </Grid>
-            </Grid>
+              </Box>
+            </Box>
           )}
         </DialogContent>
         <DialogActions>

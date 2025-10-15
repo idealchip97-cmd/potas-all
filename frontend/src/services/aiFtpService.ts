@@ -56,7 +56,7 @@ export interface AISummaryResponse {
 }
 
 class AIFtpService {
-  private baseUrl = '/api';
+  private baseUrl = 'http://localhost:3003/api';
 
   async getViolationCycles(limit: number = 50): Promise<AIViolationResponse> {
     try {
@@ -160,7 +160,7 @@ class AIFtpService {
 
   async testConnection(): Promise<boolean> {
     try {
-      const response = await fetch(`/health`);
+      const response = await fetch(`http://localhost:3003/health`);
       return response.ok;
     } catch (error) {
       console.error('❌ AI FTP Server connection test failed:', error);

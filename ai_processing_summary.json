@@ -1,0 +1,291 @@
+{
+  "timestamp": "2025-10-14T17:26:53.395549",
+  "total_cameras": 2,
+  "total_dates": 2,
+  "total_cases": 24,
+  "cases_with_ai_folders": 24,
+  "cases_processed": 24,
+  "total_images": 125,
+  "total_plates_detected": 162,
+  "cameras": {
+    "camera002": {
+      "dates": [
+        "2025-10-06",
+        "2025-10-05"
+      ],
+      "cases": 12,
+      "cases_with_ai": 12,
+      "total_images": 66,
+      "total_plates": 86
+    },
+    "camera001": {
+      "dates": [
+        "2025-10-06",
+        "2025-10-05"
+      ],
+      "cases": 12,
+      "cases_with_ai": 12,
+      "total_images": 59,
+      "total_plates": 76
+    }
+  },
+  "processing_methods": {
+    "unknown": {
+      "cases": 11,
+      "images": 53,
+      "plates": 80
+    },
+    "simple_opencv": {
+      "cases": 12,
+      "images": 68,
+      "plates": 82
+    },
+    "enhanced_alpr": {
+      "cases": 1,
+      "images": 4,
+      "plates": 0
+    }
+  },
+  "case_details": [
+    {
+      "path": "/srv/processing_inbox/camera002/2025-10-06/case005",
+      "camera": "camera002",
+      "date": "2025-10-06",
+      "has_ai_folder": true,
+      "processed": true,
+      "images": 4,
+      "plates_detected": 1,
+      "processing_method": "unknown"
+    },
+    {
+      "path": "/srv/processing_inbox/camera002/2025-10-06/case003",
+      "camera": "camera002",
+      "date": "2025-10-06",
+      "has_ai_folder": true,
+      "processed": true,
+      "images": 4,
+      "plates_detected": 0,
+      "processing_method": "simple_opencv"
+    },
+    {
+      "path": "/srv/processing_inbox/camera002/2025-10-06/case001",
+      "camera": "camera002",
+      "date": "2025-10-06",
+      "has_ai_folder": true,
+      "processed": true,
+      "images": 6,
+      "plates_detected": 0,
+      "processing_method": "simple_opencv"
+    },
+    {
+      "path": "/srv/processing_inbox/camera002/2025-10-06/case004",
+      "camera": "camera002",
+      "date": "2025-10-06",
+      "has_ai_folder": true,
+      "processed": true,
+      "images": 4,
+      "plates_detected": 3,
+      "processing_method": "unknown"
+    },
+    {
+      "path": "/srv/processing_inbox/camera002/2025-10-06/case002",
+      "camera": "camera002",
+      "date": "2025-10-06",
+      "has_ai_folder": true,
+      "processed": true,
+      "images": 9,
+      "plates_detected": 1,
+      "processing_method": "simple_opencv"
+    },
+    {
+      "path": "/srv/processing_inbox/camera002/2025-10-05/case017",
+      "camera": "camera002",
+      "date": "2025-10-05",
+      "has_ai_folder": true,
+      "processed": true,
+      "images": 5,
+      "plates_detected": 15,
+      "processing_method": "unknown"
+    },
+    {
+      "path": "/srv/processing_inbox/camera002/2025-10-05/case013",
+      "camera": "camera002",
+      "date": "2025-10-05",
+      "has_ai_folder": true,
+      "processed": true,
+      "images": 4,
+      "plates_detected": 0,
+      "processing_method": "enhanced_alpr"
+    },
+    {
+      "path": "/srv/processing_inbox/camera002/2025-10-05/case016",
+      "camera": "camera002",
+      "date": "2025-10-05",
+      "has_ai_folder": true,
+      "processed": true,
+      "images": 5,
+      "plates_detected": 11,
+      "processing_method": "unknown"
+    },
+    {
+      "path": "/srv/processing_inbox/camera002/2025-10-05/case014",
+      "camera": "camera002",
+      "date": "2025-10-05",
+      "has_ai_folder": true,
+      "processed": true,
+      "images": 7,
+      "plates_detected": 13,
+      "processing_method": "unknown"
+    },
+    {
+      "path": "/srv/processing_inbox/camera002/2025-10-05/case015",
+      "camera": "camera002",
+      "date": "2025-10-05",
+      "has_ai_folder": true,
+      "processed": true,
+      "images": 4,
+      "plates_detected": 2,
+      "processing_method": "unknown"
+    },
+    {
+      "path": "/srv/processing_inbox/camera002/2025-10-05/case019",
+      "camera": "camera002",
+      "date": "2025-10-05",
+      "has_ai_folder": true,
+      "processed": true,
+      "images": 9,
+      "plates_detected": 26,
+      "processing_method": "simple_opencv"
+    },
+    {
+      "path": "/srv/processing_inbox/camera002/2025-10-05/case018",
+      "camera": "camera002",
+      "date": "2025-10-05",
+      "has_ai_folder": true,
+      "processed": true,
+      "images": 5,
+      "plates_detected": 14,
+      "processing_method": "simple_opencv"
+    },
+    {
+      "path": "/srv/processing_inbox/camera001/2025-10-06/case005",
+      "camera": "camera001",
+      "date": "2025-10-06",
+      "has_ai_folder": true,
+      "processed": true,
+      "images": 4,
+      "plates_detected": 0,
+      "processing_method": "simple_opencv"
+    },
+    {
+      "path": "/srv/processing_inbox/camera001/2025-10-06/case003",
+      "camera": "camera001",
+      "date": "2025-10-06",
+      "has_ai_folder": true,
+      "processed": true,
+      "images": 4,
+      "plates_detected": 0,
+      "processing_method": "unknown"
+    },
+    {
+      "path": "/srv/processing_inbox/camera001/2025-10-06/case001",
+      "camera": "camera001",
+      "date": "2025-10-06",
+      "has_ai_folder": true,
+      "processed": true,
+      "images": 5,
+      "plates_detected": 2,
+      "processing_method": "simple_opencv"
+    },
+    {
+      "path": "/srv/processing_inbox/camera001/2025-10-06/case006",
+      "camera": "camera001",
+      "date": "2025-10-06",
+      "has_ai_folder": true,
+      "processed": true,
+      "images": 6,
+      "plates_detected": 5,
+      "processing_method": "simple_opencv"
+    },
+    {
+      "path": "/srv/processing_inbox/camera001/2025-10-06/case004",
+      "camera": "camera001",
+      "date": "2025-10-06",
+      "has_ai_folder": true,
+      "processed": true,
+      "images": 4,
+      "plates_detected": 3,
+      "processing_method": "simple_opencv"
+    },
+    {
+      "path": "/srv/processing_inbox/camera001/2025-10-06/case002",
+      "camera": "camera001",
+      "date": "2025-10-06",
+      "has_ai_folder": true,
+      "processed": true,
+      "images": 4,
+      "plates_detected": 2,
+      "processing_method": "simple_opencv"
+    },
+    {
+      "path": "/srv/processing_inbox/camera001/2025-10-05/case005",
+      "camera": "camera001",
+      "date": "2025-10-05",
+      "has_ai_folder": true,
+      "processed": true,
+      "images": 7,
+      "plates_detected": 11,
+      "processing_method": "unknown"
+    },
+    {
+      "path": "/srv/processing_inbox/camera001/2025-10-05/case003",
+      "camera": "camera001",
+      "date": "2025-10-05",
+      "has_ai_folder": true,
+      "processed": true,
+      "images": 5,
+      "plates_detected": 10,
+      "processing_method": "unknown"
+    },
+    {
+      "path": "/srv/processing_inbox/camera001/2025-10-05/case006",
+      "camera": "camera001",
+      "date": "2025-10-05",
+      "has_ai_folder": true,
+      "processed": true,
+      "images": 5,
+      "plates_detected": 12,
+      "processing_method": "simple_opencv"
+    },
+    {
+      "path": "/srv/processing_inbox/camera001/2025-10-05/case004",
+      "camera": "camera001",
+      "date": "2025-10-05",
+      "has_ai_folder": true,
+      "processed": true,
+      "images": 4,
+      "plates_detected": 6,
+      "processing_method": "unknown"
+    },
+    {
+      "path": "/srv/processing_inbox/camera001/2025-10-05/case007",
+      "camera": "camera001",
+      "date": "2025-10-05",
+      "has_ai_folder": true,
+      "processed": true,
+      "images": 7,
+      "plates_detected": 17,
+      "processing_method": "simple_opencv"
+    },
+    {
+      "path": "/srv/processing_inbox/camera001/2025-10-05/case002",
+      "camera": "camera001",
+      "date": "2025-10-05",
+      "has_ai_folder": true,
+      "processed": true,
+      "images": 4,
+      "plates_detected": 8,
+      "processing_method": "unknown"
+    }
+  ]
+}

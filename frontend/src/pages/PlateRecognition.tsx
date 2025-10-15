@@ -36,6 +36,7 @@ import realTimeDataService from '../services/realTimeDataService';
 import { PlateRecognitionImage } from '../services/ftpClient';
 import RealTimePlateRecognition from '../components/RealTimePlateRecognition';
 import ViolationCycleMonitor from '../components/ViolationCycleMonitor';
+import SimpleViolationMonitor from '../components/SimpleViolationMonitor';
 
 interface UploadedFile {
   file: File;
@@ -224,7 +225,7 @@ const PlateRecognition: React.FC = () => {
             </Button>
           </Box>
         </Box>
-        <ViolationCycleMonitor />
+        <SimpleViolationMonitor />
       </Box>
     );
   }

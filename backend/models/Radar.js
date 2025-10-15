@@ -26,6 +26,12 @@ const Radar = sequelize.define('Radar', {
       isIP: true
     }
   },
+  identifier: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    unique: true,
+    comment: 'Camera identifier (e.g., camera001, camera002)'
+  },
   serialNumber: {
     type: DataTypes.STRING,
     allowNull: false,
@@ -66,6 +72,10 @@ const Radar = sequelize.define('Radar', {
   tableName: 'radars',
   timestamps: true,
   indexes: [
+    {
+      fields: ['identifier'],
+      unique: true
+    },
     {
       fields: ['serialNumber'],
       unique: true

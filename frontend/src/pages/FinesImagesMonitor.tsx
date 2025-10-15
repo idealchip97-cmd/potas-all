@@ -43,7 +43,7 @@ import {
 import { PlateRecognitionImage } from '../services/ftpClient';
 import udpReadingsApi, { UdpReading } from '../services/udpReadingsApi';
 
-// New interface for violation cases (3-photo system)
+// Enhanced interface for violation cases with AI processing
 interface ViolationCase {
   eventId: string;
   cameraId: string;
@@ -58,7 +58,7 @@ interface ViolationCase {
     speed: number;
     limit: number | null;
     payload: any;
-  };
+  } | null;
   photos: {
     filename: string;
     size: number;
@@ -66,6 +66,20 @@ interface ViolationCase {
     url: string | null;
   }[];
   folderPath: string;
+  // AI Processing Results
+  hasAI: boolean;
+  processed: boolean;
+  imageCount: number;
+  platesDetected: number;
+  processingMethod: string | null;
+  aiResults?: {
+    totalImages: number;
+    platesDetected: number;
+    successfulDetections: number;
+    failedDetections: number;
+    noPlatesDetected: number;
+    results: any[];
+  };
 }
 
 interface FilterOptions {
@@ -94,16 +108,16 @@ const FinesImagesMonitor: React.FC = () => {
   const [page, setPage] = useState(1);
   const [rowsPerPage] = useState(10);
   
-  // Get today's date in YYYY-MM-DD format
-  const getTodayDate = () => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
+  // Get default date with AI processing data
+  const getDefaultDate = () => {
+    // Use 2025-10-06 as default since that's where our AI processed data is
+    return '2025-10-06';
   };
 
   // Filter states
   const [filters, setFilters] = useState<FilterOptions>({
     status: 'all',
-    dateRange: getTodayDate(), // Default to today's date
+    dateRange: getDefaultDate(), // Default to date with AI data
     search: '',
     caseFilter: ''
   });
@@ -116,54 +130,76 @@ const FinesImagesMonitor: React.FC = () => {
     todayCount: 0
   });
 
-  // Load available cameras dynamically from processing inbox
+  /**
+   * DYNAMIC CAMERA DETECTION SYSTEM
+   * 
+   * This function automatically discovers all available cameras by scanning the filesystem.
+   * Cameras are detected from /srv/processing_inbox by looking for directories that start with "camera".
+   * 
+   * How it works:
+   * 1. Makes API call to /api/cameras endpoint
+   * 2. Server scans /srv/processing_inbox for camera* directories
+   * 3. Returns list of discovered cameras (e.g., camera001, camera002, camera003, etc.)
+   * 4. Frontend updates camera dropdown dynamically
+   * 5. Falls back to default cameras if API fails
+   * 
+   * Adding new cameras:
+   * - Simply create new directory: /srv/processing_inbox/camera003/
+   * - System will auto-detect on next refresh
+   * - No configuration changes needed
+   */
   const loadAvailableCameras = async () => {
     try {
-      console.log('🔍 Loading available cameras from processing inbox...');
-      const response = await fetch('http://localhost:3003/api/discover/cameras');
+      console.log('🔍 Loading available cameras from AI FTP server...');
+      console.log('📁 Scanning /srv/processing_inbox for camera directories...');
+      
+      // API call to dynamically discover cameras from filesystem
+      const response = await fetch('/api/cameras');
       const data = await response.json();
       
       if (data.success && data.cameras && Array.isArray(data.cameras)) {
         setAvailableCameras(data.cameras);
         setIsConnected(true);
         setConnectionMode('local_server');
-        console.log(`✅ Loaded ${data.cameras.length} cameras from processing inbox:`, data.cameras);
+        console.log(`✅ Dynamically detected ${data.cameras.length} cameras:`, data.cameras);
+        console.log('📊 Camera detection successful - system supports unlimited cameras');
       } else {
-        console.warn('⚠️ Failed to load cameras from processing inbox, using fallback');
-        setAvailableCameras(['camera001', 'camera002']); // Fallback
+        console.warn('⚠️ Failed to load cameras from AI FTP server, using fallback');
+        setAvailableCameras(['camera001', 'camera002']); // Static fallback
         setIsConnected(false);
         setConnectionMode('disconnected');
       }
     } catch (error: any) {
-      console.error('❌ Failed to load available cameras from processing inbox:', error);
-      setAvailableCameras(['camera001', 'camera002']); // Fallback
+      console.error('❌ Failed to load available cameras from AI FTP server:', error);
+      console.log('🔄 Using fallback cameras - check server connection');
+      setAvailableCameras(['camera001', 'camera002']); // Static fallback
       setIsConnected(false);
       setConnectionMode('disconnected');
     }
   };
 
-  // Load available dates dynamically from processing inbox
+  // Load available dates from AI FTP server
   const loadAvailableDates = async () => {
     try {
-      console.log('🔍 Loading available dates from processing inbox...');
-      const response = await fetch('http://localhost:3003/api/discover/dates');
+      console.log('🔍 Loading available dates from AI FTP server...');
+      const response = await fetch('/api/ftp-images/dates');
       const data = await response.json();
       
       if (data.success && data.dates && Array.isArray(data.dates)) {
-        setAvailableDates(data.dates);
+        const dateStrings = data.dates.map((d: any) => d.date || d);
+        setAvailableDates(dateStrings);
         setIsConnected(true);
         setConnectionMode('local_server');
-        console.log(`✅ Loaded ${data.dates.length} dates from processing inbox:`, data.dates);
-        console.log('📊 Camera-date breakdown:', data.cameraDateMap);
+        console.log(`✅ Loaded ${dateStrings.length} dates from AI FTP server:`, dateStrings);
       } else {
-        console.warn('⚠️ Failed to load dates from processing inbox, using fallback');
-        setAvailableDates([getTodayDate()]); // Fallback to today
+        console.warn('⚠️ Failed to load dates from AI FTP server, using fallback');
+        setAvailableDates(['2025-10-05', '2025-10-06']); // Fallback to known dates
         setIsConnected(false);
         setConnectionMode('disconnected');
       }
     } catch (error: any) {
-      console.error('❌ Failed to load available dates from processing inbox:', error);
-      setAvailableDates([getTodayDate()]); // Fallback to today
+      console.error('❌ Failed to load available dates from AI FTP server:', error);
+      setAvailableDates(['2025-10-05', '2025-10-06']); // Fallback to known dates
       setIsConnected(false);
       setConnectionMode('disconnected');
     }
@@ -175,43 +211,66 @@ const FinesImagesMonitor: React.FC = () => {
     // Function disabled - using direct violation loading instead
     console.log('📝 loadAvailableCases disabled - using direct violation loading');
   };
+  /**
+   * MULTI-CAMERA VIOLATION CASE LOADING
+   * 
+   * This function loads violation cases from multiple cameras dynamically.
+   * It respects the camera selection (individual camera or "all cameras").
+   * 
+   * Camera Selection Logic:
+   * - If specific camera selected: Load only that camera's data
+   * - If "All Cameras" selected: Load data from ALL detected cameras
+   * - Uses dynamically detected camera list from loadAvailableCameras()
+   * 
+   * Data Sources:
+   * - /srv/processing_inbox/camera001/2025-10-15/case001/
+   * - /srv/processing_inbox/camera002/2025-10-15/case001/
+   * - /srv/processing_inbox/camera003/2025-10-15/case001/ (auto-detected)
+   * 
+   * API Endpoints Used:
+   * - /api/cameras/{camera}/dates/{date}/cases - Get cases for specific camera/date
+   * - /api/cameras/{camera}/dates/{date}/cases/{case}/results - Get AI results
+   */
   const loadViolationCases = async (selectedDate?: string, cameraId?: string) => {
     try {
-      console.log('🚀 Starting loadViolationCases with:', { selectedDate, cameraId });
+      console.log('🚀 Starting loadViolationCases with AI processing data:', { selectedDate, cameraId });
+      console.log('📅 Available dates:', availableDates);
+      console.log('📡 Available cameras (dynamically detected):', availableCameras);
       setLoading(true);
       setError(null);
       
       let allCases: ViolationCase[] = [];
       
+      // DYNAMIC CAMERA SELECTION LOGIC
+      // Determine which cameras to load based on user selection and detected cameras
+      let camerasToLoad: string[] = [];
+      if (cameraId && cameraId !== 'all') {
+        // Load specific camera only
+        camerasToLoad = [cameraId];
+        console.log(`🎯 Loading data from single camera: ${cameraId}`);
+      } else {
+        // Load ALL detected cameras (supports unlimited cameras)
+        camerasToLoad = availableCameras.length > 0 ? availableCameras : ['camera001', 'camera002'];
+        console.log(`🌐 Loading data from ALL detected cameras: ${camerasToLoad.join(', ')}`);
+      }
+      
       // Determine which dates to load
       let datesToLoad: string[] = [];
       if (selectedDate === 'all' || !selectedDate) {
-        // Load from all available dates (last 7 days)
-        datesToLoad = availableDates.length > 0 ? availableDates : [getTodayDate()];
-        console.log(`🔍 Loading violation cases for all dates: ${datesToLoad.join(', ')}`);
+        datesToLoad = availableDates.length > 0 ? availableDates : ['2025-10-05', '2025-10-06'];
+        console.log(`🔍 Loading cases for all dates: ${datesToLoad.join(', ')}`);
       } else {
-        // Load specific date
         datesToLoad = [selectedDate];
-        console.log(`🔍 Loading violation cases for date: ${selectedDate}`);
+        console.log(`🔍 Loading cases for date: ${selectedDate}`);
       }
       
-      // Determine which cameras to load based on selection
-      let camerasToLoad: string[];
-      if (cameraId && cameraId !== 'all') {
-        // Load ONLY the selected camera - STRICT filtering
-        camerasToLoad = [cameraId];
-        console.log(`📡 ⚠️ STRICT FILTER: Loading data from ${cameraId} ONLY`);
-      } else {
-        // Load from all available cameras
-        camerasToLoad = availableCameras.length > 0 ? availableCameras : ['camera001', 'camera002'];
-        console.log(`📡 Loading data from ALL cameras: ${camerasToLoad.join(', ')}`);
-      }
+      console.log(`🎯 Loading from cameras: ${camerasToLoad.join(', ')}`);
       
-      // Load violations from all combinations of dates and cameras
-      for (const date of datesToLoad) {
-        for (const camera of camerasToLoad) {
+      // Load cases from AI FTP server for each camera and date combination
+      for (const camera of camerasToLoad) {
+        for (const date of datesToLoad) {
           try {
-            const apiUrl = `http://localhost:3003/api/violations/${camera}/${date}`;
+            const apiUrl = `/api/cameras/${camera}/dates/${date}/cases`;
             console.log(`🔍 API CALL: ${apiUrl}`);
             const response = await fetch(apiUrl);
             
@@ -219,95 +278,110 @@ const FinesImagesMonitor: React.FC = () => {
               const data = await response.json();
               console.log(`📊 API RESPONSE for ${camera}/${date}:`, {
                 success: data.success,
-                violationCount: data.violations?.length || 0,
-                cameraIds: data.violations?.map((v: any) => v.verdict?.camera_id) || []
+                caseCount: data.cases?.length || 0,
+                summary: data.summary
               });
               
-              if (data.success && data.violations) {
-                const cameraViolations = data.violations.map((violation: any) => ({
-                  eventId: violation.eventId, // Use eventId from violation data
-                  cameraId: camera, // ENSURE camera ID matches the requested camera
-                  date: date,
-                  verdict: violation.verdict,
-                  photos: violation.photos.map((photo: any) => ({
-                    filename: photo.filename,
-                    exists: photo.exists,
-                    size: photo.size,
-                    url: photo.exists ? `http://localhost:3003${photo.url}` : null
-                  })),
-                  folderPath: violation.folderPath
-                }));
+              if (data.success && data.cases && data.cases.length > 0) {
+                // Process each case with AI data
+                for (const caseData of data.cases) {
+                  let aiResults = null;
+                  
+                  // If case has AI processing, fetch the detailed results
+                  if (caseData.processed && caseData.hasAI) {
+                    try {
+                      const resultsUrl = `/api/cameras/${camera}/dates/${date}/cases/${caseData.name}/results`;
+                      const resultsResponse = await fetch(resultsUrl);
+                      if (resultsResponse.ok) {
+                        const resultsData = await resultsResponse.json();
+                        if (resultsData.success) {
+                          aiResults = resultsData.statistics;
+                          console.log(`🤖 AI Results for ${caseData.name}:`, aiResults);
+                        }
+                      }
+                    } catch (aiError) {
+                      console.warn(`⚠️ Failed to load AI results for ${caseData.name}:`, aiError);
+                    }
+                  }
+                  
+                  // Create violation case with AI data
+                  const violationCase: ViolationCase = {
+                    eventId: caseData.name,
+                    cameraId: camera,
+                    date: date,
+                    verdict: null, // No verdict data from processing inbox
+                    photos: [], // Will be populated from image files
+                    folderPath: caseData.path,
+                    // AI Processing Data
+                    hasAI: caseData.hasAI,
+                    processed: caseData.processed,
+                    imageCount: caseData.imageCount,
+                    platesDetected: caseData.platesDetected,
+                    processingMethod: caseData.processingMethod,
+                    aiResults: aiResults
+                  };
+                  
+                  // Get image files for this case
+                  try {
+                    const imageFiles = await fetch(`/api/ftp-images/list?date=${date}&camera=${camera}`);
+                    if (imageFiles.ok) {
+                      const imageData = await imageFiles.json();
+                      if (imageData.success && imageData.files) {
+                        // Filter images that belong to this case
+                        const caseImages = imageData.files.filter((file: any) => 
+                          file.case === caseData.name || file.url?.includes(caseData.name)
+                        );
+                        
+                        violationCase.photos = caseImages.map((img: any) => ({
+                          filename: img.filename,
+                          size: img.size,
+                          exists: true,
+                          url: img.url
+                        }));
+                      }
+                    }
+                  } catch (imgError) {
+                    console.warn(`⚠️ Failed to load images for ${caseData.name}:`, imgError);
+                  }
+                  
+                  allCases.push(violationCase);
+                }
                 
-                // VERIFY: Only add violations that match the requested camera
-                const verifiedViolations = cameraViolations.filter((v: any) => v.cameraId === camera);
-                console.log(`✅ VERIFICATION for ${camera}:`);
-                console.log(`   - Total violations received: ${cameraViolations.length}`);
-                console.log(`   - Verified violations: ${verifiedViolations.length}`);
-                console.log(`   - Camera IDs in data:`, cameraViolations.map((v: any) => v.cameraId));
-                console.log(`   - Expected camera: ${camera}`);
-                
-                allCases = [...allCases, ...verifiedViolations];
                 setIsConnected(true);
-                setConnectionMode('violation_system');
-                console.log(`✅ Loaded ${cameraViolations.length} cases from ${camera} for ${date}`);
+                setConnectionMode('local_server');
+                console.log(`✅ Loaded ${data.cases.length} cases with AI data for ${camera}/${date}`);
               }
             } else {
-              console.warn(`⚠️ Failed to fetch violations from ${camera} for ${date}: ${response.status}`);
-              setIsConnected(false);
-              setConnectionMode('disconnected');
+              console.warn(`⚠️ Failed to fetch cases for ${camera}/${date}: ${response.status}`);
             }
           } catch (error: any) {
-            console.error(`❌ Error fetching violations from ${camera} for ${date}:`, {
-              message: error.message,
-              name: error.name,
-              stack: error.stack,
-              fullError: error
-            });
-            setIsConnected(false);
-            setConnectionMode('disconnected');
+            console.error(`❌ Error fetching cases for ${camera}/${date}:`, error);
           }
         }
       }
       
-      // Sort by date (newest first), then by timestamp within each date
+      // Sort by date (newest first), then by case name
       allCases.sort((a, b) => {
-        // First sort by date (newest first)
         const dateComparison = b.date.localeCompare(a.date);
         if (dateComparison !== 0) return dateComparison;
-        
-        // Then sort by timestamp within the same date (newest first)
-        const aTimestamp = (a.verdict && a.verdict.event_ts) ? a.verdict.event_ts : 0;
-        const bTimestamp = (b.verdict && b.verdict.event_ts) ? b.verdict.event_ts : 0;
-        return bTimestamp - aTimestamp;
+        return a.eventId.localeCompare(b.eventId);
       });
       
-      // FINAL VERIFICATION: Ensure only correct camera data is included
-      if (cameraId && cameraId !== 'all') {
-        console.log(`🔍 FINAL VERIFICATION for ${cameraId}:`);
-        console.log(`   - Total cases before filter: ${allCases.length}`);
-        console.log(`   - Camera IDs in all cases:`, allCases.map((c: any) => c.cameraId));
-        
-        const filteredCases = allCases.filter((c: any) => c.cameraId === cameraId);
-        console.log(`   - Cases after filter: ${filteredCases.length}`);
-        console.log(`   - Filtered case IDs:`, filteredCases.map((c: any) => `${c.eventId} (${c.cameraId})`));
-        
-        setViolationCases(filteredCases);
-        updateViolationStats(filteredCases);
-        console.log(`📊 FINAL RESULT for ${cameraId}: ${filteredCases.length} cases`);
+      setViolationCases(allCases);
+      updateViolationStats(allCases);
+      console.log(`📊 Total cases loaded with AI data: ${allCases.length}`);
+      
+      if (allCases.length > 0) {
+        setIsConnected(true);
+        setConnectionMode('local_server');
       } else {
-        setViolationCases(allCases);
-        updateViolationStats(allCases);
-        console.log(`📊 Total violation cases loaded from ALL cameras: ${allCases.length}`);
+        setIsConnected(false);
+        setConnectionMode('disconnected');
       }
       
     } catch (error: any) {
-      console.error('❌ Failed to load violation cases:', {
-        message: error.message,
-        name: error.name,
-        stack: error.stack,
-        fullError: error
-      });
-      setError(`Failed to load violation cases: ${error.message || 'Unknown error'}`);
+      console.error('❌ Failed to load cases with AI data:', error);
+      setError(`Failed to load cases: ${error.message || 'Unknown error'}`);
       setIsConnected(false);
       setConnectionMode('disconnected');
       setViolationCases([]);
@@ -319,8 +393,8 @@ const FinesImagesMonitor: React.FC = () => {
   // Test connection to server
   const testConnection = async () => {
     try {
-      console.log('🔍 Testing connection to local image server at http://localhost:3003/health...');
-      const response = await fetch('http://localhost:3003/health');
+      console.log('🔍 Testing connection to local image server...');
+      const response = await fetch('/health');
       console.log('📡 Response status:', response.status);
       
       if (!response.ok) {
@@ -333,15 +407,15 @@ const FinesImagesMonitor: React.FC = () => {
       const data = await response.json();
       console.log('📊 Response data:', data);
       
-      if (data.success) {
+      if (data.success || data.message) {
         setIsConnected(true);
         setConnectionMode('local_server');
-        console.log('✅ Connected to backend server successfully');
+        console.log('✅ Connected to local image server successfully');
         return true;
       } else {
         setIsConnected(false);
         setConnectionMode('disconnected');
-        console.log('❌ Server responded but success=false');
+        console.log('❌ Server responded but no success indicator');
         return false;
       }
     } catch (error: any) {
@@ -361,11 +435,23 @@ const FinesImagesMonitor: React.FC = () => {
   useEffect(() => {
     // Test connection first, then load data
     const initializeData = async () => {
-      const connected = await testConnection();
-      if (connected) {
-        await loadAvailableCameras();
-        await loadAvailableDates();
-        await loadViolationCases(getTodayDate(), undefined); // Load from all cameras for today's date
+      try {
+        const connected = await testConnection();
+        if (connected) {
+          await loadAvailableCameras();
+          await loadAvailableDates();
+          await loadViolationCases('2025-10-06', undefined); // Load from AI processed data
+        } else {
+          // If connection fails, stop loading after 5 seconds
+          setTimeout(() => {
+            setLoading(false);
+            setError('Unable to connect to local server on port 3003');
+          }, 5000);
+        }
+      } catch (error) {
+        console.error('Initialization error:', error);
+        setLoading(false);
+        setError('Failed to initialize data loading');
       }
     };
     
@@ -404,21 +490,26 @@ const FinesImagesMonitor: React.FC = () => {
     applyFilters();
   }, [violationCases, filters]);
 
-  // Stats calculation for violation cases (dynamic for any number of cameras)
+  // Stats calculation for violation cases with AI processing data
   const updateViolationStats = (cases: ViolationCase[]) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const todayCases = cases.filter(c => 
-      c.verdict && c.verdict.event_ts && new Date(c.verdict.event_ts * 1000) >= today
+      c.date === today.toISOString().split('T')[0]
     );
 
-    // Calculate stats for each available camera dynamically
+    // Calculate stats including AI processing data
     const newStats: {[key: string]: number} = {
       total: cases.length,
       violations: cases.filter(c => c.verdict && c.verdict.decision === 'violation').length,
       noViolations: cases.filter(c => c.verdict && c.verdict.decision === 'no_violation').length,
-      todayCount: todayCases.length
+      todayCount: todayCases.length,
+      // AI Processing Stats
+      aiEnabled: cases.filter(c => c.hasAI).length,
+      aiProcessed: cases.filter(c => c.processed).length,
+      totalPlatesDetected: cases.reduce((sum, c) => sum + (c.platesDetected || 0), 0),
+      totalImages: cases.reduce((sum, c) => sum + (c.imageCount || 0), 0)
     };
 
     // Add stats for each camera
@@ -639,6 +730,18 @@ const FinesImagesMonitor: React.FC = () => {
           >
             Clear Cache
           </Button>
+          <Button
+            onClick={() => {
+              console.log('🎯 Loading test data from 2025-10-06');
+              setFilters(prev => ({ ...prev, dateRange: '2025-10-06' }));
+              loadViolationCases('2025-10-06', selectedCamera === 'all' ? undefined : selectedCamera);
+            }}
+            disabled={loading}
+            variant="outlined"
+            color="info"
+          >
+            Load Test Data
+          </Button>
         </Box>
       </Box>
 
@@ -651,56 +754,93 @@ const FinesImagesMonitor: React.FC = () => {
 
       {/* Statistics Cards */}
       <Box display="flex" flexWrap="wrap" gap={2} sx={{ mb: 3 }}>
-        <Card sx={{ flex: '1 1 calc(25% - 8px)', minWidth: 150 }}>
+        <Card sx={{ flex: '1 1 calc(20% - 8px)', minWidth: 120 }}>
           <CardContent>
-            <Typography color="textSecondary" gutterBottom variant="body2">Total Cars</Typography>
+            <Typography color="textSecondary" gutterBottom variant="body2">Total Cases</Typography>
             <Typography variant="h4">{stats.total}</Typography>
           </CardContent>
         </Card>
-        <Card sx={{ flex: '1 1 calc(25% - 8px)', minWidth: 150 }}>
+        <Card sx={{ flex: '1 1 calc(20% - 8px)', minWidth: 120 }}>
           <CardContent>
-            <Typography color="textSecondary" gutterBottom variant="body2">Today</Typography>
-            <Typography variant="h4">{stats.todayCount}</Typography>
+            <Typography color="textSecondary" gutterBottom variant="body2">AI Enabled</Typography>
+            <Typography variant="h4" color="info.main">{stats.aiEnabled || 0}</Typography>
           </CardContent>
         </Card>
-        <Card sx={{ flex: '1 1 calc(25% - 8px)', minWidth: 150 }}>
+        <Card sx={{ flex: '1 1 calc(20% - 8px)', minWidth: 120 }}>
           <CardContent>
-            <Typography color="textSecondary" gutterBottom variant="body2">Violations</Typography>
-            <Typography variant="h4" color="error.main">{stats.violations}</Typography>
+            <Typography color="textSecondary" gutterBottom variant="body2">AI Processed</Typography>
+            <Typography variant="h4" color="success.main">{stats.aiProcessed || 0}</Typography>
           </CardContent>
         </Card>
-        <Card sx={{ flex: '1 1 calc(25% - 8px)', minWidth: 150 }}>
+        <Card sx={{ flex: '1 1 calc(20% - 8px)', minWidth: 120 }}>
           <CardContent>
-            <Typography color="textSecondary" gutterBottom variant="body2">No Violations</Typography>
-            <Typography variant="h4" color="success.main">{stats.noViolations}</Typography>
+            <Typography color="textSecondary" gutterBottom variant="body2">Plates Detected</Typography>
+            <Typography variant="h4" color="warning.main">{stats.totalPlatesDetected || 0}</Typography>
+          </CardContent>
+        </Card>
+        <Card sx={{ flex: '1 1 calc(20% - 8px)', minWidth: 120 }}>
+          <CardContent>
+            <Typography color="textSecondary" gutterBottom variant="body2">Total Images</Typography>
+            <Typography variant="h4">{stats.totalImages || 0}</Typography>
           </CardContent>
         </Card>
       </Box>
 
-      {/* Camera Breakdown (when All Cameras is selected) */}
-      {selectedCamera === 'all' && stats.total > 0 && (
+      {/* AI Processing Summary */}
+      {stats.total > 0 && (
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Typography variant="h6" gutterBottom>
-              📊 Camera Breakdown
+              🤖 AI Processing Summary
             </Typography>
-            <Box display="flex" flexWrap="wrap" gap={2}>
-              {availableCameras.map((camera, index) => {
-                const cameraStats = (stats as any)[camera] || 0;
-                const chipColor = index === 0 ? 'primary' : index === 1 ? 'secondary' : 'default';
-                
-                return (
-                  <Box key={camera} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Chip 
-                      label={camera.toUpperCase()} 
-                      color={chipColor as any} 
-                      size="small" 
-                    />
-                    <Typography variant="body2">{cameraStats} cases</Typography>
-                  </Box>
-                );
-              })}
+            <Box display="flex" flexWrap="wrap" gap={2} sx={{ mb: 2 }}>
+              <Chip 
+                label={`${stats.aiEnabled || 0}/${stats.total} AI Enabled`}
+                color={stats.aiEnabled > 0 ? 'success' : 'default'}
+                size="small"
+              />
+              <Chip 
+                label={`${stats.aiProcessed || 0} Processed`}
+                color={stats.aiProcessed > 0 ? 'info' : 'default'}
+                size="small"
+              />
+              <Chip 
+                label={`${stats.totalPlatesDetected || 0} Plates Found`}
+                color={stats.totalPlatesDetected > 0 ? 'warning' : 'default'}
+                size="small"
+              />
+              <Chip 
+                label={`${stats.totalImages || 0} Images`}
+                color="default"
+                size="small"
+              />
             </Box>
+            
+            {/* Camera Breakdown */}
+            {selectedCamera === 'all' && (
+              <Box>
+                <Typography variant="body2" color="textSecondary" gutterBottom>
+                  📊 Camera Breakdown:
+                </Typography>
+                <Box display="flex" flexWrap="wrap" gap={2}>
+                  {availableCameras.map((camera, index) => {
+                    const cameraStats = (stats as any)[camera] || 0;
+                    const chipColor = index === 0 ? 'primary' : index === 1 ? 'secondary' : 'default';
+                    
+                    return (
+                      <Box key={camera} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Chip 
+                          label={camera.toUpperCase()} 
+                          color={chipColor as any} 
+                          size="small" 
+                        />
+                        <Typography variant="body2">{cameraStats} cases</Typography>
+                      </Box>
+                    );
+                  })}
+                </Box>
+              </Box>
+            )}
           </CardContent>
         </Card>
       )}
@@ -713,6 +853,9 @@ const FinesImagesMonitor: React.FC = () => {
             <Typography variant="h6">Filters</Typography>
           </Box>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+            {/* DYNAMIC CAMERA SELECTION DROPDOWN */}
+            {/* This dropdown is populated dynamically based on detected cameras */}
+            {/* Supports unlimited cameras - automatically shows new cameras when added */}
             <TextField
               select
               label="Camera"
@@ -720,8 +863,9 @@ const FinesImagesMonitor: React.FC = () => {
               onChange={async (e) => {
                 const newCamera = e.target.value;
                 console.log(`🎯 Camera selection changed to: ${newCamera}`);
+                console.log(`📊 Available cameras: ${availableCameras.join(', ')}`);
                 
-                // FORCE clear all data immediately
+                // FORCE clear all data immediately to prevent cross-camera contamination
                 setSelectedCamera(newCamera);
                 setViolationCases([]);
                 setFilteredCases([]);
@@ -734,6 +878,7 @@ const FinesImagesMonitor: React.FC = () => {
                   noViolations: 0,
                   todayCount: 0
                 };
+                // Reset stats for all detected cameras
                 availableCameras.forEach(camera => {
                   emptyStats[camera] = 0;
                 });
@@ -743,7 +888,7 @@ const FinesImagesMonitor: React.FC = () => {
                 await new Promise(resolve => setTimeout(resolve, 100));
                 
                 if (newCamera === 'all') {
-                  console.log('📡 Loading data from ALL cameras');
+                  console.log('📡 Loading data from ALL detected cameras:', availableCameras);
                   await loadViolationCases(filters.dateRange, undefined);
                 } else {
                   console.log(`📡 Loading data from ${newCamera} ONLY - clearing other camera data`);
@@ -752,9 +897,11 @@ const FinesImagesMonitor: React.FC = () => {
               }}
               sx={{ minWidth: 150 }}
               size="small"
-              helperText="Load data from camera(s)"
+              helperText={`Load data from camera(s) - ${availableCameras.length} detected`}
             >
-              <MenuItem value="all">All Cameras</MenuItem>
+              {/* "All Cameras" option - loads from ALL detected cameras */}
+              <MenuItem value="all">All Cameras ({availableCameras.length})</MenuItem>
+              {/* Dynamic camera list - automatically populated from filesystem scan */}
               {availableCameras.map((camera) => (
                 <MenuItem key={camera} value={camera}>
                   {camera.replace('camera', 'Camera ').replace(/^Camera 0*/, 'Camera ')}
@@ -859,7 +1006,7 @@ const FinesImagesMonitor: React.FC = () => {
         <CardContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6">
-              Car Violation Cases - {selectedCamera === 'all' ? 'ALL CAMERAS' : selectedCamera.toUpperCase()} ({filteredCases.length})
+              🚗 Cases with AI Processing - {selectedCamera === 'all' ? 'ALL CAMERAS' : selectedCamera.toUpperCase()} ({filteredCases.length})
             </Typography>
             <Typography variant="body2" color="textSecondary">
               Page {page} of {Math.ceil(filteredCases.length / rowsPerPage)} • {rowsPerPage} per page
@@ -871,12 +1018,12 @@ const FinesImagesMonitor: React.FC = () => {
                 <Table stickyHeader>
                   <TableHead>
                     <TableRow>
-                      <TableCell>Case ID (Car)</TableCell>
-                      <TableCell>Date/Camera</TableCell>
-                      <TableCell>Speed Detection</TableCell>
-                      <TableCell>Decision</TableCell>
-                      <TableCell>Photos</TableCell>
-                      <TableCell>Timestamp</TableCell>
+                      <TableCell>Case ID</TableCell>
+                      <TableCell>Camera/Date</TableCell>
+                      <TableCell>AI Processing</TableCell>
+                      <TableCell>Plates Detected</TableCell>
+                      <TableCell>Images</TableCell>
+                      <TableCell>Processing Method</TableCell>
                       <TableCell>Actions</TableCell>
                     </TableRow>
                   </TableHead>
@@ -887,22 +1034,13 @@ const FinesImagesMonitor: React.FC = () => {
                       <TableRow key={`${violationCase.cameraId}-${violationCase.date}-${violationCase.eventId}`} hover>
                       <TableCell>
                         <Typography variant="body2" fontWeight="bold">
-                          {violationCase.eventId.split('_')[0]} {/* Show only case ID part */}
-                        </Typography>
-                        <Typography variant="caption" color="primary" fontWeight="bold">
-                          {violationCase.cameraId.toUpperCase()}
+                          {violationCase.eventId}
                         </Typography>
                         <Typography variant="caption" color="textSecondary">
-                          {violationCase.verdict?.src_ip || 'N/A'}
+                          {violationCase.folderPath}
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2" fontWeight="bold">
-                          {new Date(violationCase.date + 'T00:00:00').toLocaleDateString('en-US', { 
-                            month: 'short', 
-                            day: 'numeric' 
-                          })}
-                        </Typography>
                         <Chip
                           label={violationCase.cameraId.toUpperCase()}
                           size="small"
@@ -912,51 +1050,76 @@ const FinesImagesMonitor: React.FC = () => {
                           }
                           variant={selectedCamera === 'all' ? 'filled' : 'outlined'}
                         />
+                        <Typography variant="body2" fontWeight="bold">
+                          {new Date(violationCase.date + 'T00:00:00').toLocaleDateString('en-US', { 
+                            month: 'short', 
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                          <Chip 
+                            label={violationCase.hasAI ? 'AI Enabled' : 'No AI'} 
+                            color={violationCase.hasAI ? 'success' : 'default'}
+                            size="small"
+                          />
+                          <Chip 
+                            label={violationCase.processed ? 'Processed' : 'Not Processed'} 
+                            color={violationCase.processed ? 'info' : 'warning'}
+                            size="small"
+                          />
+                        </Box>
                       </TableCell>
                       <TableCell>
                         <Typography 
-                          variant="body2" 
+                          variant="h6" 
                           fontWeight="bold"
-                          color={violationCase.verdict?.decision === 'violation' ? 'error.main' : 'success.main'}
+                          color={violationCase.platesDetected > 0 ? 'warning.main' : 'text.secondary'}
                         >
-                          {violationCase.verdict?.speed || 'N/A'} km/h
+                          {violationCase.platesDetected || 0}
                         </Typography>
                         <Typography variant="caption" color="textSecondary">
-                          Limit: {violationCase.verdict?.limit || 30} km/h
+                          plates found
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Chip 
-                          label={violationCase.verdict?.decision === 'violation' ? 'VIOLATION' : 'NO VIOLATION'} 
-                          color={getStatusColor(violationCase.verdict?.decision || 'unknown') as any}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', gap: 0.5 }}>
-                          {violationCase.photos.map((photo, index) => (
+                        <Typography variant="body2" fontWeight="bold">
+                          {violationCase.imageCount || 0} images
+                        </Typography>
+                        <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5 }}>
+                          {violationCase.photos.slice(0, 3).map((photo, index) => (
                             <Avatar
                               key={`${violationCase.cameraId}-${violationCase.date}-${violationCase.eventId}-photo-${index}`}
                               src={photo.exists && photo.url ? photo.url : undefined}
                               variant="rounded"
                               sx={{ 
-                                width: 30, 
-                                height: 20, 
-                                bgcolor: photo.exists ? 'success.light' : 'error.light'
+                                width: 24, 
+                                height: 16, 
+                                bgcolor: photo.exists ? 'success.light' : 'error.light',
+                                fontSize: '0.7rem'
                               }}
                             >
                               {photo.exists ? (index + 1) : '✗'}
                             </Avatar>
                           ))}
+                          {violationCase.photos.length > 3 && (
+                            <Typography variant="caption" color="textSecondary">
+                              +{violationCase.photos.length - 3}
+                            </Typography>
+                          )}
                         </Box>
-                        <Typography variant="caption" color="textSecondary">
-                          {violationCase.photos.filter(p => p.exists).length}/{violationCase.photos.length} available
-                        </Typography>
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2">
-                          {violationCase.verdict?.event_ts ? new Date(violationCase.verdict.event_ts * 1000).toLocaleString('ar-SA') : 'N/A'}
+                          {violationCase.processingMethod || 'None'}
                         </Typography>
+                        {violationCase.aiResults && (
+                          <Typography variant="caption" color="textSecondary">
+                            {violationCase.aiResults.successfulDetections}/{violationCase.aiResults.totalImages} success
+                          </Typography>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', gap: 1 }}>
@@ -1011,7 +1174,17 @@ const FinesImagesMonitor: React.FC = () => {
             </>
           ) : (
             <Alert severity="info">
-              {violationCases.length === 0 ? `No violation cases found in ${selectedCamera === 'all' ? 'ALL CAMERAS' : selectedCamera.toUpperCase()}` : 'No cases match the current filters'}
+              {violationCases.length === 0 ? (
+                <div>
+                  <strong>No violation cases found in {selectedCamera === 'all' ? 'ALL CAMERAS' : selectedCamera.toUpperCase()}</strong>
+                  <br />
+                  <small>Current date filter: {filters.dateRange}</small>
+                  <br />
+                  <small>Available dates: {availableDates.join(', ') || 'Loading...'}</small>
+                  <br />
+                  <small>Try selecting a different date from the filter above</small>
+                </div>
+              ) : 'No cases match the current filters'}
             </Alert>
           )}
         </CardContent>

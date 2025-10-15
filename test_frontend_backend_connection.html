@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frontend-Backend Connection Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        button { padding: 10px 20px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 5px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Frontend-Backend Connection Test</h1>
+    <p>This page tests the connection between your frontend (port 38185) and backend (port 3001).</p>
+    
+    <div class="test-result info">
+        <strong>Current Configuration:</strong><br>
+        Frontend: http://127.0.0.1:38185<br>
+        Backend: http://localhost:3001/api<br>
+        Test Time: <span id="testTime"></span>
+    </div>
+
+    <button onclick="testBackendHealth()">Test Backend Health</button>
+    <button onclick="testLogin()">Test Login</button>
+    <button onclick="testFinesAPI()">Test Fines API</button>
+    <button onclick="clearResults()">Clear Results</button>
+
+    <div id="results"></div>
+
+    <script>
+        document.getElementById('testTime').textContent = new Date().toLocaleString();
+
+        function addResult(message, type = 'info') {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.innerHTML = message;
+            results.appendChild(div);
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        async function testBackendHealth() {
+            addResult('🔍 Testing backend health...', 'info');
+            
+            try {
+                const response = await fetch('http://localhost:3001/health');
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    addResult(`✅ Backend Health: ${data.message}<br>Timestamp: ${data.timestamp}`, 'success');
+                } else {
+                    addResult(`❌ Backend Health Failed: ${JSON.stringify(data)}`, 'error');
+                }
+            } catch (error) {
+                addResult(`❌ Backend Health Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testLogin() {
+            addResult('🔐 Testing login...', 'info');
+            
+            try {
+                const response = await fetch('http://localhost:3001/api/auth/signin', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: 'admin@potasfactory.com',
+                        password: 'admin123'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    // Store token for subsequent tests
+                    localStorage.setItem('testToken', data.data.token);
+                    addResult(`✅ Login Successful<br>User: ${data.data.user.firstName} ${data.data.user.lastName}<br>Role: ${data.data.user.role}`, 'success');
+                } else {
+                    addResult(`❌ Login Failed: ${data.message || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                addResult(`❌ Login Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testFinesAPI() {
+            addResult('📊 Testing fines API...', 'info');
+            
+            const token = localStorage.getItem('testToken');
+            if (!token) {
+                addResult('❌ No auth token found. Please login first.', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('http://localhost:3001/api/fines?limit=5', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    addResult(`✅ Fines API Success<br>Total Fines: ${data.data.pagination.total}<br>Retrieved: ${data.data.fines.length} fines`, 'success');
+                    
+                    if (data.data.fines.length > 0) {
+                        const sample = data.data.fines[0];
+                        addResult(`📋 Sample Fine:<br>ID: ${sample.id}<br>Speed: ${sample.speedDetected} km/h<br>Plate: ${sample.vehiclePlate || 'Not detected'}<br>Status: ${sample.status}`, 'info');
+                    }
+                } else {
+                    addResult(`❌ Fines API Failed: ${data.message || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                addResult(`❌ Fines API Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Auto-run basic health check on page load
+        window.onload = function() {
+            setTimeout(testBackendHealth, 500);
+        };
+    </script>
+</body>
+</html>
