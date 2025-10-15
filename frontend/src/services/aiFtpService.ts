@@ -60,8 +60,8 @@ class AIFtpService {
 
   async getViolationCycles(limit: number = 50): Promise<AIViolationResponse> {
     try {
-      // Use the working endpoint that provides actual violation data
-      const response = await fetch(`${this.baseUrl}/ftp-images/cases/camera001/2025-10-06`);
+      // Use relative URL to go through React dev server proxy
+      const response = await fetch(`/api/ai-cases?limit=${limit}`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -69,50 +69,76 @@ class AIFtpService {
       
       const data = await response.json();
       
-      // Transform the data to match the expected AIViolationResponse format
-      if (data.success && data.cases) {
-        const violations: AIViolation[] = data.cases
-          .filter((caseData: any) => caseData.hasVerdict && caseData.photos.length > 0)
-          .slice(0, limit)
-          .map((caseData: any) => ({
-            id: caseData.eventId,
-            camera: caseData.cameraId,
+      // Transform the AI cases data to match the expected AIViolationResponse format
+      if (data.success && data.data && data.data.cases) {
+        const violations: AIViolation[] = data.data.cases.map((caseData: any) => {
+          // Extract plate information from AI data
+          let detectedPlate = 'No Plate Detected';
+          let plateConfidence = 0;
+          let platesCount = 0;
+          
+          if (caseData.ai_data && caseData.ai_data.best_detection) {
+            detectedPlate = caseData.ai_data.best_detection.plate || caseData.ai_data.plate_number || 'No Plate Detected';
+            plateConfidence = caseData.ai_data.best_detection.confidence || caseData.ai_data.confidence || 0;
+            platesCount = caseData.ai_data.detections ? caseData.ai_data.detections.length : 1;
+          } else if (caseData.plate_number) {
+            detectedPlate = caseData.plate_number;
+            plateConfidence = caseData.confidence || 0;
+            platesCount = 1;
+          }
+
+          return {
+            id: caseData.case_id,
+            camera: caseData.camera_id,
             date: caseData.date,
-            case: caseData.eventId,
-            imagePath: caseData.folderPath,
-            imageUrl: caseData.photos[0]?.url ? `http://localhost:3003${caseData.photos[0].url}` : '',
-            platesDetected: 1, // Mock data since this is speed detection, not plate recognition
+            case: caseData.case_id,
+            imagePath: caseData.case_path,
+            imageUrl: caseData.ai_images && caseData.ai_images.length > 0 
+              ? `/api/ai-cases/${caseData.camera_id}/${caseData.date}/${caseData.case_id}/images/${caseData.ai_images[0].split('/').pop()}`
+              : '',
+            platesDetected: platesCount,
             plates: [{
               bbox: [0, 0, 100, 50],
               area: 5000,
               aspect_ratio: 2.0,
-              confidence: 0.85,
-              text: 'DETECTED',
-              detected_characters: 'DETECTED'
+              confidence: plateConfidence,
+              text: detectedPlate,
+              detected_characters: detectedPlate
             }],
-            confidence: [0.85],
-            processingMethod: 'speed_detection',
-            processedAt: new Date().toISOString(),
-            status: caseData.verdict?.decision === 'violation' ? 'success' : 'no_plates_detected'
-          }));
+            confidence: [plateConfidence],
+            processingMethod: 'ai_plate_detection',
+            processedAt: caseData.processed_at || new Date().toISOString(),
+            status: detectedPlate !== 'No Plate Detected' ? 'success' : 'no_plates_detected'
+          };
+        });
+
+        // Remove duplicates based on unique violation identifier
+        const uniqueViolations = violations.filter((violation, index, self) => 
+          index === self.findIndex(v => v.id === violation.id && v.camera === violation.camera && v.date === violation.date)
+        );
 
         return {
           success: true,
-          violations,
-          total: violations.length,
+          violations: uniqueViolations,
+          total: uniqueViolations.length,
           limit,
           summary: {
-            totalViolations: violations.length,
-            totalPlates: violations.length,
-            cameras: ['camera001'],
-            dates: ['2025-10-06']
+            totalViolations: uniqueViolations.length,
+            totalPlates: uniqueViolations.filter(v => v.status === 'success').length,
+            cameras: Array.from(new Set(uniqueViolations.map(v => v.camera))),
+            dates: Array.from(new Set(uniqueViolations.map(v => v.date)))
           }
         };
       }
       
-      throw new Error('No violation data available');
+      throw new Error('No AI cases data available');
     } catch (error) {
-      console.error('❌ Error fetching violation cycles:', error);
+      console.error('❌ Error fetching AI violation cycles:', error);
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        error: error
+      });
       throw error;
     }
   }
@@ -203,10 +229,15 @@ class AIFtpService {
 
   async testConnection(): Promise<boolean> {
     try {
-      const response = await fetch(`http://localhost:3003/health`);
+      const response = await fetch(`/health`);
       return response.ok;
     } catch (error) {
-      console.error('❌ AI FTP Server connection test failed:', error);
+      console.error('❌ AI Backend Server connection test failed:', error);
+      console.error('Connection test error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        error: error
+      });
       return false;
     }
   }

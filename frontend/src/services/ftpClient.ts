@@ -132,8 +132,8 @@ class FTPClientService {
           console.log(`🔄 Retrying in ${retryCount * 2} seconds...`);
           await new Promise(resolve => setTimeout(resolve, retryCount * 2000));
         } else {
-          console.error('❌ Local image server connection failed after all retries');
-          console.error('❌ Local image server not available - Using mock data');
+          console.log('ℹ️ Local image server not available - Using API data instead');
+          console.log('ℹ️ FTP functionality disabled - Using backend APIs for image data');
           this.initializeMockMode();
         }
       }

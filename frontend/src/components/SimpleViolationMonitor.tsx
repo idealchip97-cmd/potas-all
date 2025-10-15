@@ -39,10 +39,18 @@ import aiFtpService, { AIViolation } from '../services/aiFtpService';
 
 interface SimpleViolationMonitorProps {
   refreshTrigger?: number;
+  selectedCamera?: string;
+  dateFilter?: string;
+  statusFilter?: string;
+  searchFilter?: string;
 }
 
 const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({ 
-  refreshTrigger = 0 
+  refreshTrigger = 0,
+  selectedCamera = 'all',
+  dateFilter = '2025-10-06',
+  statusFilter = 'all',
+  searchFilter = ''
 }) => {
   const [violations, setViolations] = useState<AIViolation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,30 +75,54 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
 
   useEffect(() => {
     loadViolationCycles();
-  }, [refreshTrigger, page]);
+  }, [refreshTrigger, page, selectedCamera, dateFilter, statusFilter, searchFilter]);
 
   const loadViolationCycles = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Test AI FTP server connection first
-      const isConnected = await aiFtpService.testConnection();
-      if (!isConnected) {
-        throw new Error('AI FTP Server not available');
-      }
-
       // Get violations with pagination
       const response = await aiFtpService.getViolationCycles(100); // Get more to paginate locally
       
       if (response.success) {
-        // For pagination, we'll slice the results
+        // Apply filters
+        let filteredViolations = response.violations;
+        
+        // Filter by camera
+        if (selectedCamera && selectedCamera !== 'all') {
+          filteredViolations = filteredViolations.filter(v => v.camera === selectedCamera);
+        }
+        
+        // Filter by date
+        if (dateFilter && dateFilter !== 'all') {
+          filteredViolations = filteredViolations.filter(v => v.date === dateFilter);
+        }
+        
+        // Filter by status
+        if (statusFilter && statusFilter !== 'all') {
+          if (statusFilter === 'violation') {
+            filteredViolations = filteredViolations.filter(v => v.status === 'success');
+          } else if (statusFilter === 'no_violation') {
+            filteredViolations = filteredViolations.filter(v => v.status === 'no_plates_detected');
+          }
+        }
+        
+        // Filter by search (case ID or plate number)
+        if (searchFilter) {
+          filteredViolations = filteredViolations.filter(v => 
+            v.case.toLowerCase().includes(searchFilter.toLowerCase()) ||
+            v.plates.some(p => p.text.toLowerCase().includes(searchFilter.toLowerCase()))
+          );
+        }
+        
+        // For pagination, we'll slice the filtered results
         const startIndex = (page - 1) * itemsPerPage;
         const endIndex = startIndex + itemsPerPage;
-        const paginatedViolations = response.violations.slice(startIndex, endIndex);
+        const paginatedViolations = filteredViolations.slice(startIndex, endIndex);
         
         setViolations(paginatedViolations);
-        setTotalViolations(response.total);
+        setTotalViolations(filteredViolations.length);
         
         // Update statistics
         setStats({
@@ -106,6 +138,11 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
       }
     } catch (err: any) {
       console.error('❌ Error loading violations:', err);
+      console.error('Error details:', {
+        message: err instanceof Error ? err.message : 'Unknown error',
+        stack: err instanceof Error ? err.stack : undefined,
+        error: err
+      });
       setError(err.message || 'Failed to load data');
     } finally {
       setLoading(false);
@@ -133,7 +170,7 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
 
       const token = localStorage.getItem('token') || 'demo_token_1760447560349_liqy8nlhx';
       
-      const response = await fetch('http://localhost:3001/api/ai-fines/create-from-violations', {
+      const response = await fetch('/api/ai-fines/create-from-violations', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -526,7 +563,7 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
                 </Typography>
                 
                 {selectedViolation.plates.map((plate, index) => (
-                  <Card key={index} sx={{ mb: 2, p: 2, bgcolor: 'background.default' }}>
+                  <Card key={`${selectedViolation.id}-plate-${index}-${plate.detected_characters}`} sx={{ mb: 2, p: 2, bgcolor: 'background.default' }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
                       Plate {index + 1}: {plate.detected_characters}
                     </Typography>

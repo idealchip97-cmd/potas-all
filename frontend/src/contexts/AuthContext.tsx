@@ -20,6 +20,51 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [sessionTimeout, setSessionTimeout] = useState<NodeJS.Timeout | null>(null);
+  
+  // Session timeout duration (30 minutes)
+  const SESSION_TIMEOUT_DURATION = 30 * 60 * 1000; // 30 minutes in milliseconds
+
+  // Function to start session timeout
+  const startSessionTimeout = React.useCallback(() => {
+    // Clear existing timeout
+    if (sessionTimeout) {
+      clearTimeout(sessionTimeout);
+    }
+    
+    // Set new timeout
+    const timeoutId = setTimeout(() => {
+      console.log('🕐 Session timeout - automatically logging out');
+      logout();
+      alert('Your session has expired. Please log in again.');
+    }, SESSION_TIMEOUT_DURATION);
+    
+    setSessionTimeout(timeoutId);
+    
+    // Store session start time
+    localStorage.setItem('sessionStartTime', Date.now().toString());
+  }, [sessionTimeout]);
+
+  // Function to reset session timeout (extend session)
+  const resetSessionTimeout = React.useCallback(() => {
+    if (token && user) {
+      startSessionTimeout();
+    }
+  }, [token, user, startSessionTimeout]);
+
+  // Function to check if session is expired
+  const checkSessionExpiry = React.useCallback(() => {
+    const sessionStartTime = localStorage.getItem('sessionStartTime');
+    if (sessionStartTime) {
+      const elapsed = Date.now() - parseInt(sessionStartTime);
+      if (elapsed > SESSION_TIMEOUT_DURATION) {
+        console.log('🕐 Session expired on page load');
+        logout();
+        return true;
+      }
+    }
+    return false;
+  }, [SESSION_TIMEOUT_DURATION]);
 
   useEffect(() => {
     // Check for stored auth data on app load
@@ -36,13 +81,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         console.log('Auth: Restoring session for', userData.email);
         console.log('Auth: User data:', userData);
         
+        // Check if session has expired
+        if (checkSessionExpiry()) {
+          console.log('Auth: Session expired, not restoring');
+          setIsLoading(false);
+          return;
+        }
+        
         // Validate token with backend if it's not a demo token
         if (!storedToken.startsWith('demo_token_')) {
           validateStoredToken(storedToken, userData);
         } else {
-          // Demo token, restore immediately
+          // Demo token, restore immediately and start timeout
           setToken(storedToken);
           setUser(userData);
+          startSessionTimeout();
           console.log('Auth: Demo session restored, setting isLoading to false');
           setIsLoading(false);
         }
@@ -67,9 +120,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const response = await apiService.getDashboardStats();
         
         if (response.success) {
-          // If successful, restore the session
+          // If successful, restore the session and start timeout
           setToken(token);
           setUser(userData);
+          startSessionTimeout();
           console.log('Auth: Token validated, session restored');
         } else {
           throw new Error('Dashboard stats request failed');
@@ -94,6 +148,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       clearTimeout(failsafeTimeout);
     };
   }, []);
+
 
   const login = async (email: string, password: string): Promise<boolean> => {
     console.log('🔐 Login attempt for:', email);
@@ -124,6 +179,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Set state after localStorage is saved
         setToken(token);
         setUser(user);
+        
+        // Start session timeout
+        startSessionTimeout();
         
         console.log('✅ Login successful - State updated');
         return true;
@@ -174,6 +232,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setToken(authToken);
           setUser(userData);
           
+          // Start session timeout for demo login
+          startSessionTimeout();
+          
           console.log('✅ Demo login successful');
           return true;
         }
@@ -186,10 +247,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const logout = () => {
+    // Clear session timeout
+    if (sessionTimeout) {
+      clearTimeout(sessionTimeout);
+      setSessionTimeout(null);
+    }
+    
     setUser(null);
     setToken(null);
     localStorage.removeItem('authToken');
     localStorage.removeItem('user');
+    localStorage.removeItem('sessionStartTime');
+    
+    console.log('🚪 Logout completed - session cleared');
   };
 
   // Calculate authentication status more reliably
@@ -212,6 +282,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return authenticated;
   }, [token, user]);
 
+  // Add user activity detection to extend session
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const activityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+    
+    const handleUserActivity = () => {
+      resetSessionTimeout();
+    };
+
+    // Add event listeners for user activity
+    activityEvents.forEach(event => {
+      document.addEventListener(event, handleUserActivity, true);
+    });
+
+    return () => {
+      // Clean up event listeners
+      activityEvents.forEach(event => {
+        document.removeEventListener(event, handleUserActivity, true);
+      });
+    };
+  }, [isAuthenticated, resetSessionTimeout]);
+
   const value: AuthContextType = {
     user,
     token,
@@ -219,6 +312,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     logout,
     isAuthenticated,
     isLoading,
+    resetSessionTimeout,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

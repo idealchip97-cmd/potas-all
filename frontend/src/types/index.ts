@@ -155,6 +155,7 @@ export interface AuthContextType {
   logout: () => void;
   isAuthenticated: boolean;
   isLoading: boolean;
+  resetSessionTimeout: () => void;
 }
 
 export interface ThemeContextType {

@@ -154,14 +154,14 @@ const FinesImagesMonitor: React.FC = () => {
       console.log('📁 Scanning /srv/processing_inbox for camera directories...');
       
       // API call to dynamically discover cameras from filesystem
-      const response = await fetch('http://localhost:3003/api/discover/cameras');
+      const response = await fetch('/api/speeding-car-processor/cameras');
       const data = await response.json();
       
-      if (data.success && data.cameras && Array.isArray(data.cameras)) {
-        setAvailableCameras(data.cameras);
+      if (data.success && data.data && data.data.cameras && Array.isArray(data.data.cameras)) {
+        setAvailableCameras(data.data.cameras);
         setIsConnected(true);
         setConnectionMode('local_server');
-        console.log(`✅ Dynamically detected ${data.cameras.length} cameras:`, data.cameras);
+        console.log(`✅ Dynamically detected ${data.data.cameras.length} cameras:`, data.data.cameras);
         console.log('📊 Camera detection successful - system supports unlimited cameras');
       } else {
         console.warn('⚠️ Failed to load cameras from AI FTP server, using fallback');
@@ -171,6 +171,11 @@ const FinesImagesMonitor: React.FC = () => {
       }
     } catch (error: any) {
       console.error('❌ Failed to load available cameras from AI FTP server:', error);
+      console.error('Camera loading error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        error: error
+      });
       console.log('🔄 Using fallback cameras - check server connection');
       setAvailableCameras(['camera001', 'camera002']); // Static fallback
       setIsConnected(false);
@@ -182,11 +187,11 @@ const FinesImagesMonitor: React.FC = () => {
   const loadAvailableDates = async () => {
     try {
       console.log('🔍 Loading available dates from AI FTP server...');
-      const response = await fetch('http://localhost:3003/api/ftp-images/dates');
+      const response = await fetch('/api/speeding-car-processor/dates');
       const data = await response.json();
       
-      if (data.success && data.dates && Array.isArray(data.dates)) {
-        const dateStrings = data.dates.map((d: any) => d.date || d);
+      if (data.success && data.data && data.data.dates && Array.isArray(data.data.dates)) {
+        const dateStrings = data.data.dates;
         setAvailableDates(dateStrings);
         setIsConnected(true);
         setConnectionMode('local_server');
@@ -199,6 +204,11 @@ const FinesImagesMonitor: React.FC = () => {
       }
     } catch (error: any) {
       console.error('❌ Failed to load available dates from AI FTP server:', error);
+      console.error('Dates loading error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        error: error
+      });
       setAvailableDates(['2025-10-05', '2025-10-06']); // Fallback to known dates
       setIsConnected(false);
       setConnectionMode('disconnected');
@@ -272,8 +282,8 @@ const FinesImagesMonitor: React.FC = () => {
       for (const camera of camerasToLoad) {
         for (const date of datesToLoad) {
           try {
-            // Use the correct API endpoint that already filters for verdict.json files
-            const apiUrl = `http://localhost:3003/api/ftp-images/cases/${camera}/${date}`;
+            // Use relative URL to go through React dev server proxy
+            const apiUrl = `/api/speeding-car-processor/events/${date}?camera_id=${camera}`;
             console.log(`🔍 API CALL (Speed Monitor): ${apiUrl}`);
             const response = await fetch(apiUrl);
             
@@ -281,39 +291,44 @@ const FinesImagesMonitor: React.FC = () => {
               const data = await response.json();
               console.log(`📊 API RESPONSE for ${camera}/${date}:`, {
                 success: data.success,
-                caseCount: data.cases?.length || 0,
-                violations: data.violations || 0,
-                compliant: data.compliant || 0
+                eventCount: data.data?.events?.length || 0,
+                camera: data.data?.camera_id || camera,
+                date: data.data?.date || date
               });
               
-              if (data.success && data.cases && data.cases.length > 0) {
-                // Process each case - the API already filtered for cases with verdict.json
-                for (const caseData of data.cases) {
-                  // SKIP cases without valid verdict data (double-check)
-                  if (!caseData.hasVerdict || !caseData.verdict || !caseData.verdict.speed || !caseData.verdict.limit) {
-                    console.log(`❌ Skipping ${caseData.eventId} - no valid verdict.json with speed data`);
-                    continue; // Skip this case entirely
+              if (data.success && data.data && data.data.events && data.data.events.length > 0) {
+                // Process each event - the API already filtered for events with verdict.json
+                for (const eventData of data.data.events) {
+                  // SKIP events without valid verdict data (double-check)
+                  if (!eventData.has_verdict || !eventData.verdict || !eventData.verdict.speed || !eventData.verdict.limit) {
+                    console.log(`❌ Skipping ${eventData.event_id} - no valid verdict.json with speed data`);
+                    continue; // Skip this event entirely
                   }
                   
-                  console.log(`✅ Processing case ${caseData.eventId} with speed: ${caseData.verdict.speed} km/h, limit: ${caseData.verdict.limit} km/h`);
+                  console.log(`✅ Processing event ${eventData.event_id} with speed: ${eventData.verdict.speed} km/h, limit: ${eventData.verdict.limit} km/h`);
                   
                   // Create violation case with verdict data from the API
                   const violationCase: ViolationCase = {
-                    eventId: caseData.eventId,
+                    eventId: eventData.event_id,
                     cameraId: camera,
                     date: date,
-                    verdict: caseData.verdict, // Contains actual verdict data from verdict.json
-                    photos: (caseData.photos || []).map((photo: any) => ({
-                      ...photo,
-                      url: photo.url ? `http://localhost:3003${photo.url}` : null,
-                      thumbnailUrl: photo.thumbnailUrl ? `http://localhost:3003${photo.thumbnailUrl}` : null,
-                      imageUrl: photo.imageUrl ? `http://localhost:3003${photo.imageUrl}` : null
-                    })), // Fix photo URLs to be absolute
-                    folderPath: caseData.folderPath,
+                    verdict: eventData.verdict, // Contains actual verdict data from verdict.json
+                    photos: (eventData.photos || []).map((photoFilename: string) => {
+                      // Create photo URL using the speeding-car-processor endpoint (relative URL for proxy)
+                      const photoUrl = `/api/speeding-car-processor/event/${eventData.event_id}/photo/${photoFilename}?date=${date}&camera_id=${camera}`;
+                      console.log(`🖼️ Photo URL for ${eventData.event_id}:`, photoUrl);
+                      return {
+                        filename: photoFilename,
+                        size: 0, // Size not available from this API
+                        exists: true,
+                        url: photoUrl
+                      };
+                    }),
+                    folderPath: eventData.event_path,
                     // Set AI processing data to defaults since we're focusing on speed
                     hasAI: false,
                     processed: true,
-                    imageCount: caseData.photoCount || caseData.photos?.length || 0,
+                    imageCount: eventData.photo_count || eventData.photos?.length || 0,
                     platesDetected: 0, // Not relevant for speed monitoring
                     processingMethod: 'speed_detection',
                     aiResults: undefined
@@ -324,7 +339,7 @@ const FinesImagesMonitor: React.FC = () => {
                 
                 setIsConnected(true);
                 setConnectionMode('local_server');
-                console.log(`✅ Loaded ${data.cases.length} speed violation cases for ${camera}/${date}`);
+                console.log(`✅ Loaded ${data.data.events.length} speed violation events for ${camera}/${date}`);
               }
             } else {
               console.warn(`⚠️ Failed to fetch cases for ${camera}/${date}: ${response.status}`);
@@ -335,18 +350,27 @@ const FinesImagesMonitor: React.FC = () => {
         }
       }
       
+      // Remove duplicates based on unique case identifier
+      const uniqueCases = allCases.filter((case1, index, self) => 
+        index === self.findIndex(case2 => 
+          case2.cameraId === case1.cameraId && 
+          case2.date === case1.date && 
+          case2.eventId === case1.eventId
+        )
+      );
+      
       // Sort by date (newest first), then by case name
-      allCases.sort((a, b) => {
+      uniqueCases.sort((a, b) => {
         const dateComparison = b.date.localeCompare(a.date);
         if (dateComparison !== 0) return dateComparison;
         return a.eventId.localeCompare(b.eventId);
       });
       
-      setViolationCases(allCases);
-      updateViolationStats(allCases);
-      console.log(`📊 Total speed violation cases loaded: ${allCases.length}`);
+      setViolationCases(uniqueCases);
+      updateViolationStats(uniqueCases);
+      console.log(`📊 Total speed violation cases loaded: ${uniqueCases.length} (${allCases.length - uniqueCases.length} duplicates removed)`);
       
-      if (allCases.length > 0) {
+      if (uniqueCases.length > 0) {
         setIsConnected(true);
         setConnectionMode('local_server');
       } else {
@@ -369,7 +393,7 @@ const FinesImagesMonitor: React.FC = () => {
   const testConnection = async () => {
     try {
       console.log('🔍 Testing connection to local image server...');
-      const response = await fetch('http://localhost:3003/health');
+      const response = await fetch('/health');
       console.log('📡 Response status:', response.status);
       
       if (!response.ok) {
@@ -608,6 +632,7 @@ const FinesImagesMonitor: React.FC = () => {
     }
   };
 
+
   const handleReprocessCase = (eventId: string) => {
     // In a real system, this would trigger reprocessing on the server
     console.log(`🔄 Reprocessing case: ${eventId}`);
@@ -661,7 +686,7 @@ const FinesImagesMonitor: React.FC = () => {
           Loading violation cases...
         </Typography>
         <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
-          Violation System: localhost:3003
+          Connecting to violation system...
         </Typography>
       </Box>
     );
@@ -1007,8 +1032,10 @@ const FinesImagesMonitor: React.FC = () => {
                   <TableBody>
                     {filteredCases
                       .slice((page - 1) * rowsPerPage, page * rowsPerPage)
-                      .map((violationCase) => (
-                      <TableRow key={`${violationCase.cameraId}-${violationCase.date}-${violationCase.eventId}`} hover>
+                      .map((violationCase, index) => {
+                        const uniqueKey = `${violationCase.cameraId}-${violationCase.date}-${violationCase.eventId}-${index}`;
+                        return (
+                      <TableRow key={uniqueKey} hover>
                       <TableCell>
                         <Typography variant="body2" fontWeight="bold">
                           {violationCase.eventId}
@@ -1095,20 +1122,42 @@ const FinesImagesMonitor: React.FC = () => {
                           {violationCase.imageCount || 0} images
                         </Typography>
                         <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5 }}>
-                          {violationCase.photos.slice(0, 3).map((photo, index) => (
-                            <Avatar
-                              key={`${violationCase.cameraId}-${violationCase.date}-${violationCase.eventId}-photo-${index}`}
-                              src={photo.exists && photo.url ? photo.url : undefined}
-                              variant="rounded"
-                              sx={{ 
-                                width: 24, 
-                                height: 16, 
-                                bgcolor: photo.exists ? 'success.light' : 'error.light',
-                                fontSize: '0.7rem'
-                              }}
-                            >
-                              {photo.exists ? (index + 1) : '✗'}
-                            </Avatar>
+                          {violationCase.photos.slice(0, 3).map((photo, photoIndex) => (
+                            photo.exists && photo.url ? (
+                              <img
+                                key={`${uniqueKey}-photo-${photoIndex}`}
+                                src={photo.url}
+                                alt={`Photo ${photoIndex + 1}`}
+                                style={{ 
+                                  width: 48, 
+                                  height: 32, 
+                                  borderRadius: 4,
+                                  objectFit: 'cover',
+                                  border: '1px solid #ccc',
+                                  cursor: 'pointer'
+                                }}
+                                onError={(e) => {
+                                  console.error('Image failed to load:', photo.url);
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                                onLoad={() => {
+                                  console.log('Image loaded successfully:', photo.url);
+                                }}
+                              />
+                            ) : (
+                              <Avatar
+                                key={`${uniqueKey}-avatar-${photoIndex}`}
+                                variant="rounded"
+                                sx={{ 
+                                  width: 48, 
+                                  height: 32, 
+                                  bgcolor: 'error.light',
+                                  fontSize: '0.8rem'
+                                }}
+                              >
+                                ✗
+                              </Avatar>
+                            )
                           ))}
                           {violationCase.photos.length > 3 && (
                             <Typography variant="caption" color="textSecondary">
@@ -1144,7 +1193,8 @@ const FinesImagesMonitor: React.FC = () => {
                         </Box>
                       </TableCell>
                     </TableRow>
-                  ))}
+                        );
+                      })}
                   </TableBody>
                 </Table>
               </TableContainer>

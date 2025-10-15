@@ -19,6 +19,9 @@ import {
   TableRow,
   Paper,
   Avatar,
+  TextField,
+  MenuItem,
+  Autocomplete,
 } from '@mui/material';
 import {
   Close,
@@ -64,6 +67,13 @@ interface Statistics {
   aiModel: string;
 }
 
+interface FilterOptions {
+  status: string;
+  dateRange: string;
+  search: string;
+  caseFilter: string;
+}
+
 const PlateRecognition: React.FC = () => {
   // All hooks must be at the top level - NEVER call hooks conditionally
   const [showRealTimeView, setShowRealTimeView] = useState(false);
@@ -82,6 +92,17 @@ const PlateRecognition: React.FC = () => {
     totalCars: 0,
     last24Hours: 0,
     aiModel: 'gpt-4o-mini'
+  });
+
+  // Filter states
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
+  const [availableCameras, setAvailableCameras] = useState<string[]>([]);
+  const [selectedCamera, setSelectedCamera] = useState<string>('all');
+  const [filters, setFilters] = useState<FilterOptions>({
+    status: 'all',
+    dateRange: '2025-10-06', // Default to date with AI data
+    search: '',
+    caseFilter: ''
   });
 
   // All hooks must be called before any conditional returns
@@ -182,6 +203,45 @@ const PlateRecognition: React.FC = () => {
     };
   }, [useRealTimeData, setupRealTimeData]);
 
+  // Load available cameras and dates
+  useEffect(() => {
+    const loadFilterOptions = async () => {
+      try {
+        // Load available cameras
+        const camerasResponse = await fetch('/api/speeding-car-processor/cameras');
+        if (camerasResponse.ok) {
+          const camerasData = await camerasResponse.json();
+          if (camerasData.success && camerasData.data && camerasData.data.cameras) {
+            setAvailableCameras(camerasData.data.cameras || []);
+          }
+        }
+
+        // Load available dates
+        const datesResponse = await fetch('/api/speeding-car-processor/dates');
+        if (datesResponse.ok) {
+          const datesData = await datesResponse.json();
+          if (datesData.success && datesData.data && datesData.data.dates) {
+            setAvailableDates(datesData.data.dates || []);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading filter options:', error);
+        console.error('Filter loading error details:', {
+          message: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : undefined,
+          error: error
+        });
+      }
+    };
+
+    loadFilterOptions();
+  }, []);
+
+  // Handle date filter change
+  const handleDateFilterChange = (newDate: string) => {
+    setFilters({ ...filters, dateRange: newDate });
+  };
+
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const newFiles = acceptedFiles.map(file => ({
       file,
@@ -225,7 +285,110 @@ const PlateRecognition: React.FC = () => {
             </Button>
           </Box>
         </Box>
-        <SimpleViolationMonitor />
+        
+        {/* Filters Section - Same as FinesImagesMonitor */}
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+              <Typography variant="h6">Filters</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+              {/* Camera Selection */}
+              <TextField
+                select
+                label="Camera"
+                value={selectedCamera}
+                onChange={async (e) => {
+                  const newCamera = e.target.value;
+                  setSelectedCamera(newCamera);
+                }}
+                sx={{ minWidth: 150 }}
+                size="small"
+                helperText={`Load data from camera(s) - ${availableCameras.length} detected`}
+              >
+                <MenuItem value="all">All Cameras ({availableCameras.length})</MenuItem>
+                {availableCameras.map((camera) => (
+                  <MenuItem key={camera} value={camera}>
+                    {camera.replace('camera', 'Camera ').replace(/^Camera 0*/, 'Camera ')}
+                  </MenuItem>
+                ))}
+              </TextField>
+
+              {/* Status Filter */}
+              <TextField
+                select
+                label="Decision Status"
+                value={filters.status}
+                onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+                sx={{ minWidth: 150 }}
+                size="small"
+              >
+                <MenuItem value="all">All Cases</MenuItem>
+                <MenuItem value="violation">Violation</MenuItem>
+                <MenuItem value="no_violation">No Violation</MenuItem>
+              </TextField>
+
+              {/* Date Filter */}
+              <TextField
+                select
+                label="Date Filter"
+                value={filters.dateRange}
+                onChange={(e) => handleDateFilterChange(e.target.value)}
+                sx={{ minWidth: 180 }}
+                size="small"
+                helperText="Select specific date or all"
+              >
+                <MenuItem value="all">All Dates</MenuItem>
+                {availableDates.map((date) => (
+                  <MenuItem key={date} value={date}>
+                    {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { 
+                      year: 'numeric', 
+                      month: 'short', 
+                      day: 'numeric' 
+                    })}
+                  </MenuItem>
+                ))}
+              </TextField>
+
+              {/* Search Filter */}
+              <Autocomplete
+                freeSolo
+                options={[]} // Will be populated with case IDs
+                value={filters.search}
+                onInputChange={(event, newValue) => {
+                  setFilters({ ...filters, search: newValue || '' });
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="🔍 Search Case ID"
+                    placeholder="Type or select case ID..."
+                    size="small"
+                    sx={{ minWidth: 200 }}
+                  />
+                )}
+                sx={{ minWidth: 200 }}
+              />
+
+              {/* Quick Filter */}
+              <TextField
+                label="🚀 Quick Filter"
+                placeholder="Search by IP, speed, camera..."
+                value={filters.caseFilter}
+                onChange={(e) => setFilters({ ...filters, caseFilter: e.target.value })}
+                size="small"
+                sx={{ minWidth: 200 }}
+              />
+            </Box>
+          </CardContent>
+        </Card>
+
+        <SimpleViolationMonitor 
+          selectedCamera={selectedCamera}
+          dateFilter={filters.dateRange}
+          statusFilter={filters.status}
+          searchFilter={filters.search}
+        />
       </Box>
     );
   }

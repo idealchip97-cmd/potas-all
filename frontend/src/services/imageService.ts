@@ -30,7 +30,7 @@ class ImageService {
 
   // Get violation image URL from the backend API
   getViolationImageUrl(eventId: string, filename: string, date: string, cameraId: string) {
-    return `http://localhost:3001/api/speeding-car-processor/event/${eventId}/photo/${filename}?date=${date}&camera_id=${cameraId}`;
+    return `/api/speeding-car-processor/event/${eventId}/photo/${filename}?date=${date}&camera_id=${cameraId}`;
   }
 }
 

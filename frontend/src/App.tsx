@@ -12,6 +12,7 @@ import Fines from './pages/Fines';
 import Reports from './pages/Reports';
 import PlateRecognition from './pages/PlateRecognition';
 import FinesImagesMonitor from './pages/FinesImagesMonitor';
+import AICases from './pages/AICases';
 import AuthTest from './pages/AuthTest';
 
 function App() {
@@ -99,6 +100,16 @@ function App() {
                 <ProtectedRoute>
                   <Layout>
                     <Reports />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/ai-cases"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <AICases />
                   </Layout>
                 </ProtectedRoute>
               }

@@ -60,6 +60,7 @@ const enhancedFtpRoutes = require('./routes/enhancedFtp');
 const aiSyncRoutes = require('./routes/aiSync');
 const aiFinesRoutes = require('./routes/aiFines');
 const plateRecognitionSyncRoutes = require('./routes/plateRecognitionSync');
+const aiCasesRoutes = require('./routes/aiCases');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -84,7 +85,13 @@ app.use(cors({
     'http://127.0.0.1:42503', // Browser preview proxy
     'http://localhost:42503',
     'http://127.0.0.1:36555', // Current browser preview proxy
-    'http://localhost:36555'
+    'http://localhost:36555',
+    'http://127.0.0.1:43341', // Browser preview proxy
+    'http://localhost:43341',
+    'http://127.0.0.1:38675', // Browser preview proxy
+    'http://localhost:38675',
+    'http://127.0.0.1:41453', // Current browser preview proxy
+    'http://localhost:41453'
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -107,6 +114,115 @@ app.use(limiter);
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// Proxy middleware for image server (port 3003) - FTP Images API
+app.use('/api/ftp-images', async (req, res) => {
+  try {
+    const fetch = require('node-fetch');
+    const imageServerUrl = `http://localhost:3003${req.originalUrl}`;
+    console.log(`🔄 Proxying FTP Images to image server: ${imageServerUrl}`);
+    
+    const fetchOptions = {
+      method: req.method,
+      headers: {
+        'Content-Type': req.headers['content-type'] || 'application/json',
+      }
+    };
+    
+    // Only add body for non-GET/HEAD requests
+    if (req.method !== 'GET' && req.method !== 'HEAD' && req.body) {
+      fetchOptions.body = JSON.stringify(req.body);
+    }
+    
+    const response = await fetch(imageServerUrl, fetchOptions);
+    
+    if (response.headers.get('content-type')?.includes('image/')) {
+      // Handle image responses
+      const buffer = await response.buffer();
+      res.setHeader('Content-Type', response.headers.get('content-type'));
+      res.setHeader('Content-Length', buffer.length);
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      res.send(buffer);
+    } else {
+      // Handle JSON responses
+      const data = await response.json();
+      res.status(response.status).json(data);
+    }
+  } catch (error) {
+    console.error('❌ FTP Images proxy error:', error);
+    res.status(500).json({ success: false, error: 'Proxy error', message: error.message });
+  }
+});
+
+// Proxy middleware for image server (port 3003) - Violations API
+app.use('/api/violations', async (req, res) => {
+  try {
+    const fetch = require('node-fetch');
+    const imageServerUrl = `http://localhost:3003${req.originalUrl}`;
+    console.log(`🔄 Proxying Violations to image server: ${imageServerUrl}`);
+    
+    const fetchOptions = {
+      method: req.method,
+      headers: {
+        'Content-Type': req.headers['content-type'] || 'application/json',
+      }
+    };
+    
+    // Only add body for non-GET/HEAD requests
+    if (req.method !== 'GET' && req.method !== 'HEAD' && req.body) {
+      fetchOptions.body = JSON.stringify(req.body);
+    }
+    
+    const response = await fetch(imageServerUrl, fetchOptions);
+    
+    if (response.headers.get('content-type')?.includes('image/')) {
+      // Handle image responses
+      const buffer = await response.buffer();
+      res.setHeader('Content-Type', response.headers.get('content-type'));
+      res.setHeader('Content-Length', buffer.length);
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.send(buffer);
+    } else {
+      // Handle JSON responses
+      const data = await response.json();
+      res.status(response.status).json(data);
+    }
+  } catch (error) {
+    console.error('❌ Violations proxy error:', error);
+    res.status(500).json({ success: false, error: 'Proxy error', message: error.message });
+  }
+});
+
+// Proxy middleware for health check to image server
+app.use('/health', async (req, res, next) => {
+  // First try to respond with backend health
+  if (req.originalUrl === '/health') {
+    try {
+      const fetch = require('node-fetch');
+      const imageServerResponse = await fetch('http://localhost:3003/health');
+      const imageServerData = await imageServerResponse.json();
+      
+      res.json({
+        success: true,
+        message: 'Radar Speed Detection API is running',
+        timestamp: new Date().toISOString(),
+        imageBasePath: IMAGE_BASE_DIR,
+        imageServer: imageServerData
+      });
+    } catch (error) {
+      res.json({
+        success: true,
+        message: 'Radar Speed Detection API is running',
+        timestamp: new Date().toISOString(),
+        imageBasePath: IMAGE_BASE_DIR,
+        imageServer: { error: 'Image server not available' }
+      });
+    }
+  } else {
+    next();
+  }
+});
 
 // Static file serving for uploads
 app.use('/uploads', express.static('uploads'));
@@ -134,16 +250,6 @@ app.use(
     }
   })
 );
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Radar Speed Detection API is running',
-    timestamp: new Date().toISOString(),
-    imageBasePath: IMAGE_BASE_DIR
-  });
-});
 
 // Debug endpoint to test image directory access
 app.get('/debug/images', async (req, res) => {
@@ -237,6 +343,7 @@ app.use('/api/enhanced-ftp', enhancedFtpRoutes);
 app.use('/api/ai-sync', aiSyncRoutes);
 app.use('/api/ai-fines', aiFinesRoutes);
 app.use('/api/plate-recognition-sync', plateRecognitionSyncRoutes);
+app.use('/api/ai-cases', aiCasesRoutes);
 
 // Root route - redirect to dashboard
 app.get('/', (req, res) => {
