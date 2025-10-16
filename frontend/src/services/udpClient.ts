@@ -303,14 +303,16 @@ class UDPClientService {
       const processedFines: Fine[] = fines.map(fine => ({
         id: fine.id,
         radarId: fine.radarId,
-        vehicleSpeed: fine.vehicleSpeed,
+        speedDetected: fine.vehicleSpeed,
+        vehicleSpeed: fine.vehicleSpeed, // For compatibility
         speedLimit: fine.speedLimit,
         plateNumber: fine.plateNumber,
         fineAmount: fine.amount,
         status: fine.status as 'pending' | 'processed' | 'paid' | 'cancelled',
-        violationTime: fine.timestamp,
+        violationDateTime: fine.timestamp,
+        violationTime: fine.timestamp, // For compatibility
         imageUrl: fine.imageUrl,
-        processingNotes: `Vehicle: ${fine.vehicleType || 'Unknown'}, Direction: ${fine.direction || 'Unknown'}`,
+        notes: `Vehicle: ${fine.vehicleType || 'Unknown'}, Direction: ${fine.direction || 'Unknown'}`,
         createdAt: fine.timestamp,
         updatedAt: fine.timestamp
       }));

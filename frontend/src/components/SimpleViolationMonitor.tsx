@@ -34,6 +34,8 @@ import {
   CheckCircle,
   LocationOn,
   MonetizationOn,
+  ThumbUp,
+  ThumbDown,
 } from '@mui/icons-material';
 import aiFtpService, { AIViolation } from '../services/aiFtpService';
 
@@ -57,8 +59,11 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [selectedViolation, setSelectedViolation] = useState<AIViolation | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [creatingFines, setCreatingFines] = useState(false);
-  const [finesCreated, setFinesCreated] = useState<number | null>(null);
+  
+  // Approval/Denial state
+  const [processingViolations, setProcessingViolations] = useState<Set<string>>(new Set());
+  const [approvedViolations, setApprovedViolations] = useState<Set<string>>(new Set());
+  const [deniedViolations, setDeniedViolations] = useState<Set<string>>(new Set());
   
   // Pagination state
   const [page, setPage] = useState(1);
@@ -163,15 +168,107 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
     setSelectedViolation(null);
   };
 
-  const handleCreateFines = async () => {
+  const handleApproveViolation = async (violation: AIViolation) => {
+    const violationId = `${violation.camera}-${violation.date}-${violation.case}`;
+    
     try {
-      setCreatingFines(true);
+      setProcessingViolations(prev => new Set(prev).add(violationId));
       setError(null);
 
       const token = localStorage.getItem('token') || 'demo_token_1760447560349_liqy8nlhx';
       
-      const response = await fetch('/api/ai-fines/create-from-violations', {
+      const response = await fetch('/api/fines/approve', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          camera: violation.camera,
+          date: violation.date,
+          caseId: violation.case,
+          plateNumber: violation.plates.length > 0 ? violation.plates[0].detected_characters : 'Unknown',
+          imageUrl: violation.imageUrl
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setApprovedViolations(prev => new Set(prev).add(violationId));
+        console.log(`✅ Approved violation for case ${violation.case}`);
+      } else {
+        throw new Error(data.message || 'Failed to approve violation');
+      }
+    } catch (error) {
+      console.error('Error approving violation:', error);
+      setError(`Failed to approve violation: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setProcessingViolations(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(violationId);
+        return newSet;
+      });
+    }
+  };
+
+  const handleDenyViolation = async (violation: AIViolation) => {
+    const violationId = `${violation.camera}-${violation.date}-${violation.case}`;
+    
+    try {
+      setProcessingViolations(prev => new Set(prev).add(violationId));
+      setError(null);
+
+      const token = localStorage.getItem('token') || 'demo_token_1760447560349_liqy8nlhx';
+      
+      const response = await fetch('/api/fines/deny', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          camera: violation.camera,
+          date: violation.date,
+          caseId: violation.case,
+          plateNumber: violation.plates.length > 0 ? violation.plates[0].detected_characters : 'Unknown'
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setDeniedViolations(prev => new Set(prev).add(violationId));
+        // Remove from approved if it was previously approved
+        setApprovedViolations(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(violationId);
+          return newSet;
+        });
+        console.log(`❌ Denied violation for case ${violation.case}`);
+      } else {
+        throw new Error(data.message || 'Failed to deny violation');
+      }
+    } catch (error) {
+      console.error('Error denying violation:', error);
+      setError(`Failed to deny violation: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setProcessingViolations(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(violationId);
+        return newSet;
+      });
+    }
+  };
+
+  const handleClearFines = async () => {
+    try {
+      setError(null);
+
+      const token = localStorage.getItem('token') || 'demo_token_1760447560349_liqy8nlhx';
+      
+      const response = await fetch('/api/fines/clear-all', {
+        method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
@@ -181,21 +278,14 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
       const data = await response.json();
 
       if (data.success) {
-        setFinesCreated(data.data.createdFines);
-        console.log(`✅ Created ${data.data.createdFines} fines from detected violations`);
-        
-        // Show success message for a few seconds
-        setTimeout(() => {
-          setFinesCreated(null);
-        }, 5000);
+        console.log(`🗑️ Cleared all fines from database`);
+        alert(`Successfully cleared all fines from the database`);
       } else {
-        throw new Error(data.message || 'Failed to create fines');
+        throw new Error(data.message || 'Failed to clear fines');
       }
-    } catch (err: any) {
-      console.error('❌ Error creating fines:', err);
-      setError(err.message || 'Failed to create fines');
-    } finally {
-      setCreatingFines(false);
+    } catch (error) {
+      console.error('Error clearing fines:', error);
+      setError(`Failed to clear fines: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -313,12 +403,12 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
             <Box sx={{ display: 'flex', gap: 1 }}>
               <Button
                 variant="contained"
-                color="success"
-                startIcon={<MonetizationOn />}
-                onClick={handleCreateFines}
-                disabled={creatingFines || violations.length === 0}
+                color="error"
+                startIcon={<Close />}
+                onClick={handleClearFines}
+                size="small"
               >
-                {creatingFines ? 'Creating...' : 'Create Fines'}
+                Clear Fines Table
               </Button>
               <Button
                 variant="outlined"
@@ -331,12 +421,6 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
           </Box>
 
           {/* Success/Error Messages */}
-          {finesCreated !== null && (
-            <Alert severity="success" sx={{ mb: 2 }}>
-              <Typography variant="h6">Fines Created Successfully!</Typography>
-              <Typography>Created {finesCreated} fines from detected violations</Typography>
-            </Alert>
-          )}
 
           {error && (
             <Alert severity="error" sx={{ mb: 2 }}>
@@ -371,8 +455,8 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {violations.map((violation) => (
-                      <TableRow key={violation.id}>
+                    {violations.map((violation, index) => (
+                      <TableRow key={`${violation.camera}-${violation.date}-${violation.case}-${index}`}>
                         <TableCell>
                           <Avatar
                             src={getImageUrl(violation)}
@@ -440,14 +524,93 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
                           )}
                         </TableCell>
                         <TableCell>
-                          <Tooltip title="View details and full image">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleViewDetails(violation)}
-                            >
-                              <Visibility />
-                            </IconButton>
-                          </Tooltip>
+                          <Box sx={{ display: 'flex', gap: 1 }}>
+                            {(() => {
+                              const violationId = `${violation.camera}-${violation.date}-${violation.case}`;
+                              const isProcessing = processingViolations.has(violationId);
+                              const isApproved = approvedViolations.has(violationId);
+                              const isDenied = deniedViolations.has(violationId);
+
+                              if (isApproved) {
+                                return (
+                                  <>
+                                    <Chip 
+                                      label="Approved" 
+                                      color="success" 
+                                      size="small"
+                                      icon={<CheckCircle />}
+                                    />
+                                    <Tooltip title="Deny this violation">
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => handleDenyViolation(violation)}
+                                        disabled={isProcessing}
+                                        color="error"
+                                      >
+                                        <ThumbDown />
+                                      </IconButton>
+                                    </Tooltip>
+                                  </>
+                                );
+                              }
+
+                              if (isDenied) {
+                                return (
+                                  <>
+                                    <Chip 
+                                      label="Denied" 
+                                      color="error" 
+                                      size="small"
+                                      icon={<Close />}
+                                    />
+                                    <Tooltip title="Approve this violation">
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => handleApproveViolation(violation)}
+                                        disabled={isProcessing}
+                                        color="success"
+                                      >
+                                        <ThumbUp />
+                                      </IconButton>
+                                    </Tooltip>
+                                  </>
+                                );
+                              }
+
+                              return (
+                                <>
+                                  <Tooltip title="Approve violation and save to fines">
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => handleApproveViolation(violation)}
+                                      disabled={isProcessing}
+                                      color="success"
+                                    >
+                                      {isProcessing ? <CircularProgress size={16} /> : <ThumbUp />}
+                                    </IconButton>
+                                  </Tooltip>
+                                  <Tooltip title="Deny this violation">
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => handleDenyViolation(violation)}
+                                      disabled={isProcessing}
+                                      color="error"
+                                    >
+                                      {isProcessing ? <CircularProgress size={16} /> : <ThumbDown />}
+                                    </IconButton>
+                                  </Tooltip>
+                                  <Tooltip title="View details and full image">
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => handleViewDetails(violation)}
+                                    >
+                                      <Visibility />
+                                    </IconButton>
+                                  </Tooltip>
+                                </>
+                              );
+                            })()}
+                          </Box>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -563,7 +726,7 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
                 </Typography>
                 
                 {selectedViolation.plates.map((plate, index) => (
-                  <Card key={`${selectedViolation.id}-plate-${index}-${plate.detected_characters}`} sx={{ mb: 2, p: 2, bgcolor: 'background.default' }}>
+                  <Card key={`${selectedViolation.camera}-${selectedViolation.date}-${selectedViolation.case}-plate-${index}-${plate.detected_characters}`} sx={{ mb: 2, p: 2, bgcolor: 'background.default' }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
                       Plate {index + 1}: {plate.detected_characters}
                     </Typography>

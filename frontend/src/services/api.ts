@@ -17,7 +17,7 @@ import {
 
 class ApiService {
   private api: AxiosInstance;
-  private baseURL = 'http://localhost:3001/api';
+  private baseURL = '/api'; // Use relative URL to go through React dev server proxy
   private isDevelopmentMode = process.env.NODE_ENV === 'development';
 
   constructor() {
@@ -32,7 +32,7 @@ class ApiService {
     // Request interceptor to add auth token
     this.api.interceptors.request.use(
       (config) => {
-        const token = localStorage.getItem('authToken');
+        const token = localStorage.getItem('authToken') || localStorage.getItem('token');
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
         }
@@ -46,14 +46,25 @@ class ApiService {
       (response) => response,
       (error) => {
         if (error.response?.status === 401) {
-          console.log('🔐 Authentication error - clearing stored credentials');
-          localStorage.removeItem('authToken');
-          localStorage.removeItem('user');
+          console.log('🔐 Authentication error detected');
           
-          // Only redirect if we're not already on the login page
-          if (!window.location.pathname.includes('/login')) {
-            console.log('🔄 Redirecting to login page');
-            window.location.href = '/login';
+          // Check if we have a valid token stored
+          const storedToken = localStorage.getItem('authToken');
+          if (!storedToken || storedToken.startsWith('demo_token_')) {
+            // Only clear and redirect for real auth failures or missing tokens
+            console.log('🔐 Clearing stored credentials and redirecting');
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            
+            // Only redirect if we're not already on the login page
+            if (!window.location.pathname.includes('/login')) {
+              console.log('🔄 Redirecting to login page');
+              window.location.href = '/login';
+            }
+          } else {
+            // For real tokens, just log the error but don't force logout
+            console.log('🔐 Token may be expired, but keeping session active');
           }
         } else if (error.code === 'ECONNREFUSED' || error.message.includes('Network Error')) {
           console.log('🌐 Backend connection failed - using fallback mode');
@@ -175,6 +186,16 @@ class ApiService {
 
   async getFineById(id: number): Promise<ApiResponse<Fine>> {
     const response: AxiosResponse<ApiResponse<Fine>> = await this.api.get(`/fines/${id}`);
+    return response.data;
+  }
+
+  async deleteFine(id: number): Promise<ApiResponse<any>> {
+    const response: AxiosResponse<ApiResponse<any>> = await this.api.delete(`/fines/${id}`);
+    return response.data;
+  }
+
+  async updateFine(id: number, data: Partial<Fine>): Promise<ApiResponse<Fine>> {
+    const response: AxiosResponse<ApiResponse<Fine>> = await this.api.put(`/fines/${id}`, data);
     return response.data;
   }
 

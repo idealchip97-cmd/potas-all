@@ -42,14 +42,17 @@ export interface Radar {
 export interface Fine {
   id: number;
   radarId: number;
-  vehicleSpeed: number;
+  speedDetected: number;
+  vehicleSpeed?: number; // For compatibility
   speedLimit: number;
   plateNumber: string;
+  vehiclePlate?: string; // For compatibility
   fineAmount: number;
   status: 'pending' | 'processed' | 'paid' | 'cancelled';
-  violationTime: string;
+  violationDateTime: string;
+  violationTime?: string; // For compatibility
   imageUrl?: string;
-  processingNotes?: string;
+  notes?: string;
   createdAt: string;
   updatedAt: string;
   radar?: Radar;

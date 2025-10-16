@@ -5,10 +5,16 @@ const { authenticate } = require('../middleware/auth');
 const axios = require('axios');
 
 /**
- * Create fines from AI detected violations
+ * Create fines from AI detected violations - DISABLED
+ * This endpoint is disabled to prevent automatic fine creation
+ * Use individual approve/deny buttons on plate recognition page instead
  * POST /api/ai-fines/create-from-violations
  */
 router.post('/create-from-violations', async (req, res) => {
+  return res.status(400).json({
+    success: false,
+    message: 'Bulk fine creation is disabled. Use individual approve/deny buttons on the plate recognition page instead.'
+  });
   try {
     console.log('🚀 Starting AI fines creation process...');
     

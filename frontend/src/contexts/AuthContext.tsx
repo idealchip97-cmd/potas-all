@@ -22,8 +22,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [sessionTimeout, setSessionTimeout] = useState<NodeJS.Timeout | null>(null);
   
-  // Session timeout duration (30 minutes)
-  const SESSION_TIMEOUT_DURATION = 30 * 60 * 1000; // 30 minutes in milliseconds
+  // Session timeout duration (24 hours to match JWT expiration)
+  const SESSION_TIMEOUT_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
   // Function to start session timeout
   const startSessionTimeout = React.useCallback(() => {
@@ -88,16 +88,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           return;
         }
         
-        // Validate token with backend if it's not a demo token
+        // Always restore session immediately, validate in background
+        setToken(storedToken);
+        setUser(userData);
+        startSessionTimeout();
+        console.log('Auth: Session restored immediately');
+        setIsLoading(false);
+        
+        // Validate token with backend in background (non-blocking)
         if (!storedToken.startsWith('demo_token_')) {
-          validateStoredToken(storedToken, userData);
-        } else {
-          // Demo token, restore immediately and start timeout
-          setToken(storedToken);
-          setUser(userData);
-          startSessionTimeout();
-          console.log('Auth: Demo session restored, setting isLoading to false');
-          setIsLoading(false);
+          validateStoredTokenInBackground(storedToken, userData);
         }
         
       } catch (error) {
@@ -111,7 +111,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsLoading(false);
     }
 
-    async function validateStoredToken(token: string, userData: User) {
+    async function validateStoredTokenInBackground(token: string, userData: User) {
       try {
         // Import API service dynamically
         const { default: apiService } = await import('../services/api');
@@ -120,21 +120,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const response = await apiService.getDashboardStats();
         
         if (response.success) {
-          // If successful, restore the session and start timeout
-          setToken(token);
-          setUser(userData);
-          startSessionTimeout();
-          console.log('Auth: Token validated, session restored');
+          console.log('Auth: Token validated successfully in background');
         } else {
-          throw new Error('Dashboard stats request failed');
+          console.warn('Auth: Token validation failed, but keeping session active');
         }
       } catch (error) {
-        console.warn('Auth: Stored token is invalid, clearing session', error);
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('user');
-        // Don't set user/token to null here as they're already null
-      } finally {
-        setIsLoading(false);
+        console.warn('Auth: Background token validation failed, but keeping session active', error);
+        // Don't clear the session on background validation failure
       }
     }
 
@@ -167,9 +159,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         console.log('✅ Backend authentication successful for:', user.email);
         
-        // Save to localStorage first
+        // Save to localStorage first (both keys for compatibility)
         try {
           localStorage.setItem('authToken', token);
+          localStorage.setItem('token', token); // Also save as 'token' for API service compatibility
           localStorage.setItem('user', JSON.stringify(user));
           console.log('✅ Login successful - Session saved to localStorage');
         } catch (storageError) {
@@ -228,6 +221,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           };
           
           localStorage.setItem('authToken', authToken);
+          localStorage.setItem('token', authToken); // Also save as 'token' for API service compatibility
           localStorage.setItem('user', JSON.stringify(userData));
           setToken(authToken);
           setUser(userData);
@@ -256,6 +250,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUser(null);
     setToken(null);
     localStorage.removeItem('authToken');
+    localStorage.removeItem('token'); // Also remove 'token' key
     localStorage.removeItem('user');
     localStorage.removeItem('sessionStartTime');
     

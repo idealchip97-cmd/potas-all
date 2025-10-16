@@ -2,6 +2,17 @@ const { Fine, Radar, User } = require('../models');
 const { validationResult } = require('express-validator');
 const { Op } = require('sequelize');
 
+// Transform fine data to match frontend expectations
+const transformFineData = (fine) => {
+  const fineData = fine.toJSON ? fine.toJSON() : fine;
+  return {
+    ...fineData,
+    plateNumber: fineData.vehiclePlate, // Map vehiclePlate to plateNumber for frontend
+    vehicleSpeed: fineData.speedDetected, // Map speedDetected to vehicleSpeed for compatibility
+    violationTime: fineData.violationDateTime // Map violationDateTime to violationTime for compatibility
+  };
+};
+
 const getAllFines = async (req, res) => {
   try {
     const { 
@@ -52,7 +63,7 @@ const getAllFines = async (req, res) => {
       success: true,
       message: 'Fines retrieved successfully',
       data: {
-        fines: fines.rows,
+        fines: fines.rows.map(transformFineData),
         pagination: {
           currentPage: parseInt(page),
           totalPages: Math.ceil(fines.count / limit),

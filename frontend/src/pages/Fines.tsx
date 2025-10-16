@@ -4,6 +4,7 @@ import {
   Card,
   CardContent,
   Typography,
+  Avatar,
   Chip,
   IconButton,
   Button,
@@ -14,7 +15,15 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Avatar,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Tooltip,
+  Pagination,
 } from '@mui/material';
 import {
   Visibility,
@@ -27,14 +36,13 @@ import {
   AttachMoney,
   TrendingUp,
   TrendingDown,
-  Wifi,
-  WifiOff,
+  CameraAlt,
+  Speed,
+  Edit,
+  Delete,
 } from '@mui/icons-material';
-import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import apiService from '../services/api';
-import realTimeDataService from '../services/realTimeDataService';
 import { Fine } from '../types';
-
 
 interface FineFilters {
   status?: string;
@@ -52,8 +60,22 @@ const Fines: React.FC = () => {
   const [selectedFine, setSelectedFine] = useState<Fine | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [filters, setFilters] = useState<FineFilters>({});
-  const [isRealTimeConnected, setIsRealTimeConnected] = useState(false);
-  const [useRealTimeData, setUseRealTimeData] = useState(true);
+  
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 10;
+  
+  // Delete confirmation state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [fineToDelete, setFineToDelete] = useState<Fine | null>(null);
+  
+  // Edit plate number state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [fineToEdit, setFineToEdit] = useState<Fine | null>(null);
+  const [newPlateNumber, setNewPlateNumber] = useState('');
+  
+  // Success message state
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const calculateStats = useCallback((finesData: Fine[]) => {
     const totalFines = finesData.length;
@@ -71,98 +93,24 @@ const Fines: React.FC = () => {
     });
   }, []);
 
-  const setupRealTimeData = useCallback(() => {
-    setLoading(true);
-    
-    // Subscribe to connection status
-    const unsubscribeConnection = realTimeDataService.onConnectionChange((status) => {
-      setIsRealTimeConnected(status.udp);
-      if (!status.udp) {
-        setError('Real-time connection lost. Switching to API data.');
-        setUseRealTimeData(false);
-      }
-    });
-
-    // Subscribe to fine updates
-    const unsubscribeFines = realTimeDataService.onFineUpdate((updatedFines) => {
-      // Apply filters if any
-      let filteredFines = updatedFines;
-      
-      if (filters.status) {
-        filteredFines = filteredFines.filter(fine => fine.status === filters.status);
-      }
-      
-      if (filters.minSpeed) {
-        filteredFines = filteredFines.filter(fine => fine.vehicleSpeed >= filters.minSpeed!);
-      }
-      
-      if (filters.maxSpeed) {
-        filteredFines = filteredFines.filter(fine => fine.vehicleSpeed <= filters.maxSpeed!);
-      }
-      
-      if (filters.startDate) {
-        filteredFines = filteredFines.filter(fine => 
-          new Date(fine.violationTime) >= new Date(filters.startDate!)
-        );
-      }
-      
-      if (filters.endDate) {
-        filteredFines = filteredFines.filter(fine => 
-          new Date(fine.violationTime) <= new Date(filters.endDate!)
-        );
-      }
-      
-      setFines(filteredFines);
-      setLoading(false);
-      setError(null);
-      
-      // Calculate stats from filtered fines
-      calculateStats(filteredFines);
-    });
-
-    // Subscribe to errors
-    const unsubscribeErrors = realTimeDataService.onError((error, source) => {
-      if (source === 'udp') {
-        setError(`Real-time data error: ${error}`);
-      }
-    });
-
-    // Request initial data
-    realTimeDataService.requestFineData(filters);
-
-    // Return cleanup function
-    return () => {
-      unsubscribeConnection();
-      unsubscribeFines();
-      unsubscribeErrors();
-    };
-  }, [filters, calculateStats]);
-
+  // Load fines data on component mount and when filters change
   useEffect(() => {
-    if (useRealTimeData) {
-      setupRealTimeData();
-    } else {
-      fetchFines();
-      fetchStats();
-    }
-    
-    return () => {
-      // Cleanup subscriptions when component unmounts
-    };
-  }, [filters, useRealTimeData, setupRealTimeData]);
+    fetchFines();
+    fetchStats();
+  }, [filters]);
 
   const fetchFines = async () => {
     try {
       setLoading(true);
       const response = await apiService.getFines(filters);
-      // Handle the correct API response structure: response.data.fines
       const finesData = response.data?.fines || response.data || [];
       setFines(Array.isArray(finesData) ? finesData : []);
+      calculateStats(Array.isArray(finesData) ? finesData : []);
       setError(null);
     } catch (err) {
-      setError('Failed to fetch fines data');
       console.error('Error fetching fines:', err);
-      setFines([]); // Set empty array on error
+      setError('Failed to fetch fines data');
+      setFines([]);
     } finally {
       setLoading(false);
     }
@@ -171,12 +119,10 @@ const Fines: React.FC = () => {
   const fetchStats = async () => {
     try {
       const response = await apiService.getFines({});
-      // Handle the correct API response structure for stats
       const finesData = response.data?.fines || response.data || [];
-      setStats(Array.isArray(finesData) ? finesData : []);
-    } catch (err) {
-      console.error('Error fetching fine stats:', err);
-      setStats([]);
+      calculateStats(Array.isArray(finesData) ? finesData : []);
+    } catch (error) {
+      console.error('Error fetching fine stats:', error);
     }
   };
 
@@ -188,19 +134,83 @@ const Fines: React.FC = () => {
     }
   };
 
-
   const handleRefresh = () => {
-    if (useRealTimeData) {
-      realTimeDataService.requestFineData(filters);
-    } else {
-      fetchFines();
-      fetchStats();
+    fetchFines();
+    fetchStats();
+    setError(null);
+  };
+
+  // Delete fine function
+  const handleDeleteFine = async () => {
+    if (!fineToDelete) return;
+    
+    try {
+      const response = await apiService.deleteFine(fineToDelete.id);
+      
+      if (response.success) {
+        setSuccessMessage(`Fine #${fineToDelete.id} deleted successfully!`);
+        setFines(fines.filter(f => f.id !== fineToDelete.id));
+        calculateStats(fines.filter(f => f.id !== fineToDelete.id));
+        
+        // Hide success message after 3 seconds
+        setTimeout(() => setSuccessMessage(null), 3000);
+      } else {
+        setError('Failed to delete fine');
+      }
+    } catch (error) {
+      console.error('Error deleting fine:', error);
+      setError('Failed to delete fine');
+    } finally {
+      setDeleteDialogOpen(false);
+      setFineToDelete(null);
     }
   };
 
-  const toggleDataSource = () => {
-    setUseRealTimeData(!useRealTimeData);
-    setError(null);
+  // Edit plate number function
+  const handleEditPlateNumber = async () => {
+    if (!fineToEdit || !newPlateNumber.trim()) return;
+    
+    try {
+      const response = await apiService.updateFine(fineToEdit.id, {
+        plateNumber: newPlateNumber.trim()
+      });
+      
+      if (response.success) {
+        setSuccessMessage(`Plate number updated successfully to ${newPlateNumber}!`);
+        
+        // Update the fine in the local state
+        setFines(fines.map(f => 
+          f.id === fineToEdit.id 
+            ? { ...f, plateNumber: newPlateNumber.trim() }
+            : f
+        ));
+        
+        // Hide success message after 3 seconds
+        setTimeout(() => setSuccessMessage(null), 3000);
+      } else {
+        setError('Failed to update plate number');
+      }
+    } catch (error) {
+      console.error('Error updating plate number:', error);
+      setError('Failed to update plate number');
+    } finally {
+      setEditDialogOpen(false);
+      setFineToEdit(null);
+      setNewPlateNumber('');
+    }
+  };
+
+  // Open delete confirmation
+  const openDeleteConfirmation = (fine: Fine) => {
+    setFineToDelete(fine);
+    setDeleteDialogOpen(true);
+  };
+
+  // Open edit dialog
+  const openEditDialog = (fine: Fine) => {
+    setFineToEdit(fine);
+    setNewPlateNumber(fine.plateNumber || '');
+    setEditDialogOpen(true);
   };
 
   const getStatusColor = (status: string) => {
@@ -223,71 +233,7 @@ const Fines: React.FC = () => {
     }
   };
 
-  const columns: GridColDef[] = [
-    { field: 'id', headerName: 'ID', width: 100 },
-    { field: 'plateNumber', headerName: 'Plate Number', width: 130 },
-    {
-      field: 'vehicleSpeed',
-      headerName: 'Speed (km/h)',
-      width: 120,
-      type: 'number',
-    },
-    {
-      field: 'speedLimit',
-      headerName: 'Speed Limit',
-      width: 120,
-      type: 'number',
-    },
-    {
-      field: 'fineAmount',
-      headerName: 'Fine Amount',
-      width: 120,
-      type: 'number',
-      renderCell: (params) => `$${params.value}`,
-    },
-    {
-      field: 'status',
-      headerName: 'Status',
-      width: 120,
-      renderCell: (params) => (
-        <Chip
-          label={params.value}
-          color={getStatusColor(params.value) as any}
-          size="small"
-          icon={getStatusIcon(params.value)}
-        />
-      ),
-    },
-    {
-      field: 'violationTime',
-      headerName: 'Violation Time',
-      width: 180,
-      renderCell: (params) => new Date(params.value).toLocaleString(),
-    },
-    {
-      field: 'radar.location',
-      headerName: 'Location',
-      width: 150,
-      valueGetter: (params: any) => 'N/A',
-    },
-    {
-      field: 'actions',
-      headerName: 'Actions',
-      width: 100,
-      sortable: false,
-      renderCell: (params) => (
-        <IconButton
-          onClick={() => handleViewDetails(params.row.id)}
-          color="primary"
-          size="small"
-        >
-          <Visibility />
-        </IconButton>
-      ),
-    },
-  ];
-
-  if (error) {
+  if (error && fines.length === 0) {
     return (
       <Box sx={{ p: 3 }}>
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -302,204 +248,308 @@ const Fines: React.FC = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" component="h1">
-          Fines Management
-        </Typography>
-        <Button
-          onClick={handleRefresh}
-          startIcon={<Refresh />}
-          disabled={loading}
-        >
-          Refresh
-        </Button>
+      <Typography variant="h4" gutterBottom>
+        Fines Management
+      </Typography>
+
+      {/* Statistics Cards */}
+      <Box sx={{ 
+        display: 'flex', 
+        flexWrap: 'wrap', 
+        gap: 3, 
+        mb: 3,
+        '& > *': { flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', md: '1 1 calc(20% - 14.4px)' } }
+      }}>
+        <Card>
+          <CardContent>
+            <Box display="flex" alignItems="center" justifyContent="space-between">
+              <Box>
+                <Typography color="textSecondary" gutterBottom>
+                  Total Fines
+                </Typography>
+                <Typography variant="h4">
+                  {stats?.totalFines || 0}
+                </Typography>
+              </Box>
+              <Avatar sx={{ bgcolor: 'primary.main' }}>
+                <Receipt />
+              </Avatar>
+            </Box>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent>
+            <Box display="flex" alignItems="center" justifyContent="space-between">
+              <Box>
+                <Typography color="textSecondary" gutterBottom>
+                  Pending
+                </Typography>
+                <Typography variant="h4">
+                  {stats?.pendingFines || 0}
+                </Typography>
+              </Box>
+              <Avatar sx={{ bgcolor: 'warning.main' }}>
+                <Pending />
+              </Avatar>
+            </Box>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent>
+            <Box display="flex" alignItems="center" justifyContent="space-between">
+              <Box>
+                <Typography color="textSecondary" gutterBottom>
+                  Processed
+                </Typography>
+                <Typography variant="h4">
+                  {stats?.processedFines || 0}
+                </Typography>
+              </Box>
+              <Avatar sx={{ bgcolor: 'info.main' }}>
+                <CheckCircle />
+              </Avatar>
+            </Box>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent>
+            <Box display="flex" alignItems="center" justifyContent="space-between">
+              <Box>
+                <Typography color="textSecondary" gutterBottom>
+                  Total Revenue
+                </Typography>
+                <Typography variant="h4">
+                  ${stats?.totalRevenue || 0}
+                </Typography>
+              </Box>
+              <Avatar sx={{ bgcolor: 'success.main' }}>
+                <AttachMoney />
+              </Avatar>
+            </Box>
+          </CardContent>
+        </Card>
       </Box>
 
-      {/* Filters */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Filters
-          </Typography>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-            <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)', md: '1 1 calc(16.67% - 10px)' } }}>
-              <TextField
-                select
-                fullWidth
-                label="Status"
-                value={filters.status || ''}
-                onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-              >
-                <MenuItem value="">All</MenuItem>
-                <MenuItem value="pending">Pending</MenuItem>
-                <MenuItem value="processed">Processed</MenuItem>
-                <MenuItem value="paid">Paid</MenuItem>
-                <MenuItem value="cancelled">Cancelled</MenuItem>
-              </TextField>
-            </Box>
-            <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)', md: '1 1 calc(16.67% - 10px)' } }}>
-              <TextField
-                fullWidth
-                label="Min Speed"
-                type="number"
-                value={filters.minSpeed || ''}
-                onChange={(e) => setFilters({ ...filters, minSpeed: e.target.value ? Number(e.target.value) : undefined })}
-              />
-            </Box>
-            <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)', md: '1 1 calc(16.67% - 10px)' } }}>
-              <TextField
-                fullWidth
-                label="Max Speed"
-                type="number"
-                value={filters.maxSpeed || ''}
-                onChange={(e) => setFilters({ ...filters, maxSpeed: e.target.value ? Number(e.target.value) : undefined })}
-              />
-            </Box>
-            <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)', md: '1 1 calc(33.33% - 12px)' } }}>
-              <TextField
-                fullWidth
-                label="Start Date"
-                type="date"
-                InputLabelProps={{ shrink: true }}
-                value={filters.startDate || ''}
-                onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
-              />
-            </Box>
-            <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)', md: '1 1 calc(33.33% - 12px)' } }}>
-              <TextField
-                fullWidth
-                label="End Date"
-                type="date"
-                InputLabelProps={{ shrink: true }}
-                value={filters.endDate || ''}
-                onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
-              />
-            </Box>
-          </Box>
-        </CardContent>
-      </Card>
-
-      {/* Fines Stats Cards */}
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, mb: 3 }}>
-        <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', md: '1 1 calc(20% - 14.4px)' } }}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography color="textSecondary" gutterBottom>
-                    Total Fines
-                  </Typography>
-                  <Typography variant="h4">
-                    {stats?.totalFines || 0}
-                  </Typography>
-                </Box>
-                <Avatar sx={{ bgcolor: 'primary.main' }}>
-                  <Receipt />
-                </Avatar>
-              </Box>
-            </CardContent>
-          </Card>
-        </Box>
-        <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', md: '1 1 calc(20% - 14.4px)' } }}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography color="textSecondary" gutterBottom>
-                    Pending
-                  </Typography>
-                  <Typography variant="h4">
-                    {stats?.pendingFines || 0}
-                  </Typography>
-                </Box>
-                <Avatar sx={{ bgcolor: 'warning.main' }}>
-                  <Pending />
-                </Avatar>
-              </Box>
-            </CardContent>
-          </Card>
-        </Box>
-        <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', md: '1 1 calc(20% - 14.4px)' } }}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography color="textSecondary" gutterBottom>
-                    Processed
-                  </Typography>
-                  <Typography variant="h4">
-                    {stats?.processedFines || 0}
-                  </Typography>
-                </Box>
-                <Avatar sx={{ bgcolor: 'info.main' }}>
-                  <CheckCircle />
-                </Avatar>
-              </Box>
-            </CardContent>
-          </Card>
-        </Box>
-        <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', md: '1 1 calc(20% - 14.4px)' } }}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography color="textSecondary" gutterBottom>
-                    Total Revenue
-                  </Typography>
-                  <Typography variant="h4">
-                    ${stats?.totalRevenue || 0}
-                  </Typography>
-                </Box>
-                <Avatar sx={{ bgcolor: 'success.main' }}>
-                  <AttachMoney />
-                </Avatar>
-              </Box>
-            </CardContent>
-          </Card>
-        </Box>
-        <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', md: '1 1 calc(20% - 14.4px)' } }}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography color="textSecondary" gutterBottom>
-                    Monthly Growth
-                  </Typography>
-                  <Typography variant="h4">
-                    {stats?.monthlyGrowth || 0}%
-                  </Typography>
-                </Box>
-                <Avatar sx={{ bgcolor: stats?.monthlyGrowth && stats.monthlyGrowth > 0 ? 'success.main' : 'error.main' }}>
-                  {stats?.monthlyGrowth && stats.monthlyGrowth > 0 ? <TrendingUp /> : <TrendingDown />}
-                </Avatar>
-              </Box>
-            </CardContent>
-          </Card>
-        </Box>
-      </Box>
-
-      {/* Fines Data Grid */}
+      {/* Fines Table */}
       <Card>
         <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Fines List
-          </Typography>
-          <Box sx={{ height: 600, width: '100%' }}>
-            <DataGrid
-              rows={fines}
-              columns={columns}
-              initialState={{
-                pagination: {
-                  paginationModel: { pageSize: 20 }
-                }
-              }}
-              pageSizeOptions={[10, 20, 50]}
-              disableRowSelectionOnClick
-              loading={loading}
-            />
+          {/* Success/Error Messages */}
+          {successMessage && (
+            <Alert severity="success" sx={{ mb: 2 }}>
+              {successMessage}
+            </Alert>
+          )}
+
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
+
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6">
+              Fines Management ({fines.length} total)
+            </Typography>
+            <Button
+              variant="outlined"
+              startIcon={<Refresh />}
+              onClick={handleRefresh}
+              size="small"
+            >
+              Refresh
+            </Button>
           </Box>
+
+          {loading ? (
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <Typography>Loading fines...</Typography>
+            </Box>
+          ) : fines.length === 0 ? (
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <Typography variant="h6" color="textSecondary">
+                No fines found
+              </Typography>
+              <Typography variant="body2" color="textSecondary">
+                Approved violations will appear here
+              </Typography>
+            </Box>
+          ) : (
+            <>
+              <TableContainer component={Paper}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Image</TableCell>
+                      <TableCell>Plate Number</TableCell>
+                      <TableCell>Speed</TableCell>
+                      <TableCell>Fine Amount</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>Violation Time</TableCell>
+                      <TableCell>Actions</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {fines
+                      .slice((page - 1) * itemsPerPage, page * itemsPerPage)
+                      .map((fine, index) => (
+                      <TableRow key={`fine-${fine.id}-${index}`}>
+                        <TableCell>
+                          <Avatar
+                            src={fine.imageUrl}
+                            variant="rounded"
+                            sx={{ width: 80, height: 60 }}
+                          >
+                            <CameraAlt />
+                          </Avatar>
+                        </TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={fine.plateNumber || 'Unknown'} 
+                            color="primary" 
+                            size="small"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Speed fontSize="small" color="action" />
+                            <Typography variant="body2">
+                              {fine.speedDetected || fine.vehicleSpeed} km/h
+                            </Typography>
+                            <Typography variant="caption" color="textSecondary">
+                              (limit: {fine.speedLimit})
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'success.main' }}>
+                            ${fine.fineAmount}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={fine.status}
+                            color={getStatusColor(fine.status) as any}
+                            size="small"
+                            icon={getStatusIcon(fine.status)}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {new Date(fine.violationDateTime || fine.violationTime || new Date()).toLocaleString()}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', gap: 1 }}>
+                            <Tooltip title="View Details">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleViewDetails(fine.id)}
+                                color="primary"
+                              >
+                                <Visibility />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Edit Plate Number">
+                              <IconButton
+                                size="small"
+                                color="info"
+                                onClick={() => openEditDialog(fine)}
+                              >
+                                <Edit />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Delete Fine">
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => openDeleteConfirmation(fine)}
+                              >
+                                <Delete />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+
+              {/* Pagination */}
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+                <Pagination
+                  count={Math.ceil(fines.length / itemsPerPage)}
+                  page={page}
+                  onChange={(event, value) => setPage(value)}
+                  color="primary"
+                />
+              </Box>
+            </>
+          )}
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} maxWidth="sm">
+        <DialogTitle>
+          Confirm Delete
+        </DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete Fine #{fineToDelete?.id}?
+          </Typography>
+          <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+            Plate: {fineToDelete?.plateNumber} | Amount: ${fineToDelete?.fineAmount}
+          </Typography>
+          <Typography variant="body2" color="error" sx={{ mt: 2 }}>
+            This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleDeleteFine} color="error" variant="contained">
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit Plate Number Dialog */}
+      <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm">
+        <DialogTitle>
+          Edit Plate Number
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ mb: 2 }}>
+            Fine #{fineToEdit?.id} - Current plate: {fineToEdit?.plateNumber}
+          </Typography>
+          <TextField
+            fullWidth
+            label="New Plate Number"
+            value={newPlateNumber}
+            onChange={(e) => setNewPlateNumber(e.target.value)}
+            placeholder="Enter new plate number"
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleEditPlateNumber} 
+            color="primary" 
+            variant="contained"
+            disabled={!newPlateNumber.trim()}
+          >
+            Update
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Fine Details Dialog */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
@@ -519,20 +569,10 @@ const Fines: React.FC = () => {
               </Box>
               <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>
                 <Typography variant="subtitle2" color="textSecondary">
-                  Status
-                </Typography>
-                <Chip
-                  label={selectedFine.status}
-                  color={getStatusColor(selectedFine.status) as any}
-                  icon={getStatusIcon(selectedFine.status)}
-                />
-              </Box>
-              <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>
-                <Typography variant="subtitle2" color="textSecondary">
                   Vehicle Speed
                 </Typography>
                 <Typography variant="body1" gutterBottom>
-                  {selectedFine.vehicleSpeed} km/h
+                  {selectedFine.speedDetected} km/h
                 </Typography>
               </Box>
               <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>
@@ -547,79 +587,35 @@ const Fines: React.FC = () => {
                 <Typography variant="subtitle2" color="textSecondary">
                   Fine Amount
                 </Typography>
-                <Typography variant="body1" gutterBottom color="success.main">
+                <Typography variant="body1" gutterBottom>
                   ${selectedFine.fineAmount}
                 </Typography>
+              </Box>
+              <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>
+                <Typography variant="subtitle2" color="textSecondary">
+                  Status
+                </Typography>
+                <Chip
+                  label={selectedFine.status}
+                  color={getStatusColor(selectedFine.status) as any}
+                  icon={getStatusIcon(selectedFine.status)}
+                />
               </Box>
               <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>
                 <Typography variant="subtitle2" color="textSecondary">
                   Violation Time
                 </Typography>
                 <Typography variant="body1" gutterBottom>
-                  {new Date(selectedFine.violationTime).toLocaleString()}
-                </Typography>
-              </Box>
-              <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>
-                <Typography variant="subtitle2" color="textSecondary">
-                  Radar ID
-                </Typography>
-                <Typography variant="body1" gutterBottom>
-                  {selectedFine.radarId}
-                </Typography>
-              </Box>
-              <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>
-                <Typography variant="subtitle2" color="textSecondary">
-                  Location
-                </Typography>
-                <Typography variant="body1" gutterBottom>
-                  {selectedFine.radar?.location || 'N/A'}
-                </Typography>
-              </Box>
-              {selectedFine.imageUrl && (
-                <Box sx={{ flex: '1 1 100%' }}>
-                  <Typography variant="subtitle2" color="textSecondary">
-                    Violation Image
-                  </Typography>
-                  <Box sx={{ mt: 1 }}>
-                    <img
-                      src={selectedFine.imageUrl}
-                      alt="Violation"
-                      style={{ maxWidth: '100%', height: 'auto' }}
-                    />
-                  </Box>
-                </Box>
-              )}
-              {selectedFine.processingNotes && (
-                <Box sx={{ flex: '1 1 100%' }}>
-                  <Typography variant="subtitle2" color="textSecondary">
-                    Processing Notes
-                  </Typography>
-                  <Typography variant="body1" gutterBottom>
-                    {selectedFine.processingNotes}
-                  </Typography>
-                </Box>
-              )}
-              <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>
-                <Typography variant="subtitle2" color="textSecondary">
-                  Created At
-                </Typography>
-                <Typography variant="body1" gutterBottom>
-                  {new Date(selectedFine.createdAt).toLocaleString()}
-                </Typography>
-              </Box>
-              <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>
-                <Typography variant="subtitle2" color="textSecondary">
-                  Updated At
-                </Typography>
-                <Typography variant="body1" gutterBottom>
-                  {new Date(selectedFine.updatedAt).toLocaleString()}
+                  {new Date(selectedFine.violationDateTime || selectedFine.violationTime || new Date()).toLocaleString()}
                 </Typography>
               </Box>
             </Box>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>Close</Button>
+          <Button onClick={() => setDialogOpen(false)}>
+            Close
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>
