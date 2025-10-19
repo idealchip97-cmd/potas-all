@@ -18,6 +18,7 @@ import {
   Grid,
   Tabs,
   Tab,
+  Alert,
   LinearProgress,
   Avatar
 } from '@mui/material';
@@ -72,7 +73,7 @@ const Reports: React.FC = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [selectedCamera, setSelectedCamera] = useState('all');
-  const [finesData, setFinesData] = useState([]);
+  const [finesData, setFinesData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [aiPerformance, setAiPerformance] = useState({
@@ -81,6 +82,7 @@ const Reports: React.FC = () => {
     accuracy: 0,
     avgConfidence: 0
   });
+  const [useDemoData, setUseDemoData] = useState(false);
   const { token } = useAuth();
 
   // Mock data for demonstration
@@ -125,16 +127,18 @@ const Reports: React.FC = () => {
       
       if (response.ok) {
         const data = await response.json();
-        if (data.success && data.data && data.data.cases) {
-          const cases = data.data.cases;
+        console.log('AI Cases API Response:', data); // Debug log
+        
+        if (data.success && data.cases) {
+          const cases = data.cases;
           const totalProcessed = cases.length;
           const accurateDetections = cases.filter((c: any) => 
-            c.ai_data && c.ai_data.confidence && c.ai_data.confidence > 0.8
+            c.confidence && c.confidence > 0.8
           ).length;
           
           const avgConfidence = cases.reduce((sum: number, c: any) => {
-            return sum + (c.ai_data?.confidence || 0);
-          }, 0) / totalProcessed;
+            return sum + (c.confidence || 0);
+          }, 0) / (totalProcessed || 1);
           
           setAiPerformance({
             totalProcessed,
@@ -142,10 +146,43 @@ const Reports: React.FC = () => {
             accuracy: totalProcessed > 0 ? (accurateDetections / totalProcessed) * 100 : 0,
             avgConfidence: avgConfidence * 100
           });
+          
+          console.log('AI Performance Updated:', {
+            totalProcessed,
+            accurateDetections,
+            accuracy: totalProcessed > 0 ? (accurateDetections / totalProcessed) * 100 : 0,
+            avgConfidence: avgConfidence * 100
+          });
+        } else {
+          console.warn('AI Cases API failed, using demo data');
+          setUseDemoData(true);
+          setAiPerformance({
+            totalProcessed: 13,
+            accurateDetections: 11,
+            accuracy: 84.6,
+            avgConfidence: 87.2
+          });
         }
+      } else {
+        console.warn('AI Cases API failed, using demo data');
+        setUseDemoData(true);
+        setAiPerformance({
+          totalProcessed: 13,
+          accurateDetections: 11,
+          accuracy: 84.6,
+          avgConfidence: 87.2
+        });
       }
     } catch (error) {
       console.error('Error fetching AI performance data:', error);
+      console.warn('Using demo AI performance data');
+      setUseDemoData(true);
+      setAiPerformance({
+        totalProcessed: 13,
+        accurateDetections: 11,
+        accuracy: 84.6,
+        avgConfidence: 87.2
+      });
     }
   };
 
@@ -153,6 +190,8 @@ const Reports: React.FC = () => {
   const fetchFinesData = async () => {
     try {
       setLoading(true);
+      console.log('Fetching fines data with token:', token ? 'Token present' : 'No token');
+      
       const response = await fetch('/api/fines', {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -160,8 +199,11 @@ const Reports: React.FC = () => {
         }
       });
       
+      console.log('Fines API Response Status:', response.status);
+      
       if (response.ok) {
         const data = await response.json();
+        console.log('Fines API Response Data:', data);
         setFinesData(data.fines || []);
         
         // Calculate total revenue in JD
@@ -169,9 +211,33 @@ const Reports: React.FC = () => {
           return sum + (parseFloat(fine.fineAmount) || 0);
         }, 0);
         setTotalRevenue(revenue);
+        
+        console.log('Fines Data Updated:', {
+          count: (data.fines || []).length,
+          revenue: revenue
+        });
+      } else {
+        const errorText = await response.text();
+        console.error('Fines API Error:', response.status, errorText);
+        console.warn('Using demo fines data');
+        setUseDemoData(true);
+        const demoFines = [
+          { id: 1, vehiclePlate: '112-2334', fineAmount: '75.00', violationDateTime: '2025-01-19T10:30:00Z', notes: 'from camera001 case case001' },
+          { id: 2, vehiclePlate: '512-3456', fineAmount: '50.00', violationDateTime: '2025-01-19T14:15:00Z', notes: 'from camera002 case case003' }
+        ];
+        setFinesData(demoFines);
+        setTotalRevenue(125.00);
       }
     } catch (error) {
       console.error('Error fetching fines data:', error);
+      console.warn('Using demo fines data');
+      setUseDemoData(true);
+      const demoFines = [
+        { id: 1, vehiclePlate: '112-2334', fineAmount: '75.00', violationDateTime: '2025-01-19T10:30:00Z', notes: 'from camera001 case case001' },
+        { id: 2, vehiclePlate: '512-3456', fineAmount: '50.00', violationDateTime: '2025-01-19T14:15:00Z', notes: 'from camera002 case case003' }
+      ];
+      setFinesData(demoFines);
+      setTotalRevenue(125.00);
     } finally {
       setLoading(false);
     }
@@ -203,24 +269,31 @@ const Reports: React.FC = () => {
   return (
     <Box sx={{ p: 3, backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
       {/* Header */}
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-          <Assessment sx={{ fontSize: 32, color: 'primary.main' }} />
-          Reports & Analytics
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Comprehensive radar system performance and violation reports
-        </Typography>
-      </Box>
-
-      {/* Action Buttons */}
-      <Box sx={{ mb: 3, display: 'flex', gap: 2 }}>
-        <Button variant="outlined" startIcon={<Download />}>
-          Export Data
-        </Button>
-        <Button variant="contained" startIcon={<Print />}>
-          Print Report
-        </Button>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+        <Box>
+          <Typography variant="h4" component="h1" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Assessment />
+            Reports & Analytics
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            Comprehensive radar system performance and violation reports
+          </Typography>
+          {useDemoData && (
+            <Alert severity="info" sx={{ mt: 1, maxWidth: 600 }}>
+              Using demo data - API endpoints may be unavailable
+            </Alert>
+          )}
+        </Box>
+        
+        {/* Action Buttons */}
+        <Box sx={{ mb: 3, display: 'flex', gap: 2 }}>
+          <Button variant="outlined" startIcon={<Download />}>
+            Export Data
+          </Button>
+          <Button variant="contained" startIcon={<Print />}>
+            Print Report
+          </Button>
+        </Box>
       </Box>
 
       {/* Tabs */}
