@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Card,
@@ -35,6 +35,7 @@ import {
   CheckCircle,
   Schedule
 } from '@mui/icons-material';
+import { useAuth } from '../contexts/AuthContext';
 
 interface ReportData {
   id: string;
@@ -71,6 +72,10 @@ const Reports: React.FC = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [selectedCamera, setSelectedCamera] = useState('all');
+  const [finesData, setFinesData] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [totalRevenue, setTotalRevenue] = useState(0);
+  const { token } = useAuth();
 
   // Mock data for demonstration
   const mockReportData: ReportData[] = [
@@ -106,6 +111,51 @@ const Reports: React.FC = () => {
   const totalViolations = mockReportData.reduce((sum, item) => sum + item.violations, 0);
   const totalVehicles = mockReportData.reduce((sum, item) => sum + item.totalVehicles, 0);
   const avgSpeed = Math.round(mockReportData.reduce((sum, item) => sum + item.avgSpeed, 0) / mockReportData.length);
+
+  // Fetch fines data from backend
+  const fetchFinesData = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/fines', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setFinesData(data.fines || []);
+        
+        // Calculate total revenue in JD
+        const revenue = (data.fines || []).reduce((sum: number, fine: any) => {
+          return sum + (parseFloat(fine.fineAmount) || 0);
+        }, 0);
+        setTotalRevenue(revenue);
+      }
+    } catch (error) {
+      console.error('Error fetching fines data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Generate report function
+  const handleGenerateReport = () => {
+    console.log('Generating report with filters:', {
+      dateRange,
+      selectedCamera,
+      activeTab
+    });
+    fetchFinesData();
+  };
+
+  // Load data on component mount
+  useEffect(() => {
+    if (token) {
+      fetchFinesData();
+    }
+  }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
@@ -186,8 +236,14 @@ const Reports: React.FC = () => {
               </TextField>
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <Button fullWidth variant="contained" sx={{ height: '56px' }}>
-                Generate Report
+              <Button 
+                fullWidth 
+                variant="contained" 
+                sx={{ height: '56px' }}
+                onClick={handleGenerateReport}
+                disabled={loading}
+              >
+                {loading ? 'Generating...' : 'Generate Report'}
               </Button>
             </Grid>
           </Grid>
@@ -268,10 +324,32 @@ const Reports: React.FC = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box>
                   <Typography color="text.secondary" gutterBottom>
+                    Total Revenue
+                  </Typography>
+                  <Typography variant="h4">
+                    {totalRevenue.toFixed(2)} JD
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Collected fines
+                  </Typography>
+                </Box>
+                <Avatar sx={{ bgcolor: 'success.main' }}>
+                  <Assessment />
+                </Avatar>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography color="text.secondary" gutterBottom>
                     Active Cameras
                   </Typography>
                   <Typography variant="h4">
-                    2/3
+                    2/2
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     Online status
@@ -357,42 +435,68 @@ const Reports: React.FC = () => {
           <CardContent>
             <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
               <Warning />
-              Violation Reports
+              Fines Reports
             </Typography>
-            <TableContainer component={Paper}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Date</TableCell>
-                    <TableCell>Camera</TableCell>
-                    <TableCell>Violations</TableCell>
-                    <TableCell>Total Vehicles</TableCell>
-                    <TableCell>Avg Speed</TableCell>
-                    <TableCell>Status</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {mockReportData.map((item) => (
-                    <TableRow key={item.id} hover>
-                      <TableCell>{item.date}</TableCell>
-                      <TableCell>{item.camera}</TableCell>
-                      <TableCell>
-                        <Typography color="error" fontWeight="medium">{item.violations}</Typography>
-                      </TableCell>
-                      <TableCell>{item.totalVehicles}</TableCell>
-                      <TableCell>{item.avgSpeed} km/h</TableCell>
-                      <TableCell>
-                        <Chip 
-                          size="small"
-                          label={item.status}
-                          color={item.status === 'active' ? 'success' : item.status === 'maintenance' ? 'warning' : 'error'}
-                        />
-                      </TableCell>
+            {loading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+                <Typography>Loading fines data...</Typography>
+              </Box>
+            ) : (
+              <TableContainer component={Paper}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Date</TableCell>
+                      <TableCell>Plate Number</TableCell>
+                      <TableCell>Speed Detected</TableCell>
+                      <TableCell>Speed Limit</TableCell>
+                      <TableCell>Fine Amount</TableCell>
+                      <TableCell>Status</TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                  </TableHead>
+                  <TableBody>
+                    {finesData.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} sx={{ textAlign: 'center', py: 4 }}>
+                          <Typography color="text.secondary">
+                            No fines data available. Generate a report to load data.
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      finesData.map((fine: any) => (
+                        <TableRow key={fine.id} hover>
+                          <TableCell>
+                            {new Date(fine.violationDateTime).toLocaleDateString('en-US')}
+                          </TableCell>
+                          <TableCell>
+                            <Typography fontWeight="medium">{fine.vehiclePlate}</Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography color="error" fontWeight="medium">
+                              {fine.speedDetected} km/h
+                            </Typography>
+                          </TableCell>
+                          <TableCell>{fine.speedLimit} km/h</TableCell>
+                          <TableCell>
+                            <Typography fontWeight="medium" color="success.main">
+                              {parseFloat(fine.fineAmount).toFixed(2)} JD
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip 
+                              size="small"
+                              label={fine.status || 'Processed'}
+                              color="success"
+                            />
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
           </CardContent>
         </Card>
       </TabPanel>
