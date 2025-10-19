@@ -85,7 +85,7 @@ const Reports: React.FC = () => {
   const [useDemoData, setUseDemoData] = useState(false);
   const { token } = useAuth();
 
-  // Mock data for demonstration
+  // Mock data for demonstrationboard it 
   const mockReportData: ReportData[] = [
     {
       id: '1',
@@ -186,10 +186,24 @@ const Reports: React.FC = () => {
     }
   };
 
+  // Clear cache function
+  const clearCache = () => {
+    console.log('🧹 Clearing cache and resetting state...');
+    setFinesData([]);
+    setTotalRevenue(0);
+    setUseDemoData(false);
+    // Clear any localStorage cache
+    localStorage.removeItem('reportsCache');
+    localStorage.removeItem('finesData');
+    localStorage.removeItem('totalRevenue');
+  };
+
   // Fetch fines data from backend
   const fetchFinesData = async () => {
     try {
       setLoading(true);
+      // Clear cache and reset revenue to prevent accumulation
+      clearCache();
       console.log('Fetching fines data with token:', token ? 'Token present' : 'No token');
       
       const response = await fetch('/api/fines', {
@@ -204,17 +218,33 @@ const Reports: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         console.log('Fines API Response Data:', data);
-        setFinesData(data.fines || []);
         
-        // Calculate total revenue in JD
-        const revenue = (data.fines || []).reduce((sum: number, fine: any) => {
-          return sum + (parseFloat(fine.fineAmount) || 0);
-        }, 0);
-        setTotalRevenue(revenue);
+        // Backend returns data.data.fines, not data.fines
+        const finesArray = data.data?.fines || data.fines || [];
+        setFinesData(finesArray);
+        
+        // Calculate total revenue in JD - Force numeric calculation
+        let calculatedRevenue = 0;
+        console.log('=== REVENUE CALCULATION START ===');
+        
+        for (let i = 0; i < finesArray.length; i++) {
+          const fine = finesArray[i];
+          const fineAmountRaw = fine.fineAmount;
+          const fineAmountStr = String(fineAmountRaw || '0');
+          const fineAmountNum = Number(fineAmountStr);
+          const validAmount = isNaN(fineAmountNum) ? 0 : fineAmountNum;
+          
+          console.log(`Fine ${i + 1}: Plate=${fine.vehiclePlate}, Raw="${fineAmountRaw}", String="${fineAmountStr}", Number=${fineAmountNum}, Valid=${validAmount}`);
+          calculatedRevenue = calculatedRevenue + validAmount;
+          console.log(`Running total: ${calculatedRevenue}`);
+        }
+        
+        console.log(`=== FINAL REVENUE: ${calculatedRevenue} JD from ${finesArray.length} fines ===`);
+        setTotalRevenue(Number(calculatedRevenue));
         
         console.log('Fines Data Updated:', {
-          count: (data.fines || []).length,
-          revenue: revenue
+          count: finesArray.length,
+          revenue: calculatedRevenue
         });
       } else {
         const errorText = await response.text();
@@ -226,7 +256,10 @@ const Reports: React.FC = () => {
           { id: 2, vehiclePlate: '512-3456', fineAmount: '50.00', violationDateTime: '2025-01-19T14:15:00Z', notes: 'from camera002 case case003' }
         ];
         setFinesData(demoFines);
-        setTotalRevenue(125.00);
+        // Calculate demo revenue properly
+        const demoRevenue = demoFines.reduce((sum, fine) => sum + parseFloat(fine.fineAmount), 0);
+        console.log(`Demo revenue calculated: ${demoRevenue}`);
+        setTotalRevenue(demoRevenue);
       }
     } catch (error) {
       console.error('Error fetching fines data:', error);
@@ -237,7 +270,10 @@ const Reports: React.FC = () => {
         { id: 2, vehiclePlate: '512-3456', fineAmount: '50.00', violationDateTime: '2025-01-19T14:15:00Z', notes: 'from camera002 case case003' }
       ];
       setFinesData(demoFines);
-      setTotalRevenue(125.00);
+      // Calculate demo revenue properly
+      const demoRevenue = demoFines.reduce((sum, fine) => sum + parseFloat(fine.fineAmount), 0);
+      console.log(`Demo revenue calculated (catch): ${demoRevenue}`);
+      setTotalRevenue(demoRevenue);
     } finally {
       setLoading(false);
     }
@@ -254,6 +290,174 @@ const Reports: React.FC = () => {
     fetchAiPerformanceData();
   };
 
+  // Print report function
+  const handlePrintReport = () => {
+    const printContent = document.getElementById('reports-content');
+    if (printContent) {
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>Radar System Report - ${new Date().toLocaleDateString()}</title>
+              <style>
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+                .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }
+                .stat-card { border: 1px solid #ddd; padding: 15px; border-radius: 5px; }
+                .stat-title { font-weight: bold; color: #666; margin-bottom: 5px; }
+                .stat-value { font-size: 24px; font-weight: bold; color: #333; }
+                .stat-subtitle { font-size: 12px; color: #888; }
+                table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                th { background-color: #f5f5f5; font-weight: bold; }
+                .print-date { text-align: right; margin-top: 20px; font-size: 12px; color: #666; }
+                @media print { body { margin: 0; } }
+              </style>
+            </head>
+            <body>
+              <div class="header">
+                <h1>Radar System Report</h1>
+                <p>Generated on ${new Date().toLocaleDateString('en-US', { 
+                  year: 'numeric', 
+                  month: 'long', 
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}</p>
+              </div>
+              
+              <div class="stats-grid">
+                <div class="stat-card">
+                  <div class="stat-title">Total Fines</div>
+                  <div class="stat-value">${finesData.length}</div>
+                  <div class="stat-subtitle">Approved violations</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-title">AI Cases Processed</div>
+                  <div class="stat-value">${aiPerformance.totalProcessed}</div>
+                  <div class="stat-subtitle">Plate detections</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-title">AI Accuracy</div>
+                  <div class="stat-value">${aiPerformance.accuracy.toFixed(1)}%</div>
+                  <div class="stat-subtitle">Detection accuracy</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-title">Total Revenue</div>
+                  <div class="stat-value">${totalRevenue.toFixed(2)} JD</div>
+                  <div class="stat-subtitle">Collected fines</div>
+                </div>
+              </div>
+
+              ${finesData.length > 0 ? `
+                <h2>Fines Report</h2>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Plate Number</th>
+                      <th>Speed Detected</th>
+                      <th>Speed Limit</th>
+                      <th>Fine Amount</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${finesData.map(fine => `
+                      <tr>
+                        <td>${new Date(fine.violationDateTime).toLocaleDateString('en-US')}</td>
+                        <td>${fine.vehiclePlate}</td>
+                        <td>${fine.speedDetected} km/h</td>
+                        <td>${fine.speedLimit} km/h</td>
+                        <td>${parseFloat(fine.fineAmount).toFixed(2)} JD</td>
+                        <td>${fine.status || 'Processed'}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              ` : '<p>No fines data available.</p>'}
+
+              <div class="print-date">
+                Report generated by Radar System - ${new Date().toISOString()}
+              </div>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+      }
+    }
+  };
+
+  // Export data function
+  const handleExportData = () => {
+    const exportData = {
+      reportDate: new Date().toISOString(),
+      filters: {
+        dateRange,
+        selectedCamera,
+        activeTab
+      },
+      statistics: {
+        totalFines: finesData.length,
+        totalRevenue: totalRevenue,
+        aiPerformance: aiPerformance
+      },
+      finesData: finesData.map(fine => ({
+        id: fine.id,
+        date: fine.violationDateTime,
+        plateNumber: fine.vehiclePlate,
+        speedDetected: fine.speedDetected,
+        speedLimit: fine.speedLimit,
+        violationAmount: fine.violationAmount,
+        fineAmount: fine.fineAmount,
+        status: fine.status,
+        notes: fine.notes
+      }))
+    };
+
+    // Create CSV format
+    const csvHeaders = ['Date', 'Plate Number', 'Speed Detected (km/h)', 'Speed Limit (km/h)', 'Violation Amount (km/h)', 'Fine Amount (JD)', 'Status'];
+    const csvRows = finesData.map(fine => [
+      new Date(fine.violationDateTime).toLocaleDateString('en-US'),
+      fine.vehiclePlate,
+      fine.speedDetected,
+      fine.speedLimit,
+      fine.violationAmount,
+      parseFloat(fine.fineAmount).toFixed(2),
+      fine.status || 'Processed'
+    ]);
+
+    const csvContent = [
+      csvHeaders.join(','),
+      ...csvRows.map(row => row.join(','))
+    ].join('\n');
+
+    // Create and download CSV file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `radar_system_report_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // Also create JSON export option
+    const jsonBlob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const jsonLink = document.createElement('a');
+    const jsonUrl = URL.createObjectURL(jsonBlob);
+    jsonLink.setAttribute('href', jsonUrl);
+    jsonLink.setAttribute('download', `radar_system_report_${new Date().toISOString().split('T')[0]}.json`);
+    jsonLink.style.visibility = 'hidden';
+    document.body.appendChild(jsonLink);
+    
+    console.log('📊 Report exported as CSV and JSON files');
+    alert('Report exported successfully! Check your downloads folder for CSV and JSON files.');
+  };
+
   // Load data on component mount
   useEffect(() => {
     if (token) {
@@ -267,7 +471,7 @@ const Reports: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 3, backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
+    <Box id="reports-content" sx={{ p: 3, backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
       {/* Header */}
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Box>
@@ -287,11 +491,31 @@ const Reports: React.FC = () => {
         
         {/* Action Buttons */}
         <Box sx={{ mb: 3, display: 'flex', gap: 2 }}>
-          <Button variant="outlined" startIcon={<Download />}>
+          <Button 
+            variant="outlined" 
+            startIcon={<Download />}
+            onClick={handleExportData}
+            disabled={finesData.length === 0}
+            title={finesData.length === 0 ? "Generate a report first to export data" : "Export report data as CSV and JSON files"}
+          >
             Export Data
           </Button>
-          <Button variant="contained" startIcon={<Print />}>
+          <Button 
+            variant="contained" 
+            startIcon={<Print />}
+            onClick={handlePrintReport}
+            disabled={finesData.length === 0}
+            title={finesData.length === 0 ? "Generate a report first to print" : "Print the current report"}
+          >
             Print Report
+          </Button>
+          <Button 
+            variant="outlined" 
+            color="warning"
+            onClick={clearCache}
+            title="Clear cache and reset all data"
+          >
+            🧹 Clear Cache
           </Button>
         </Box>
       </Box>

@@ -55,6 +55,24 @@ const Dashboard: React.FC = () => {
     violationTypes: []
   });
 
+  // Clear cache function
+  const clearDashboardCache = () => {
+    console.log('🧹 Clearing Dashboard cache...');
+    setStats(null);
+    setTotalRevenue(0);
+    setError(null);
+    setChartData({
+      hourlyViolations: [],
+      cameraStats: [],
+      speedDistribution: [],
+      violationTypes: []
+    });
+    // Clear localStorage cache
+    localStorage.removeItem('dashboardCache');
+    localStorage.removeItem('dashboardStats');
+    localStorage.removeItem('dashboardRevenue');
+  };
+
   // Fetch real revenue data from fines API
   const fetchRevenueData = async () => {
     try {
@@ -69,10 +87,28 @@ const Dashboard: React.FC = () => {
       
       if (response.ok) {
         const data = await response.json();
-        const revenue = (data.fines || []).reduce((sum: number, fine: any) => {
-          return sum + (parseFloat(fine.fineAmount) || 0);
+        console.log('Dashboard fines API response:', data);
+        
+        // Backend returns data.data.fines, not data.fines
+        const finesArray = data.data?.fines || data.fines || [];
+        console.log('Dashboard fines array:', finesArray);
+        
+        const revenue = finesArray.reduce((sum: number, fine: any) => {
+          const fineAmount = parseFloat(fine.fineAmount?.toString() || '0');
+          const validAmount = isNaN(fineAmount) ? 0 : fineAmount;
+          console.log(`Dashboard fine: ${fine.vehiclePlate}, amount: ${fineAmount}, valid: ${validAmount}`);
+          return sum + validAmount;
         }, 0);
+        
+        console.log('Dashboard calculated revenue:', revenue);
         setTotalRevenue(revenue);
+        
+        // Update stats with real revenue
+        setStats(prevStats => prevStats ? {
+          ...prevStats,
+          totalRevenue: revenue,
+          todayRevenue: revenue
+        } : null);
       }
     } catch (error) {
       console.error('Error fetching revenue data:', error);
@@ -157,14 +193,14 @@ const Dashboard: React.FC = () => {
         violationTypes: violationTypesData
       });
       
-      // Update stats with real data
+      // Update stats with real data (revenue will be updated separately by fetchRevenueData)
       setStats({
         totalRadars: 2,
         activeRadars: 2,
         totalFines: totalViolations,
         todayFines: totalViolations,
-        totalRevenue: totalViolations * 150,
-        todayRevenue: totalViolations * 150,
+        totalRevenue: 0, // Will be updated by fetchRevenueData
+        todayRevenue: 0, // Will be updated by fetchRevenueData
         averageSpeed: 65,
         complianceRate: totalCases > 0 ? Math.round(((totalCases - totalViolations) / totalCases) * 100) : 100,
         pendingFines: Math.floor(totalViolations * 0.8),
@@ -198,8 +234,12 @@ const Dashboard: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchViolationSystemData();
-    fetchRevenueData();
+    if (token) {
+      console.log('🔄 Dashboard loading with fresh data...');
+      clearDashboardCache();
+      fetchViolationSystemData();
+      fetchRevenueData();
+    }
   }, [token]);
 
   const actionCards = [

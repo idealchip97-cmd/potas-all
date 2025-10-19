@@ -87,12 +87,31 @@ const Fines: React.FC = () => {
   // Success message state
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // Clear cache function
+  const clearCache = () => {
+    console.log('🧹 Clearing Fines page cache...');
+    setFines([]);
+    setStats(null);
+    setError(null);
+    // Clear localStorage cache
+    localStorage.removeItem('finesCache');
+    localStorage.removeItem('finesStats');
+    // Force refresh
+    fetchFines();
+    fetchStats();
+  };
+
   const calculateStats = useCallback((finesData: Fine[]) => {
     const totalFines = finesData.length;
     const pendingFines = finesData.filter(f => f.status === 'pending').length;
     const processedFines = finesData.filter(f => f.status === 'processed').length;
     const paidFines = finesData.filter(f => f.status === 'paid').length;
-    const totalRevenue = finesData.reduce((sum, fine) => sum + fine.fineAmount, 0);
+    
+    // Fix revenue calculation - force numeric addition
+    const totalRevenue = finesData.reduce((sum, fine) => {
+      const fineAmount = parseFloat(fine.fineAmount?.toString() || '0');
+      return sum + (isNaN(fineAmount) ? 0 : fineAmount);
+    }, 0);
     
     setStats({
       totalFines,
@@ -145,8 +164,8 @@ const Fines: React.FC = () => {
   };
 
   const handleRefresh = () => {
-    fetchFines();
-    fetchStats();
+    console.log('🔄 Refreshing fines data with cache clear...');
+    clearCache();
     setError(null);
   };
 
@@ -406,7 +425,7 @@ const Fines: React.FC = () => {
                   Total Revenue
                 </Typography>
                 <Typography variant="h4">
-                  {stats?.totalRevenue || 0} JD
+                  {(stats?.totalRevenue || 0).toFixed(2)} JD
                 </Typography>
               </Box>
               <Avatar sx={{ bgcolor: 'success.main' }}>

@@ -93,7 +93,11 @@ app.use(cors({
     'http://127.0.0.1:41453', // Current browser preview proxy
     'http://localhost:41453',
     'http://127.0.0.1:36891', // Dashboard browser preview proxy
-    'http://localhost:36891'
+    'http://localhost:36891',
+    'http://127.0.0.1:42879', // Current browser preview proxy
+    'http://localhost:42879',
+    'http://127.0.0.1:38833', // Current browser preview proxy
+    'http://localhost:38833'
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],

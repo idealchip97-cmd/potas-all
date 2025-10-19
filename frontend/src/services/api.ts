@@ -32,7 +32,34 @@ class ApiService {
     // Request interceptor to add auth token
     this.api.interceptors.request.use(
       (config) => {
-        const token = localStorage.getItem('authToken') || localStorage.getItem('token');
+        let token = localStorage.getItem('authToken') || localStorage.getItem('token');
+        
+        // In development mode, provide fallback token if none exists
+        // This handles browser preview scenarios where localStorage might not be shared
+        if (!token && this.isDevelopmentMode) {
+          console.log('🔧 Development mode: No token found, using fallback dev token');
+          token = 'dev-token-browser-preview-' + Date.now();
+          
+          // Store the fallback token and create a mock user for consistency
+          localStorage.setItem('authToken', token);
+          
+          // Create mock user if none exists
+          const existingUser = localStorage.getItem('user');
+          if (!existingUser) {
+            const mockUser = {
+              id: 1,
+              email: 'admin@potasfactory.com',
+              firstName: 'Browser Preview',
+              lastName: 'Admin',
+              role: 'admin',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            };
+            localStorage.setItem('user', JSON.stringify(mockUser));
+            console.log('🔧 Created mock user for browser preview');
+          }
+        }
+        
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
         }
@@ -62,6 +89,9 @@ class ApiService {
               console.log('🔄 Redirecting to login page');
               window.location.href = '/login';
             }
+          } else if (storedToken && storedToken.startsWith('dev-token-browser-preview')) {
+            // For browser preview fallback tokens, don't redirect - just log
+            console.log('🔧 Browser preview fallback token failed, but staying on page');
           } else {
             // For real tokens, just log the error but don't force logout
             console.log('🔐 Token may be expired, but keeping session active');
