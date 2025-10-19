@@ -40,6 +40,7 @@ import { PlateRecognitionImage } from '../services/ftpClient';
 import RealTimePlateRecognition from '../components/RealTimePlateRecognition';
 import ViolationCycleMonitor from '../components/ViolationCycleMonitor';
 import SimpleViolationMonitor from '../components/SimpleViolationMonitor';
+import RoleIndicator from '../components/RoleIndicator';
 
 interface UploadedFile {
   file: File;
@@ -264,6 +265,7 @@ const PlateRecognition: React.FC = () => {
     return (
       <Box>
         <Box sx={{ p: 2, bgcolor: 'white', borderBottom: '1px solid #e5e7eb' }}>
+          <RoleIndicator />
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
             <Button
               variant={showViolationCycle ? 'contained' : 'outlined'}
@@ -397,6 +399,7 @@ const PlateRecognition: React.FC = () => {
     return (
       <Box>
         <Box sx={{ p: 2, bgcolor: 'white', borderBottom: '1px solid #e5e7eb' }}>
+          <RoleIndicator />
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
             <Button
               variant={showViolationCycle ? 'contained' : 'outlined'}
@@ -617,6 +620,7 @@ const PlateRecognition: React.FC = () => {
     <Box sx={{ minHeight: '100vh', bgcolor: '#f9fafb' }}>
       {/* Navigation Tabs */}
       <Box sx={{ p: 2, bgcolor: 'white', borderBottom: '1px solid #e5e7eb' }}>
+        <RoleIndicator />
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
           <Button
             variant={showViolationCycle ? 'contained' : 'outlined'}

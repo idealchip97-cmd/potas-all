@@ -104,6 +104,22 @@ const Login: React.FC = () => {
         }}
       >
         <Paper elevation={3} sx={{ padding: 4, width: '100%' }}>
+          {/* Company Logos */}
+          <Box sx={{ textAlign: 'center', mb: 4 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 3, mb: 3 }}>
+              <img 
+                src="/ideal chip logo.png" 
+                alt="Ideal Chip Logo" 
+                style={{ height: '60px', objectFit: 'contain' }}
+              />
+              <img 
+                src="/arab_potash-logo-en.png" 
+                alt="Arab Potash Company Logo" 
+                style={{ height: '60px', objectFit: 'contain' }}
+              />
+            </Box>
+          </Box>
+
           <Box sx={{ textAlign: 'center', mb: 3 }}>
             <Typography component="h1" variant="h4" gutterBottom>
               Radar Control System
@@ -154,43 +170,8 @@ const Login: React.FC = () => {
               {loading ? <CircularProgress size={24} /> : 'Sign In'}
             </Button>
             
-            <Button
-              fullWidth
-              variant="outlined"
-              color="secondary"
-              sx={{ mb: 2 }}
-              onClick={handleAutoLogin}
-              disabled={loading}
-            >
-              🚀 Quick Admin Login (Development)
-            </Button>
           </Box>
 
-          <Box sx={{ mt: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Demo Accounts
-            </Typography>
-            {demoAccounts.map((account) => (
-              <Card key={account.role} sx={{ mb: 1 }}>
-                <CardContent sx={{ py: 1 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Box>
-                      <Typography variant="subtitle2">{account.role}</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {account.email}
-                      </Typography>
-                    </Box>
-                    <Button
-                      size="small"
-                      onClick={() => handleDemoLogin(account.email, account.password)}
-                    >
-                      Use Account
-                    </Button>
-                  </Box>
-                </CardContent>
-              </Card>
-            ))}
-          </Box>
         </Paper>
       </Box>
     </Container>

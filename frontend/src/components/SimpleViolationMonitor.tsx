@@ -39,6 +39,7 @@ import {
 } from '@mui/icons-material';
 import aiFtpService, { AIViolation } from '../services/aiFtpService';
 import approvalSyncService from '../services/approvalSyncService';
+import usePermissions from '../hooks/usePermissions';
 
 interface SimpleViolationMonitorProps {
   refreshTrigger?: number;
@@ -55,6 +56,7 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
   statusFilter = 'all',
   searchFilter = ''
 }) => {
+  const permissions = usePermissions();
   const [violations, setViolations] = useState<AIViolation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -654,16 +656,18 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
                                       size="small"
                                       icon={<CheckCircle />}
                                     />
-                                    <Tooltip title="Deny this violation">
-                                      <IconButton
-                                        size="small"
-                                        onClick={() => handleDenyViolation(violation)}
-                                        disabled={isProcessing}
-                                        color="error"
-                                      >
-                                        <ThumbDown />
-                                      </IconButton>
-                                    </Tooltip>
+                                    {permissions.canDenyPlates && (
+                                      <Tooltip title="Deny this violation">
+                                        <IconButton
+                                          size="small"
+                                          onClick={() => handleDenyViolation(violation)}
+                                          disabled={isProcessing}
+                                          color="error"
+                                        >
+                                          <ThumbDown />
+                                        </IconButton>
+                                      </Tooltip>
+                                    )}
                                   </>
                                 );
                               }
@@ -677,42 +681,48 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
                                       size="small"
                                       icon={<Close />}
                                     />
-                                    <Tooltip title="Approve this violation">
-                                      <IconButton
-                                        size="small"
-                                        onClick={() => handleApproveViolation(violation)}
-                                        disabled={isProcessing}
-                                        color="success"
-                                      >
-                                        <ThumbUp />
-                                      </IconButton>
-                                    </Tooltip>
+                                    {permissions.canApprovePlates && (
+                                      <Tooltip title="Approve this violation">
+                                        <IconButton
+                                          size="small"
+                                          onClick={() => handleApproveViolation(violation)}
+                                          disabled={isProcessing}
+                                          color="success"
+                                        >
+                                          <ThumbUp />
+                                        </IconButton>
+                                      </Tooltip>
+                                    )}
                                   </>
                                 );
                               }
 
                               return (
                                 <>
-                                  <Tooltip title="Approve violation and save to fines">
-                                    <IconButton
-                                      size="small"
-                                      onClick={() => handleApproveViolation(violation)}
-                                      disabled={isProcessing}
-                                      color="success"
-                                    >
-                                      {isProcessing ? <CircularProgress size={16} /> : <ThumbUp />}
-                                    </IconButton>
-                                  </Tooltip>
-                                  <Tooltip title="Deny this violation">
-                                    <IconButton
-                                      size="small"
-                                      onClick={() => handleDenyViolation(violation)}
-                                      disabled={isProcessing}
-                                      color="error"
-                                    >
-                                      {isProcessing ? <CircularProgress size={16} /> : <ThumbDown />}
-                                    </IconButton>
-                                  </Tooltip>
+                                  {permissions.canApprovePlates && (
+                                    <Tooltip title="Approve violation and save to fines">
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => handleApproveViolation(violation)}
+                                        disabled={isProcessing}
+                                        color="success"
+                                      >
+                                        {isProcessing ? <CircularProgress size={16} /> : <ThumbUp />}
+                                      </IconButton>
+                                    </Tooltip>
+                                  )}
+                                  {permissions.canDenyPlates && (
+                                    <Tooltip title="Deny this violation">
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => handleDenyViolation(violation)}
+                                        disabled={isProcessing}
+                                        color="error"
+                                      >
+                                        {isProcessing ? <CircularProgress size={16} /> : <ThumbDown />}
+                                      </IconButton>
+                                    </Tooltip>
+                                  )}
                                   <Tooltip title="View details and full image">
                                     <IconButton
                                       size="small"

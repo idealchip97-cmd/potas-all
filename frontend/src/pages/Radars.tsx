@@ -15,11 +15,15 @@ import {
   LinearProgress,
   Tooltip,
   IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import {
   LocationOn,
   CheckCircle,
-  Error,
+  Error as ErrorIcon,
   Warning,
   Refresh,
   PhotoCamera,
@@ -30,79 +34,57 @@ import {
   Wifi,
   CameraAlt,
   Timeline,
+  Edit,
+  Delete,
+  Add,
+  Sync,
 } from '@mui/icons-material';
 import { Radar } from '../types';
+import RadarEditDialog from '../components/RadarEditDialog';
+import usePermissions from '../hooks/usePermissions';
+import RoleIndicator from '../components/RoleIndicator';
 
 const Radars: React.FC = () => {
+  const permissions = usePermissions();
   const [radars, setRadars] = useState<Radar[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCamera, setSelectedCamera] = useState<number | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [selectedRadar, setSelectedRadar] = useState<Radar | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [radarToDelete, setRadarToDelete] = useState<Radar | null>(null);
 
   const fetchRadars = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      // Create 3 camera/radar entries with real data from violation system
-      const cameras = ['camera001', 'camera002', 'camera003'];
-      const date = '2025-10-05';
-      const radarData: Radar[] = [];
+      const token = localStorage.getItem('token') || 'demo_token_1760447560349_liqy8nlhx';
       
-      for (let i = 0; i < cameras.length; i++) {
-        const cameraId = cameras[i];
-        let violationCount = 0;
-        
-        try {
-          // Fetch real violation data for each camera
-          const response = await fetch(`/api/violations/${cameraId}/${date}`);
-          if (response.ok) {
-            const data = await response.json();
-            if (data.success && data.violations) {
-              violationCount = data.violations.length;
-            }
-          }
-        } catch (fetchError) {
-          console.warn(`Could not fetch data for ${cameraId}:`, fetchError);
+      // Use dynamic discovery endpoint
+      const response = await fetch('/api/radars/discover', {
+        headers: {
+          'Authorization': `Bearer ${token}`
         }
-        
-        // Create radar entry with Dead Sea Jordan locations + camera images
-        const locations = [
-          { name: 'Dead Sea Highway - North', coords: [31.5497, 35.4732], description: 'Main tourist route to Dead Sea resorts' },
-          { name: 'Dead Sea Resort Area', coords: [31.5000, 35.4500], description: 'Hotel and spa district monitoring' },
-          { name: 'Dead Sea - South Access', coords: [31.4500, 35.4200], description: 'Southern entrance checkpoint' }
-        ];
-        
-        const radar: Radar = {
-          id: i + 1,
-          name: `Dead Sea Camera ${String(i + 1).padStart(3, '0')}`,
-          location: locations[i].name,
-          ipAddress: `192.168.1.${60 + i}`,
-          serialNumber: `UNV-CAM-${2024000 + i}`,
-          speedLimit: 30, // Static speed limit
-          status: violationCount > 0 ? 'active' : 'inactive',
-          latitude: locations[i].coords[0], // Dead Sea coordinates
-          longitude: locations[i].coords[1],
-          installationDate: '2024-01-15',
-          lastMaintenance: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
-          ftpPath: `/srv/processing_inbox/${cameraId}`,
-          createdAt: '2024-01-15T00:00:00Z',
-          updatedAt: new Date().toISOString(),
-          statistics: {
-            totalFines: violationCount,
-            pendingFines: Math.floor(violationCount * 0.8)
-          }
-        };
-        
-        radarData.push(radar);
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data.radars) {
+          setRadars(data.data.radars);
+          console.log(`✅ Discovered ${data.data.radars.length} radars from /srv/processing_inbox`);
+        } else {
+          throw new (Error as any)(data.message || 'Failed to discover radars');
+        }
+      } else {
+        const errorMsg = `HTTP ${response.status}: ${response.statusText}`;
+        throw new (Error as any)(errorMsg);
       }
       
-      setRadars(radarData);
-      console.log(`✅ Loaded ${radarData.length} cameras with real violation data`);
-      
     } catch (error: any) {
-      console.error('Error creating radar data:', error);
-      setError(`Failed to load camera data: ${error.message}`);
+      console.error('Error discovering radars:', error);
+      setError(`Failed to discover radars: ${error.message}`);
       setRadars([]);
     } finally {
       setLoading(false);
@@ -115,6 +97,87 @@ const Radars: React.FC = () => {
 
   const handleRefresh = () => {
     fetchRadars();
+  };
+
+  const handleEditRadar = (radar: Radar) => {
+    setSelectedRadar(radar);
+    setEditDialogOpen(true);
+  };
+
+  const handleAddRadar = () => {
+    setSelectedRadar(null);
+    setEditDialogOpen(true);
+  };
+
+  const handleSaveRadar = async (formData: FormData) => {
+    try {
+      const token = localStorage.getItem('token') || 'demo_token_1760447560349_liqy8nlhx';
+      
+      const url = selectedRadar ? `/api/radars/${selectedRadar.id}` : '/api/radars';
+      const method = selectedRadar ? 'PUT' : 'POST';
+      
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          console.log(`✅ ${selectedRadar ? 'Updated' : 'Created'} radar successfully`);
+          fetchRadars(); // Refresh the list
+        } else {
+          throw new (Error as any)(data.message || 'Failed to save radar');
+        }
+      } else {
+        const errorMsg = `HTTP ${response.status}: ${response.statusText}`;
+        throw new (Error as any)(errorMsg);
+      }
+    } catch (error: any) {
+      console.error('Error saving radar:', error);
+      throw error; // Re-throw to be handled by the dialog
+    }
+  };
+
+  const handleDeleteRadar = (radar: Radar) => {
+    setRadarToDelete(radar);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteRadar = async () => {
+    if (!radarToDelete) return;
+    
+    try {
+      const token = localStorage.getItem('token') || 'demo_token_1760447560349_liqy8nlhx';
+      
+      const response = await fetch(`/api/radars/${radarToDelete.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          console.log(`✅ Deleted radar ${radarToDelete.name} successfully`);
+          fetchRadars(); // Refresh the list
+          setDeleteDialogOpen(false);
+          setRadarToDelete(null);
+        } else {
+          throw new (Error as any)(data.message || 'Failed to delete radar');
+        }
+      } else {
+        const errorMsg = `HTTP ${response.status}: ${response.statusText}`;
+        throw new (Error as any)(errorMsg);
+      }
+    } catch (error: any) {
+      console.error('Error deleting radar:', error);
+      setError(`Failed to delete radar: ${error.message}`);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -132,19 +195,24 @@ const Radars: React.FC = () => {
       case 'active': return <Wifi />;
       case 'inactive': return <WifiOff />;
       case 'maintenance': return <Warning />;
-      case 'error': return <Error />;
+      case 'error': return <ErrorIcon />;
       default: return <WifiOff />;
     }
   };
 
-  // Mock camera images - in real system these would come from actual cameras
-  const getCameraImage = (cameraId: number) => {
-    const images = [
+  // Get radar image - use uploaded image or fallback to default
+  const getRadarImage = (radar: Radar) => {
+    if (radar.imageUrl) {
+      return `http://localhost:3001${radar.imageUrl}`;
+    }
+    
+    // Fallback images based on radar ID
+    const fallbackImages = [
       'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=300&fit=crop', // Dead Sea landscape
       'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=400&h=300&fit=crop', // Highway view
       'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=300&fit=crop'  // Road monitoring
     ];
-    return images[cameraId - 1] || images[0];
+    return fallbackImages[(radar.id - 1) % fallbackImages.length];
   };
 
   if (loading) {
@@ -160,6 +228,8 @@ const Radars: React.FC = () => {
 
   return (
     <Box sx={{ p: 3 }}>
+      <RoleIndicator />
+      
       {/* Animated Header */}
       <Slide direction="down" in={!loading} timeout={800}>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
@@ -191,26 +261,51 @@ const Radars: React.FC = () => {
               />
             </Box>
           </Box>
-          <Button
-            variant="contained"
-            startIcon={<Refresh />}
-            onClick={handleRefresh}
-            size="large"
-            sx={{
-              borderRadius: 3,
-              px: 3,
-              py: 1.5,
-              background: 'linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)',
-              '&:hover': {
-                background: 'linear-gradient(45deg, #1976D2 30%, #1CB5E0 90%)',
-                transform: 'translateY(-2px)',
-                boxShadow: 6
-              },
-              transition: 'all 0.3s ease'
-            }}
-          >
-            Refresh Network
-          </Button>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            {permissions.canAddRadars && (
+              <Button
+                variant="outlined"
+                startIcon={<Add />}
+                onClick={handleAddRadar}
+                sx={{
+                  borderColor: '#10b981',
+                  color: '#10b981',
+                  '&:hover': {
+                    borderColor: '#059669',
+                    backgroundColor: 'rgba(16, 185, 129, 0.04)',
+                  },
+                  borderRadius: 2,
+                  px: 3,
+                  py: 1.5,
+                  fontWeight: 600,
+                  textTransform: 'none',
+                  fontSize: '0.95rem',
+                }}
+              >
+                Add Radar
+              </Button>
+            )}
+            <Button
+              variant="contained"
+              startIcon={<Sync />}
+              onClick={handleRefresh}
+              size="large"
+              sx={{
+                borderRadius: 3,
+                px: 3,
+                py: 1.5,
+                background: 'linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)',
+                '&:hover': {
+                  background: 'linear-gradient(45deg, #1976D2 30%, #1CB5E0 90%)',
+                  transform: 'translateY(-2px)',
+                  boxShadow: 6
+                },
+                transition: 'all 0.3s ease'
+              }}
+            >
+              Sync Radars
+            </Button>
+          </Box>
         </Box>
       </Slide>
 
@@ -257,7 +352,7 @@ const Radars: React.FC = () => {
                 <CardMedia
                   component="img"
                   height="200"
-                  image={getCameraImage(radar.id)}
+                  image={getRadarImage(radar)}
                   alt={radar.name}
                   sx={{
                     transition: 'transform 0.3s ease',
@@ -315,7 +410,7 @@ const Radars: React.FC = () => {
                   <Box display="grid" gridTemplateColumns="1fr 1fr" gap={2} mb={2}>
                     <Box textAlign="center" p={1} sx={{ bgcolor: 'rgba(33, 150, 243, 0.1)', borderRadius: 2 }}>
                       <Typography variant="h4" fontWeight="bold" color="primary">
-                        {radar.statistics?.totalFines || 0}
+                        {radar.violationCount || 0}
                       </Typography>
                       <Typography variant="caption" color="textSecondary">
                         Total Violations
@@ -323,7 +418,7 @@ const Radars: React.FC = () => {
                     </Box>
                     <Box textAlign="center" p={1} sx={{ bgcolor: 'rgba(255, 152, 0, 0.1)', borderRadius: 2 }}>
                       <Typography variant="h4" fontWeight="bold" color="warning.main">
-                        {radar.statistics?.pendingFines || 0}
+                        {Math.floor((radar.violationCount || 0) * 0.8)}
                       </Typography>
                       <Typography variant="caption" color="textSecondary">
                         Pending Fines
@@ -378,32 +473,66 @@ const Radars: React.FC = () => {
                             <strong>Serial:</strong> {radar.serialNumber}
                           </Typography>
                           <Typography variant="body2">
-                            <strong>Installed:</strong> {new Date(radar.installationDate).toLocaleDateString()}
+                            <strong>Installed:</strong> {
+                              radar.installationDate 
+                                ? new Date(radar.installationDate).toLocaleDateString()
+                                : 'Not available'
+                            }
                           </Typography>
                           <Typography variant="body2">
-                            <strong>Last Maintenance:</strong> {new Date(radar.lastMaintenance || '').toLocaleDateString()}
+                            <strong>Last Maintenance:</strong> {
+                              radar.lastMaintenance 
+                                ? new Date(radar.lastMaintenance).toLocaleDateString()
+                                : 'Not available'
+                            }
                           </Typography>
                           <Typography variant="body2">
-                            <strong>Coordinates:</strong> {radar.latitude.toFixed(4)}, {radar.longitude.toFixed(4)}
+                            <strong>Coordinates:</strong> {
+                              typeof radar.latitude === 'number' && typeof radar.longitude === 'number' 
+                                ? `${radar.latitude.toFixed(4)}, ${radar.longitude.toFixed(4)}`
+                                : 'Not available'
+                            }
                           </Typography>
                         </Box>
                         
-                        <Box display="flex" gap={1} mt={2}>
+                        <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
+                          {permissions.canEditRadars && (
+                            <Button 
+                              size="small" 
+                              startIcon={<Edit />}
+                              variant="contained"
+                              color="primary"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditRadar(radar);
+                              }}
+                              sx={{ borderRadius: 2 }}
+                            >
+                              Edit
+                            </Button>
+                          )}
+                          {permissions.canDeleteRadars && (
+                            <Button 
+                              size="small" 
+                              startIcon={<Delete />}
+                              variant="outlined"
+                              color="error"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteRadar(radar);
+                              }}
+                              sx={{ borderRadius: 2 }}
+                            >
+                              Delete
+                            </Button>
+                          )}
                           <Button 
                             size="small" 
                             startIcon={<Visibility />}
                             variant="outlined"
                             sx={{ borderRadius: 2 }}
                           >
-                            View Live Feed
-                          </Button>
-                          <Button 
-                            size="small" 
-                            startIcon={<Timeline />}
-                            variant="outlined"
-                            sx={{ borderRadius: 2 }}
-                          >
-                            Analytics
+                            Live Feed
                           </Button>
                         </Box>
                       </Box>
@@ -414,6 +543,43 @@ const Radars: React.FC = () => {
           </Fade>
         ))}
       </Box>
+
+      {/* Edit Radar Dialog */}
+      <RadarEditDialog
+        open={editDialogOpen}
+        radar={selectedRadar}
+        onClose={() => {
+          setEditDialogOpen(false);
+          setSelectedRadar(null);
+        }}
+        onSave={handleSaveRadar}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} maxWidth="sm">
+        <DialogTitle>
+          Confirm Delete
+        </DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete radar "{radarToDelete?.name}"?
+          </Typography>
+          <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+            Location: {radarToDelete?.location}
+          </Typography>
+          <Typography variant="body2" color="textSecondary">
+            This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button onClick={confirmDeleteRadar} color="error" variant="contained">
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Add CSS animations */}
       <style>

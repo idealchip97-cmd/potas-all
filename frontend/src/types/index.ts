@@ -30,6 +30,8 @@ export interface Radar {
   installationDate: string;
   lastMaintenance: string | null;
   ftpPath: string;
+  imageUrl?: string;
+  identifier?: string;
   createdAt: string;
   updatedAt: string;
   fines?: Fine[];
@@ -37,6 +39,7 @@ export interface Radar {
     totalFines: number;
     pendingFines: number;
   };
+  violationCount?: number;
 }
 
 export interface Fine {

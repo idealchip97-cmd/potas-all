@@ -44,6 +44,8 @@ import {
 import apiService from '../services/api';
 import approvalSyncService from '../services/approvalSyncService';
 import { Fine } from '../types';
+import usePermissions from '../hooks/usePermissions';
+import RoleIndicator from '../components/RoleIndicator';
 
 interface FineFilters {
   status?: string;
@@ -54,6 +56,7 @@ interface FineFilters {
 }
 
 const Fines: React.FC = () => {
+  const permissions = usePermissions();
   const [fines, setFines] = useState<Fine[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -259,6 +262,8 @@ const Fines: React.FC = () => {
       <Typography variant="h4" gutterBottom>
         Fines Management
       </Typography>
+      
+      <RoleIndicator />
 
       {/* Statistics Cards */}
       <Box sx={{ 
@@ -460,24 +465,28 @@ const Fines: React.FC = () => {
                                 <Visibility />
                               </IconButton>
                             </Tooltip>
-                            <Tooltip title="Edit Plate Number">
-                              <IconButton
-                                size="small"
-                                color="info"
-                                onClick={() => openEditDialog(fine)}
-                              >
-                                <Edit />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Delete Fine">
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => openDeleteConfirmation(fine)}
-                              >
-                                <Delete />
-                              </IconButton>
-                            </Tooltip>
+                            {permissions.canEditFines && (
+                              <Tooltip title="Edit Plate Number">
+                                <IconButton
+                                  size="small"
+                                  color="info"
+                                  onClick={() => openEditDialog(fine)}
+                                >
+                                  <Edit />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                            {permissions.canDeleteFines && (
+                              <Tooltip title="Delete Fine">
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  onClick={() => openDeleteConfirmation(fine)}
+                                >
+                                  <Delete />
+                                </IconButton>
+                              </Tooltip>
+                            )}
                           </Box>
                         </TableCell>
                       </TableRow>
