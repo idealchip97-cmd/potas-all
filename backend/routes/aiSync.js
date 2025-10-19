@@ -81,9 +81,10 @@ router.post('/sync', async (req, res) => {
   }
 });
 
-// Auto-start the service when the module is loaded
-aiSyncService.start().catch(error => {
-  console.error('Failed to auto-start AI sync service:', error);
-});
+// Auto-start the service when the module is loaded - DISABLED
+// This should only run when manually approved through plate recognition UI
+// aiSyncService.start().catch(error => {
+//   console.error('Failed to auto-start AI sync service:', error);
+// });
 
 module.exports = router;

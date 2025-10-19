@@ -60,10 +60,17 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
   const [selectedViolation, setSelectedViolation] = useState<AIViolation | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   
-  // Approval/Denial state
+  // Approval/Denial state with persistence
   const [processingViolations, setProcessingViolations] = useState<Set<string>>(new Set());
-  const [approvedViolations, setApprovedViolations] = useState<Set<string>>(new Set());
-  const [deniedViolations, setDeniedViolations] = useState<Set<string>>(new Set());
+  const [approvedViolations, setApprovedViolations] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem('approvedViolations');
+    return saved ? new Set(JSON.parse(saved)) : new Set();
+  });
+  const [deniedViolations, setDeniedViolations] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem('deniedViolations');
+    return saved ? new Set(JSON.parse(saved)) : new Set();
+  });
+  const [approvedFromBackend, setApprovedFromBackend] = useState<Set<string>>(new Set());
   
   // Pagination state
   const [page, setPage] = useState(1);
@@ -80,7 +87,51 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
 
   useEffect(() => {
     loadViolationCycles();
+    loadApprovedViolations();
   }, [refreshTrigger, page, selectedCamera, dateFilter, statusFilter, searchFilter]);
+
+  // Save approval/denial state to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('approvedViolations', JSON.stringify(Array.from(approvedViolations)));
+  }, [approvedViolations]);
+
+  useEffect(() => {
+    localStorage.setItem('deniedViolations', JSON.stringify(Array.from(deniedViolations)));
+  }, [deniedViolations]);
+
+  const loadApprovedViolations = async () => {
+    try {
+      const token = localStorage.getItem('token') || 'demo_token_1760447560349_liqy8nlhx';
+      
+      const response = await fetch('/api/fines?limit=1000', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data.fines) {
+          const approvedCases = new Set<string>();
+          
+          data.data.fines.forEach((fine: any) => {
+            // Extract case information from notes
+            const notesMatch = fine.notes?.match(/from (\w+) case (\w+)/);
+            if (notesMatch) {
+              const [, camera, caseId] = notesMatch;
+              // Use the same format as violation IDs
+              const violationId = `${camera}-${dateFilter}-${caseId}`;
+              approvedCases.add(violationId);
+            }
+          });
+          
+          setApprovedFromBackend(approvedCases);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading approved violations:', error);
+    }
+  };
 
   const loadViolationCycles = async () => {
     try {
@@ -196,6 +247,13 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
 
       if (data.success) {
         setApprovedViolations(prev => new Set(prev).add(violationId));
+        setApprovedFromBackend(prev => new Set(prev).add(violationId));
+        // Remove from denied if it was previously denied
+        setDeniedViolations(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(violationId);
+          return newSet;
+        });
         console.log(`✅ Approved violation for case ${violation.case}`);
       } else {
         throw new Error(data.message || 'Failed to approve violation');
@@ -245,6 +303,11 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
           newSet.delete(violationId);
           return newSet;
         });
+        setApprovedFromBackend(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(violationId);
+          return newSet;
+        });
         console.log(`❌ Denied violation for case ${violation.case}`);
       } else {
         throw new Error(data.message || 'Failed to deny violation');
@@ -278,8 +341,17 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
       const data = await response.json();
 
       if (data.success) {
-        console.log(`🗑️ Cleared all fines from database`);
-        alert(`Successfully cleared all fines from the database`);
+        // Clear all approval/denial states
+        setApprovedViolations(new Set());
+        setDeniedViolations(new Set());
+        setApprovedFromBackend(new Set());
+        
+        // Clear localStorage
+        localStorage.removeItem('approvedViolations');
+        localStorage.removeItem('deniedViolations');
+        
+        console.log(`🗑️ Cleared all fines from database and reset approval states`);
+        alert(`Successfully cleared all fines from the database and reset approval states`);
       } else {
         throw new Error(data.message || 'Failed to clear fines');
       }
@@ -391,6 +463,34 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
             </Box>
           </CardContent>
         </Card>
+        
+        <Card sx={{ minWidth: 200, flex: 1 }}>
+          <CardContent>
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <ThumbUp color="success" sx={{ mr: 1 }} />
+              <Box>
+                <Typography variant="h4">{approvedViolations.size + approvedFromBackend.size}</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Approved
+                </Typography>
+              </Box>
+            </Box>
+          </CardContent>
+        </Card>
+        
+        <Card sx={{ minWidth: 200, flex: 1 }}>
+          <CardContent>
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <ThumbDown color="error" sx={{ mr: 1 }} />
+              <Box>
+                <Typography variant="h4">{deniedViolations.size}</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Denied
+                </Typography>
+              </Box>
+            </Box>
+          </CardContent>
+        </Card>
       </Box>
 
       {/* Violations Table */}
@@ -447,11 +547,11 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
                       <TableCell>Image</TableCell>
                       <TableCell>Camera</TableCell>
                       <TableCell>Date</TableCell>
-                      <TableCell>Status</TableCell>
+                      <TableCell>Case ID</TableCell>
                       <TableCell>Plate Number</TableCell>
                       <TableCell>Plate Count</TableCell>
                       <TableCell>Highest Confidence</TableCell>
-                      <TableCell>Actions</TableCell>
+                      <TableCell>Approval Status</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -528,7 +628,7 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
                             {(() => {
                               const violationId = `${violation.camera}-${violation.date}-${violation.case}`;
                               const isProcessing = processingViolations.has(violationId);
-                              const isApproved = approvedViolations.has(violationId);
+                              const isApproved = approvedViolations.has(violationId) || approvedFromBackend.has(violationId);
                               const isDenied = deniedViolations.has(violationId);
 
                               if (isApproved) {
