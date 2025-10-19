@@ -75,6 +75,12 @@ const Reports: React.FC = () => {
   const [finesData, setFinesData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [totalRevenue, setTotalRevenue] = useState(0);
+  const [aiPerformance, setAiPerformance] = useState({
+    totalProcessed: 0,
+    accurateDetections: 0,
+    accuracy: 0,
+    avgConfidence: 0
+  });
   const { token } = useAuth();
 
   // Mock data for demonstration
@@ -112,6 +118,37 @@ const Reports: React.FC = () => {
   const totalVehicles = mockReportData.reduce((sum, item) => sum + item.totalVehicles, 0);
   const avgSpeed = Math.round(mockReportData.reduce((sum, item) => sum + item.avgSpeed, 0) / mockReportData.length);
 
+  // Fetch AI performance data
+  const fetchAiPerformanceData = async () => {
+    try {
+      const response = await fetch('/api/ai-cases?limit=100');
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data && data.data.cases) {
+          const cases = data.data.cases;
+          const totalProcessed = cases.length;
+          const accurateDetections = cases.filter((c: any) => 
+            c.ai_data && c.ai_data.confidence && c.ai_data.confidence > 0.8
+          ).length;
+          
+          const avgConfidence = cases.reduce((sum: number, c: any) => {
+            return sum + (c.ai_data?.confidence || 0);
+          }, 0) / totalProcessed;
+          
+          setAiPerformance({
+            totalProcessed,
+            accurateDetections,
+            accuracy: totalProcessed > 0 ? (accurateDetections / totalProcessed) * 100 : 0,
+            avgConfidence: avgConfidence * 100
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching AI performance data:', error);
+    }
+  };
+
   // Fetch fines data from backend
   const fetchFinesData = async () => {
     try {
@@ -148,12 +185,14 @@ const Reports: React.FC = () => {
       activeTab
     });
     fetchFinesData();
+    fetchAiPerformanceData();
   };
 
   // Load data on component mount
   useEffect(() => {
     if (token) {
       fetchFinesData();
+      fetchAiPerformanceData();
     }
   }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -258,13 +297,13 @@ const Reports: React.FC = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box>
                   <Typography color="text.secondary" gutterBottom>
-                    Total Violations
+                    Total Fines
                   </Typography>
                   <Typography variant="h4">
-                    {totalViolations}
+                    {finesData.length}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Last 7 days
+                    Approved violations
                   </Typography>
                 </Box>
                 <Avatar sx={{ bgcolor: 'error.main' }}>
@@ -280,13 +319,13 @@ const Reports: React.FC = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box>
                   <Typography color="text.secondary" gutterBottom>
-                    Total Vehicles
+                    AI Cases Processed
                   </Typography>
                   <Typography variant="h4">
-                    {totalVehicles.toLocaleString()}
+                    {aiPerformance.totalProcessed}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Detected
+                    Plate detections
                   </Typography>
                 </Box>
                 <Avatar sx={{ bgcolor: 'primary.main' }}>
@@ -302,13 +341,13 @@ const Reports: React.FC = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box>
                   <Typography color="text.secondary" gutterBottom>
-                    Average Speed
+                    AI Accuracy
                   </Typography>
                   <Typography variant="h4">
-                    {avgSpeed} km/h
+                    {aiPerformance.accuracy.toFixed(1)}%
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    All cameras
+                    Detection accuracy
                   </Typography>
                 </Box>
                 <Avatar sx={{ bgcolor: 'success.main' }}>
@@ -506,7 +545,30 @@ const Reports: React.FC = () => {
           <Grid size={{ xs: 12, md: 6 }}>
             <Card>
               <CardContent>
-                <Typography variant="h6" gutterBottom>Camera Performance</Typography>
+                <Typography variant="h6" gutterBottom>AI Performance & Accuracy</Typography>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body2">AI Detection Accuracy</Typography>
+                    <Typography variant="body2" fontWeight="medium">{aiPerformance.accuracy.toFixed(1)}%</Typography>
+                  </Box>
+                  <LinearProgress variant="determinate" value={aiPerformance.accuracy} color="success" />
+                </Box>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body2">Average Confidence</Typography>
+                    <Typography variant="body2" fontWeight="medium">{aiPerformance.avgConfidence.toFixed(1)}%</Typography>
+                  </Box>
+                  <LinearProgress variant="determinate" value={aiPerformance.avgConfidence} color="primary" />
+                </Box>
+                <Box sx={{ mb: 2, p: 2, bgcolor: 'info.light', borderRadius: 1, border: '1px solid', borderColor: 'info.main' }}>
+                  <Typography variant="body2" fontWeight="medium" color="info.dark">
+                    Total Cases Processed: {aiPerformance.totalProcessed}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Accurate Detections: {aiPerformance.accurateDetections} / {aiPerformance.totalProcessed}
+                  </Typography>
+                </Box>
+                <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>Camera Performance</Typography>
                 <Box sx={{ mb: 2, p: 2, bgcolor: 'success.light', borderRadius: 1, border: '1px solid', borderColor: 'success.main' }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -516,7 +578,7 @@ const Reports: React.FC = () => {
                     <Chip size="small" label="Active" color="success" />
                   </Box>
                   <Typography variant="body2" color="text.secondary">
-                    Uptime: 99.8% | Violations: 27 | Accuracy: 98.2%
+                    Uptime: 99.8% | Fines: {finesData.filter((f: any) => f.notes?.includes('camera001')).length} | AI Accuracy: {aiPerformance.accuracy.toFixed(1)}%
                   </Typography>
                 </Box>
                 <Box sx={{ mb: 2, p: 2, bgcolor: 'success.light', borderRadius: 1, border: '1px solid', borderColor: 'success.main' }}>
@@ -528,19 +590,7 @@ const Reports: React.FC = () => {
                     <Chip size="small" label="Active" color="success" />
                   </Box>
                   <Typography variant="body2" color="text.secondary">
-                    Uptime: 98.5% | Violations: 8 | Accuracy: 97.8%
-                  </Typography>
-                </Box>
-                <Box sx={{ p: 2, bgcolor: 'warning.light', borderRadius: 1, border: '1px solid', borderColor: 'warning.main' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Schedule color="warning" />
-                      <Typography fontWeight="medium">Camera 003</Typography>
-                    </Box>
-                    <Chip size="small" label="Maintenance" color="warning" />
-                  </Box>
-                  <Typography variant="body2" color="text.secondary">
-                    Last active: 2 hours ago | Scheduled maintenance
+                    Uptime: 98.5% | Fines: {finesData.filter((f: any) => f.notes?.includes('camera002')).length} | AI Accuracy: {aiPerformance.accuracy.toFixed(1)}%
                   </Typography>
                 </Box>
               </CardContent>
