@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Button,
@@ -40,6 +40,12 @@ const LocationMapPicker: React.FC<LocationMapPickerProps> = ({
   const [selectedLng, setSelectedLng] = useState(validInitialLng);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Refs to manage Google Maps instances
+  const mapRef = useRef<any>(null);
+  const markerRef = useRef<any>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const scriptLoadedRef = useRef(false);
 
   useEffect(() => {
     if (open) {
@@ -49,16 +55,58 @@ const LocationMapPicker: React.FC<LocationMapPickerProps> = ({
       setSelectedLng(validLng);
       setError(null);
       loadGoogleMaps();
+    } else {
+      // Cleanup when dialog closes
+      cleanupMap();
     }
   }, [open, initialLat, initialLng]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      cleanupMap();
+    };
+  }, []);
+
+  const cleanupMap = () => {
+    try {
+      if (markerRef.current) {
+        markerRef.current.setMap(null);
+        markerRef.current = null;
+      }
+      if (mapRef.current) {
+        mapRef.current = null;
+      }
+    } catch (error) {
+      console.warn('Error cleaning up map:', error);
+    }
+  };
 
   const loadGoogleMaps = () => {
     // Check if Google Maps is already loaded
     if (window.google && window.google.maps) {
       setMapLoaded(true);
-      initializeMap();
+      // Use setTimeout to ensure DOM is ready
+      setTimeout(() => initializeMap(), 100);
       return;
     }
+
+    // Prevent multiple script loads
+    if (scriptLoadedRef.current) {
+      return;
+    }
+
+    // Check if script is already being loaded
+    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
+    if (existingScript) {
+      existingScript.addEventListener('load', () => {
+        setMapLoaded(true);
+        setTimeout(() => initializeMap(), 100);
+      });
+      return;
+    }
+
+    scriptLoadedRef.current = true;
 
     // Load Google Maps API
     const script = document.createElement('script');
@@ -67,11 +115,12 @@ const LocationMapPicker: React.FC<LocationMapPickerProps> = ({
     script.defer = true;
     script.onload = () => {
       setMapLoaded(true);
-      initializeMap();
+      setTimeout(() => initializeMap(), 100);
     };
     script.onerror = () => {
-      setError('Failed to load Google Maps. Using OpenStreetMap instead.');
+      setError('Failed to load Google Maps. Using coordinate picker instead.');
       initializeOpenStreetMap();
+      scriptLoadedRef.current = false;
     };
     document.head.appendChild(script);
   };
@@ -82,39 +131,56 @@ const LocationMapPicker: React.FC<LocationMapPickerProps> = ({
       return;
     }
 
-    const mapElement = document.getElementById('location-map');
-    if (!mapElement) return;
+    const mapElement = mapContainerRef.current;
+    if (!mapElement) {
+      console.warn('Map container not found');
+      return;
+    }
 
-    const map = new window.google.maps.Map(mapElement, {
-      center: { lat: selectedLat, lng: selectedLng },
-      zoom: 15,
-      mapTypeId: window.google.maps.MapTypeId.ROADMAP,
-    });
+    try {
+      // Cleanup existing map
+      cleanupMap();
 
-    const marker = new window.google.maps.Marker({
-      position: { lat: selectedLat, lng: selectedLng },
-      map: map,
-      draggable: true,
-      title: 'Radar Location',
-    });
+      // Create new map
+      const map = new window.google.maps.Map(mapElement, {
+        center: { lat: selectedLat, lng: selectedLng },
+        zoom: 15,
+        mapTypeId: window.google.maps.MapTypeId.ROADMAP,
+      });
 
-    // Update coordinates when marker is dragged
-    marker.addListener('dragend', () => {
-      const position = marker.getPosition();
-      if (position) {
-        setSelectedLat(position.lat());
-        setSelectedLng(position.lng());
-      }
-    });
+      const marker = new window.google.maps.Marker({
+        position: { lat: selectedLat, lng: selectedLng },
+        map: map,
+        draggable: true,
+        title: 'Radar Location',
+      });
 
-    // Update coordinates when map is clicked
-    map.addListener('click', (event: any) => {
-      const lat = event.latLng.lat();
-      const lng = event.latLng.lng();
-      setSelectedLat(lat);
-      setSelectedLng(lng);
-      marker.setPosition({ lat, lng });
-    });
+      // Store references
+      mapRef.current = map;
+      markerRef.current = marker;
+
+      // Update coordinates when marker is dragged
+      marker.addListener('dragend', () => {
+        const position = marker.getPosition();
+        if (position) {
+          setSelectedLat(position.lat());
+          setSelectedLng(position.lng());
+        }
+      });
+
+      // Update coordinates when map is clicked
+      map.addListener('click', (event: any) => {
+        const lat = event.latLng.lat();
+        const lng = event.latLng.lng();
+        setSelectedLat(lat);
+        setSelectedLng(lng);
+        marker.setPosition({ lat, lng });
+      });
+    } catch (error) {
+      console.error('Error initializing map:', error);
+      setError('Failed to initialize map. Using coordinate picker instead.');
+      initializeOpenStreetMap();
+    }
   };
 
   const initializeOpenStreetMap = () => {
@@ -131,9 +197,14 @@ const LocationMapPicker: React.FC<LocationMapPickerProps> = ({
           setSelectedLat(lat);
           setSelectedLng(lng);
           
-          // Re-initialize map with new location
-          if (mapLoaded) {
-            initializeMap();
+          // Update existing map if available
+          if (mapRef.current && markerRef.current) {
+            const newPosition = { lat, lng };
+            mapRef.current.setCenter(newPosition);
+            markerRef.current.setPosition(newPosition);
+          } else if (mapLoaded) {
+            // Re-initialize map with new location
+            setTimeout(() => initializeMap(), 100);
           }
         },
         (error) => {
@@ -195,7 +266,7 @@ const LocationMapPicker: React.FC<LocationMapPickerProps> = ({
 
         {/* Map Container */}
         <Box
-          id="location-map"
+          ref={mapContainerRef}
           sx={{
             width: '100%',
             height: 400,

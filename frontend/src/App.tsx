@@ -13,6 +13,7 @@ import Reports from './pages/Reports';
 import PlateRecognition from './pages/PlateRecognition';
 import FinesImagesMonitor from './pages/FinesImagesMonitor';
 import AICases from './pages/AICases';
+import Settings from './pages/Settings';
 import AuthTest from './pages/AuthTest';
 
 function App() {
@@ -119,7 +120,7 @@ function App() {
               element={
                 <ProtectedRoute>
                   <Layout>
-                    <div>Settings page coming soon...</div>
+                    <Settings />
                   </Layout>
                 </ProtectedRoute>
               }

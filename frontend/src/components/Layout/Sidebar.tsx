@@ -48,9 +48,7 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onClose }) => {
     { text: 'Fines', icon: <Receipt />, path: '/fines' },
     { text: 'Plate Recognition', icon: <CameraAlt />, path: '/plate-recognition' },
     { text: 'Multi-Camera Monitor', icon: <CloudUpload />, path: '/fines-images-monitor' },
-    { text: 'Reports', icon: <Assessment />, path: '/reports' },
-    { text: 'Speed Analysis', icon: <Speed />, path: '/speed-analysis' },
-    { text: 'Locations', icon: <LocationOn />, path: '/locations' },
+    { text: 'Reports & Analytics', icon: <Assessment />, path: '/reports' },
     { text: 'Settings', icon: <Settings />, path: '/settings' },
   ];
 

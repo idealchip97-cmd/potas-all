@@ -170,11 +170,12 @@ const Login: React.FC = () => {
             {/* Company Logos - Vertical Layout */}
             <Slide direction="down" in timeout={1200}>
               <Box sx={{ textAlign: 'center', mb: 4 }}>
+                {/* Arab Potash Logo - Top */}
                 <Zoom in timeout={1500}>
                   <Box sx={{ mb: 3 }}>
                     <img 
-                      src="/idealchip-logo.png" 
-                      alt="Ideal Chip Logo" 
+                      src="/arab_potash-logo-en.png" 
+                      alt="Arab Potash Company Logo" 
                       style={{ 
                         height: '93px', // 55% larger than 60px
                         objectFit: 'contain',
@@ -185,11 +186,12 @@ const Login: React.FC = () => {
                     />
                   </Box>
                 </Zoom>
+                {/* Ideal Chip Logo - Bottom */}
                 <Zoom in timeout={1700}>
                   <Box>
                     <img 
-                      src="/arab_potash-logo-en.png" 
-                      alt="Arab Potash Company Logo" 
+                      src="/idealchip-logo.png" 
+                      alt="Ideal Chip Logo" 
                       style={{ 
                         height: '93px', // 55% larger than 60px
                         objectFit: 'contain',

@@ -82,7 +82,7 @@ router.post('/approve', authenticate, async (req, res) => {
         const speedDetected = verdictData?.verdict?.speed || 50; // Default if not available
         const speedLimit = verdictData?.verdict?.limit || 30; // Default if not available
         const violationAmount = speedDetected - speedLimit;
-        const fineAmount = violationAmount > 20 ? 200.00 : violationAmount > 10 ? 100.00 : 50.00;
+        const fineAmount = violationAmount > 20 ? 100.00 : violationAmount > 10 ? 75.00 : 50.00;
         const detectedPlate = plateNumber || aiData?.plate_number || aiData?.best_detection?.plate || 'Unknown';
         
         // Find or create a radar entry (use camera as radar identifier)

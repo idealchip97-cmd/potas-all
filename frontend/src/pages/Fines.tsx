@@ -40,6 +40,7 @@ import {
   Speed,
   Edit,
   Delete,
+  MonetizationOn,
 } from '@mui/icons-material';
 import apiService from '../services/api';
 import approvalSyncService from '../services/approvalSyncService';
@@ -77,6 +78,11 @@ const Fines: React.FC = () => {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [fineToEdit, setFineToEdit] = useState<Fine | null>(null);
   const [newPlateNumber, setNewPlateNumber] = useState('');
+  
+  // Edit fine amount state
+  const [editAmountDialogOpen, setEditAmountDialogOpen] = useState(false);
+  const [fineToEditAmount, setFineToEditAmount] = useState<Fine | null>(null);
+  const [newFineAmount, setNewFineAmount] = useState('');
   
   // Success message state
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -234,6 +240,61 @@ const Fines: React.FC = () => {
     setEditDialogOpen(true);
   };
 
+  // Edit fine amount function
+  const handleEditFineAmount = async () => {
+    if (!fineToEditAmount || !newFineAmount.trim()) return;
+    
+    const amount = parseFloat(newFineAmount.trim());
+    if (isNaN(amount) || amount <= 0) {
+      setError('Please enter a valid fine amount');
+      return;
+    }
+    
+    try {
+      const response = await apiService.updateFine(fineToEditAmount.id, {
+        fineAmount: amount
+      });
+      
+      if (response.success) {
+        setSuccessMessage(`Fine amount updated successfully to ${amount} JD!`);
+        
+        // Update the fine in the local state
+        setFines(fines.map(f => 
+          f.id === fineToEditAmount.id 
+            ? { ...f, fineAmount: amount }
+            : f
+        ));
+        
+        // Recalculate stats
+        const updatedFines = fines.map(f => 
+          f.id === fineToEditAmount.id 
+            ? { ...f, fineAmount: amount }
+            : f
+        );
+        calculateStats(updatedFines);
+        
+        // Hide success message after 3 seconds
+        setTimeout(() => setSuccessMessage(null), 3000);
+      } else {
+        setError('Failed to update fine amount');
+      }
+    } catch (error) {
+      console.error('Error updating fine amount:', error);
+      setError('Failed to update fine amount');
+    } finally {
+      setEditAmountDialogOpen(false);
+      setFineToEditAmount(null);
+      setNewFineAmount('');
+    }
+  };
+
+  // Open edit amount dialog
+  const openEditAmountDialog = (fine: Fine) => {
+    setFineToEditAmount(fine);
+    setNewFineAmount(fine.fineAmount.toString());
+    setEditAmountDialogOpen(true);
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'warning';
@@ -345,7 +406,7 @@ const Fines: React.FC = () => {
                   Total Revenue
                 </Typography>
                 <Typography variant="h4">
-                  ${stats?.totalRevenue || 0}
+                  {stats?.totalRevenue || 0} JD
                 </Typography>
               </Box>
               <Avatar sx={{ bgcolor: 'success.main' }}>
@@ -448,7 +509,7 @@ const Fines: React.FC = () => {
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'success.main' }}>
-                            ${fine.fineAmount}
+                            {fine.fineAmount} JD
                           </Typography>
                         </TableCell>
                         <TableCell>
@@ -483,6 +544,17 @@ const Fines: React.FC = () => {
                                   onClick={() => openEditDialog(fine)}
                                 >
                                   <Edit />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                            {permissions.canEditFines && (
+                              <Tooltip title="Edit Fine Amount">
+                                <IconButton
+                                  size="small"
+                                  color="warning"
+                                  onClick={() => openEditAmountDialog(fine)}
+                                >
+                                  <MonetizationOn />
                                 </IconButton>
                               </Tooltip>
                             )}
@@ -529,7 +601,7 @@ const Fines: React.FC = () => {
             Are you sure you want to delete Fine #{fineToDelete?.id}?
           </Typography>
           <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
-            Plate: {fineToDelete?.plateNumber} | Amount: ${fineToDelete?.fineAmount}
+            Plate: {fineToDelete?.plateNumber} | Amount: {fineToDelete?.fineAmount} JD
           </Typography>
           <Typography variant="body2" color="error" sx={{ mt: 2 }}>
             This action cannot be undone.
@@ -578,6 +650,44 @@ const Fines: React.FC = () => {
         </DialogActions>
       </Dialog>
 
+      {/* Edit Fine Amount Dialog */}
+      <Dialog open={editAmountDialogOpen} onClose={() => setEditAmountDialogOpen(false)} maxWidth="sm">
+        <DialogTitle>
+          Edit Fine Amount
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ mb: 2 }}>
+            Fine #{fineToEditAmount?.id} - Current amount: {fineToEditAmount?.fineAmount} JD
+          </Typography>
+          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+            Default fine amount is 50 JD. Admin can adjust based on violation severity.
+          </Typography>
+          <TextField
+            fullWidth
+            label="New Fine Amount (JD)"
+            value={newFineAmount}
+            onChange={(e) => setNewFineAmount(e.target.value)}
+            placeholder="Enter new fine amount"
+            type="number"
+            inputProps={{ min: 1, step: 0.01 }}
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditAmountDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleEditFineAmount} 
+            color="primary" 
+            variant="contained"
+            disabled={!newFineAmount.trim() || parseFloat(newFineAmount) <= 0}
+          >
+            Update Amount
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Fine Details Dialog */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>
@@ -615,7 +725,7 @@ const Fines: React.FC = () => {
                   Fine Amount
                 </Typography>
                 <Typography variant="body1" gutterBottom>
-                  ${selectedFine.fineAmount}
+                  {selectedFine.fineAmount} JD
                 </Typography>
               </Box>
               <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Card,
@@ -7,23 +7,44 @@ import {
   Button,
   TextField,
   MenuItem,
-  Alert,
-  CircularProgress,
-  Tab,
-  Tabs,
+  Chip,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   Paper,
+  Grid,
+  Tabs,
+  Tab,
+  LinearProgress,
+  Avatar
 } from '@mui/material';
 import {
   Assessment,
   TrendingUp,
-  Speed,
-  LocationOn,
+  Camera,
+  CalendarToday,
   Download,
-  Refresh,
+  Print,
+  BarChart,
+  PieChart,
+  Speed,
+  Warning,
+  CheckCircle,
+  Schedule
 } from '@mui/icons-material';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
-import { ViolationTrend, RadarPerformance, SpeedAnalysis, LocationViolation } from '../types';
-import apiService from '../services/api';
+
+interface ReportData {
+  id: string;
+  date: string;
+  camera: string;
+  violations: number;
+  totalVehicles: number;
+  avgSpeed: number;
+  status: 'active' | 'maintenance' | 'offline';
+}
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -33,586 +54,461 @@ interface TabPanelProps {
 
 function TabPanel(props: TabPanelProps) {
   const { children, value, index, ...other } = props;
-
   return (
     <div
       role="tabpanel"
       hidden={value !== index}
-      id={`simple-tabpanel-${index}`}
-      aria-labelledby={`simple-tab-${index}`}
+      id={`reports-tabpanel-${index}`}
+      aria-labelledby={`reports-tab-${index}`}
       {...other}
     >
-      {value === index && (
-        <Box sx={{ p: 3 }}>
-          {children}
-        </Box>
-      )}
+      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
     </div>
   );
 }
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
-
 const Reports: React.FC = () => {
-  const [tabValue, setTabValue] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState(0);
+  const [dateRange, setDateRange] = useState({ start: '', end: '' });
+  const [selectedCamera, setSelectedCamera] = useState('all');
 
-  // Violation Trends State
-  const [trends, setTrends] = useState<ViolationTrend[]>([]);
-  const [trendPeriod, setTrendPeriod] = useState<'hourly' | 'daily' | 'weekly' | 'monthly'>('daily');
-  const [trendDays, setTrendDays] = useState(30);
-
-  // Radar Performance State
-  const [radarPerformance, setRadarPerformance] = useState<RadarPerformance[]>([]);
-
-  // Speed Analysis State
-  const [speedAnalysis, setSpeedAnalysis] = useState<SpeedAnalysis[]>([]);
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-
-  // Location Analysis State
-  const [locationViolations, setLocationViolations] = useState<LocationViolation[]>([]);
-
-  // Monthly Report State
-  const [monthlyReport, setMonthlyReport] = useState<any>(null);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-
-  // Compliance Report State
-  const [complianceReport, setComplianceReport] = useState<any>(null);
-
-  const loadTrends = async () => {
-    try {
-      setLoading(true);
-      await apiService.getDashboardStats();
-      setTrends([]);
-      setError(null);
-    } catch (err) {
-      setError('Failed to load violation trends');
-      console.error('Error loading trends:', err);
-    } finally {
-      setLoading(false);
+  // Mock data for demonstration
+  const mockReportData: ReportData[] = [
+    {
+      id: '1',
+      date: '2025-01-19',
+      camera: 'Camera 001',
+      violations: 15,
+      totalVehicles: 245,
+      avgSpeed: 68,
+      status: 'active'
+    },
+    {
+      id: '2',
+      date: '2025-01-19',
+      camera: 'Camera 002',
+      violations: 8,
+      totalVehicles: 189,
+      avgSpeed: 62,
+      status: 'active'
+    },
+    {
+      id: '3',
+      date: '2025-01-18',
+      camera: 'Camera 001',
+      violations: 12,
+      totalVehicles: 198,
+      avgSpeed: 65,
+      status: 'maintenance'
     }
-  };
+  ];
 
-  const loadRadarPerformance = async () => {
-    try {
-      await apiService.getRadars();
-      setRadarPerformance([]);
-    } catch (err) {
-      console.error('Error loading radar performance:', err);
-    }
-  };
-
-  const loadSpeedAnalysis = async () => {
-    try {
-      setLoading(true);
-      await apiService.getFines();
-      setSpeedAnalysis([]);
-      setError(null);
-    } catch (err) {
-      setError('Failed to load speed analysis');
-      console.error('Error loading speed analysis:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadLocationViolations = async () => {
-    try {
-      setLoading(true);
-      await apiService.getFines();
-      setLocationViolations([]);
-      setError(null);
-    } catch (err) {
-      setError('Failed to load location violations');
-      console.error('Error loading location violations:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadMonthlyReport = async () => {
-    try {
-      setLoading(true);
-      const response = await apiService.getDashboardStats();
-      setMonthlyReport(response.data);
-      setError(null);
-    } catch (err) {
-      setError('Failed to load monthly report');
-      console.error('Error loading monthly report:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadComplianceReport = async () => {
-    try {
-      setLoading(true);
-      const response = await apiService.getDashboardStats();
-      setComplianceReport(response.data);
-      setError(null);
-    } catch (err) {
-      setError('Failed to load compliance report');
-      console.error('Error loading compliance report:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadTrends();
-    loadRadarPerformance();
-  }, []);
+  const totalViolations = mockReportData.reduce((sum, item) => sum + item.violations, 0);
+  const totalVehicles = mockReportData.reduce((sum, item) => sum + item.totalVehicles, 0);
+  const avgSpeed = Math.round(mockReportData.reduce((sum, item) => sum + item.avgSpeed, 0) / mockReportData.length);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
-    setTabValue(newValue);
+    setActiveTab(newValue);
   };
 
-  if (error) {
-    return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-        <Button onClick={() => setError(null)} startIcon={<Refresh />}>
-          Dismiss
-        </Button>
-      </Box>
-    );
-  }
-
   return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" component="h1">
+    <Box sx={{ p: 3, backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
+      {/* Header */}
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="h4" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+          <Assessment sx={{ fontSize: 32, color: 'primary.main' }} />
           Reports & Analytics
         </Typography>
-        <Button
-          startIcon={<Download />}
-          variant="outlined"
-        >
-          Export Data
-        </Button>
+        <Typography variant="body1" color="text.secondary">
+          Comprehensive radar system performance and violation reports
+        </Typography>
       </Box>
 
-      {/* Overview Cards */}
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, mb: 3 }}>
-        <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', md: '1 1 calc(25% - 18px)' } }}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography color="textSecondary" gutterBottom>
-                    Total Violations
-                  </Typography>
-                  <Typography variant="h4">
-                    {trends.reduce((sum, t) => sum + t.violations, 0)}
-                  </Typography>
-                </Box>
-                <Assessment color="primary" />
-              </Box>
-            </CardContent>
-          </Card>
-        </Box>
-        <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', md: '1 1 calc(25% - 18px)' } }}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography color="textSecondary" gutterBottom>
-                    Active Radars
-                  </Typography>
-                  <Typography variant="h4">
-                    {radarPerformance.filter(r => r.status === 'active').length}
-                  </Typography>
-                </Box>
-                <LocationOn color="success" />
-              </Box>
-            </CardContent>
-          </Card>
-        </Box>
-        <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', md: '1 1 calc(25% - 18px)' } }}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography color="textSecondary" gutterBottom>
-                    Avg Speed
-                  </Typography>
-                  <Typography variant="h4">
-                    {radarPerformance.length > 0 
-                      ? Math.round(radarPerformance.reduce((sum, r) => sum + r.averageSpeed, 0) / radarPerformance.length)
-                      : 0} km/h
-                  </Typography>
-                </Box>
-                <Speed color="warning" />
-              </Box>
-            </CardContent>
-          </Card>
-        </Box>
-        <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', md: '1 1 calc(25% - 18px)' } }}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography color="textSecondary" gutterBottom>
-                    This Month
-                  </Typography>
-                  <Typography variant="h4">
-                    {trends.filter(t => new Date(t.date).getMonth() === new Date().getMonth()).reduce((sum, t) => sum + t.violations, 0)}
-                  </Typography>
-                </Box>
-                <TrendingUp color="info" />
-              </Box>
-            </CardContent>
-          </Card>
-        </Box>
+      {/* Action Buttons */}
+      <Box sx={{ mb: 3, display: 'flex', gap: 2 }}>
+        <Button variant="outlined" startIcon={<Download />}>
+          Export Data
+        </Button>
+        <Button variant="contained" startIcon={<Print />}>
+          Print Report
+        </Button>
       </Box>
 
       {/* Tabs */}
       <Paper sx={{ mb: 3 }}>
-        <Tabs value={tabValue} onChange={handleTabChange} aria-label="reports tabs">
-          <Tab label="Violation Trends" />
-          <Tab label="Radar Performance" />
-          <Tab label="Speed Analysis" />
-          <Tab label="Location Analysis" />
-          <Tab label="Monthly Report" />
-          <Tab label="Compliance Report" />
+        <Tabs value={activeTab} onChange={handleTabChange} aria-label="reports tabs">
+          <Tab icon={<BarChart />} label="Overview" />
+          <Tab icon={<Warning />} label="Violations" />
+          <Tab icon={<Speed />} label="Performance" />
+          <Tab icon={<PieChart />} label="Analytics" />
         </Tabs>
       </Paper>
 
-      {/* Violation Trends Tab */}
-      <TabPanel value={tabValue} index={0}>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 3 }}>
-          <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(33.33% - 12px)' } }}>
-            <TextField
-              select
-              fullWidth
-              label="Period"
-              value={trendPeriod}
-              onChange={(e) => setTrendPeriod(e.target.value as any)}
-            >
-              <MenuItem value="hourly">Hourly</MenuItem>
-              <MenuItem value="daily">Daily</MenuItem>
-              <MenuItem value="weekly">Weekly</MenuItem>
-              <MenuItem value="monthly">Monthly</MenuItem>
-            </TextField>
-          </Box>
-          <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(33.33% - 12px)' } }}>
-            <TextField
-              fullWidth
-              label="Number of Days"
-              type="number"
-              value={trendDays}
-              onChange={(e) => setTrendDays(Number(e.target.value))}
-            />
-          </Box>
-          <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(33.33% - 12px)' } }}>
-            <Button
-              variant="contained"
-              fullWidth
-              onClick={loadTrends}
-              disabled={loading}
-              sx={{ height: '56px' }}
-            >
-              {loading ? <CircularProgress size={24} /> : 'Update Trends'}
-            </Button>
-          </Box>
-        </Box>
+      {/* Filters */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+            <CalendarToday />
+            Report Filters
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <TextField
+                fullWidth
+                label="Start Date"
+                type="date"
+                value={dateRange.start}
+                onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <TextField
+                fullWidth
+                label="End Date"
+                type="date"
+                value={dateRange.end}
+                onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <TextField
+                fullWidth
+                select
+                label="Camera"
+                value={selectedCamera}
+                onChange={(e) => setSelectedCamera(e.target.value)}
+              >
+                <MenuItem value="all">All Cameras</MenuItem>
+                <MenuItem value="camera001">Camera 001</MenuItem>
+                <MenuItem value="camera002">Camera 002</MenuItem>
+              </TextField>
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <Button fullWidth variant="contained" sx={{ height: '56px' }}>
+                Generate Report
+              </Button>
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Violation Trends - {trendPeriod.charAt(0).toUpperCase() + trendPeriod.slice(1)}
-            </Typography>
-            <ResponsiveContainer width="100%" height={400}>
-              <LineChart data={trends}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
-                <Tooltip />
-                <Line type="monotone" dataKey="violations" stroke="#1976d2" strokeWidth={2} />
-              </LineChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </TabPanel>
+      {/* Statistics Cards */}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography color="text.secondary" gutterBottom>
+                    Total Violations
+                  </Typography>
+                  <Typography variant="h4">
+                    {totalViolations}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Last 7 days
+                  </Typography>
+                </Box>
+                <Avatar sx={{ bgcolor: 'error.main' }}>
+                  <Warning />
+                </Avatar>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography color="text.secondary" gutterBottom>
+                    Total Vehicles
+                  </Typography>
+                  <Typography variant="h4">
+                    {totalVehicles.toLocaleString()}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Detected
+                  </Typography>
+                </Box>
+                <Avatar sx={{ bgcolor: 'primary.main' }}>
+                  <Speed />
+                </Avatar>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography color="text.secondary" gutterBottom>
+                    Average Speed
+                  </Typography>
+                  <Typography variant="h4">
+                    {avgSpeed} km/h
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    All cameras
+                  </Typography>
+                </Box>
+                <Avatar sx={{ bgcolor: 'success.main' }}>
+                  <TrendingUp />
+                </Avatar>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography color="text.secondary" gutterBottom>
+                    Active Cameras
+                  </Typography>
+                  <Typography variant="h4">
+                    2/3
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Online status
+                  </Typography>
+                </Box>
+                <Avatar sx={{ bgcolor: 'secondary.main' }}>
+                  <Camera />
+                </Avatar>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
 
-      {/* Radar Performance Tab */}
-      <TabPanel value={tabValue} index={1}>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-          <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 calc(66.67% - 12px)' } }}>
+      {/* Tab Panels */}
+      <TabPanel value={activeTab} index={0}>
+        <Grid container spacing={3}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card>
               <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Radar Performance Comparison
+                <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                  <Schedule />
+                  Recent Activity
                 </Typography>
-                <ResponsiveContainer width="100%" height={400}>
-                  <BarChart data={radarPerformance}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="radarName" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="totalViolations" fill="#1976d2" name="Total Violations" />
-                    <Bar dataKey="todayViolations" fill="#4caf50" name="Today Violations" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </Box>
-          <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 calc(33.33% - 12px)' } }}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Radar Status Overview
-                </Typography>
-                {radarPerformance.map((radar, index) => (
-                  <Box key={radar.radarId} sx={{ mb: 2 }}>
-                    <Typography variant="subtitle2">{radar.radarName}</Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Status: {radar.status}
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Uptime: {radar.uptime}%
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Avg Speed: {radar.averageSpeed} km/h
-                    </Typography>
+                {mockReportData.slice(0, 5).map((item) => (
+                  <Box key={item.id} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 2, mb: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <Camera color="action" />
+                      <Box>
+                        <Typography variant="body2" fontWeight="medium">{item.camera}</Typography>
+                        <Typography variant="caption" color="text.secondary">{item.date}</Typography>
+                      </Box>
+                    </Box>
+                    <Box sx={{ textAlign: 'right' }}>
+                      <Typography variant="body2" fontWeight="medium">{item.violations} violations</Typography>
+                      <Chip 
+                        size="small"
+                        label={item.status}
+                        color={item.status === 'active' ? 'success' : item.status === 'maintenance' ? 'warning' : 'error'}
+                      />
+                    </Box>
                   </Box>
                 ))}
               </CardContent>
             </Card>
-          </Box>
-        </Box>
-      </TabPanel>
-
-      {/* Speed Analysis Tab */}
-      <TabPanel value={tabValue} index={2}>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 3 }}>
-          <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(33.33% - 12px)' } }}>
-            <TextField
-              fullWidth
-              label="Start Date"
-              type="date"
-              InputLabelProps={{ shrink: true }}
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-            />
-          </Box>
-          <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(33.33% - 12px)' } }}>
-            <TextField
-              fullWidth
-              label="End Date"
-              type="date"
-              InputLabelProps={{ shrink: true }}
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-            />
-          </Box>
-          <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(33.33% - 12px)' } }}>
-            <Button
-              variant="contained"
-              fullWidth
-              onClick={loadSpeedAnalysis}
-              disabled={loading}
-              sx={{ height: '56px' }}
-            >
-              {loading ? <CircularProgress size={24} /> : 'Analyze Speed'}
-            </Button>
-          </Box>
-        </Box>
-
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-          <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 calc(66.67% - 12px)' } }}>
+          </Grid>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card>
               <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Speed Distribution
+                <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                  <BarChart />
+                  Performance Summary
                 </Typography>
-                <ResponsiveContainer width="100%" height={400}>
-                  <BarChart data={speedAnalysis}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="speedRange" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="count" fill="#1976d2" name="Violations Count" />
-                  </BarChart>
-                </ResponsiveContainer>
+                <Box sx={{ mb: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body2">Detection Accuracy</Typography>
+                    <Typography variant="body2" fontWeight="medium">98.5%</Typography>
+                  </Box>
+                  <LinearProgress variant="determinate" value={98.5} color="success" />
+                </Box>
+                <Box sx={{ mb: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body2">System Uptime</Typography>
+                    <Typography variant="body2" fontWeight="medium">99.2%</Typography>
+                  </Box>
+                  <LinearProgress variant="determinate" value={99.2} color="primary" />
+                </Box>
+                <Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body2">Response Time</Typography>
+                    <Typography variant="body2" fontWeight="medium">&lt; 100ms</Typography>
+                  </Box>
+                  <LinearProgress variant="determinate" value={95} color="secondary" />
+                </Box>
               </CardContent>
             </Card>
-          </Box>
-          <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 calc(33.33% - 12px)' } }}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Speed Range Breakdown
-                </Typography>
-                <ResponsiveContainer width="100%" height={400}>
-                  <PieChart>
-                    <Pie
-                      data={speedAnalysis}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="count"
-                    >
-                      {speedAnalysis.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </Box>
-        </Box>
+          </Grid>
+        </Grid>
       </TabPanel>
 
-      {/* Location Analysis Tab */}
-      <TabPanel value={tabValue} index={3}>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 3 }}>
-          <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(33.33% - 12px)' } }}>
-            <TextField
-              fullWidth
-              label="Start Date"
-              type="date"
-              InputLabelProps={{ shrink: true }}
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-            />
-          </Box>
-          <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(33.33% - 12px)' } }}>
-            <TextField
-              fullWidth
-              label="End Date"
-              type="date"
-              InputLabelProps={{ shrink: true }}
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-            />
-          </Box>
-          <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(33.33% - 12px)' } }}>
-            <Button
-              variant="contained"
-              fullWidth
-              onClick={loadLocationViolations}
-              disabled={loading}
-              sx={{ height: '56px' }}
-            >
-              {loading ? <CircularProgress size={24} /> : 'Analyze Locations'}
-            </Button>
-          </Box>
-        </Box>
-
+      <TabPanel value={activeTab} index={1}>
         <Card>
           <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Violations by Location
+            <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+              <Warning />
+              Violation Reports
             </Typography>
-            <ResponsiveContainer width="100%" height={400}>
-              <BarChart data={locationViolations}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="location" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="violations" fill="#1976d2" name="Violations" />
-              </BarChart>
-            </ResponsiveContainer>
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Date</TableCell>
+                    <TableCell>Camera</TableCell>
+                    <TableCell>Violations</TableCell>
+                    <TableCell>Total Vehicles</TableCell>
+                    <TableCell>Avg Speed</TableCell>
+                    <TableCell>Status</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {mockReportData.map((item) => (
+                    <TableRow key={item.id} hover>
+                      <TableCell>{item.date}</TableCell>
+                      <TableCell>{item.camera}</TableCell>
+                      <TableCell>
+                        <Typography color="error" fontWeight="medium">{item.violations}</Typography>
+                      </TableCell>
+                      <TableCell>{item.totalVehicles}</TableCell>
+                      <TableCell>{item.avgSpeed} km/h</TableCell>
+                      <TableCell>
+                        <Chip 
+                          size="small"
+                          label={item.status}
+                          color={item.status === 'active' ? 'success' : item.status === 'maintenance' ? 'warning' : 'error'}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
           </CardContent>
         </Card>
       </TabPanel>
 
-      {/* Monthly Report Tab */}
-      <TabPanel value={tabValue} index={4}>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 3 }}>
-          <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>
-            <TextField
-              fullWidth
-              label="Year"
-              type="number"
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(Number(e.target.value))}
-            />
-          </Box>
-          <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>
-            <Button
-              variant="contained"
-              fullWidth
-              onClick={loadMonthlyReport}
-              disabled={loading}
-              sx={{ height: '56px' }}
-            >
-              {loading ? <CircularProgress size={24} /> : 'Generate Report'}
-            </Button>
-          </Box>
-        </Box>
-
-        {monthlyReport && (
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Monthly Report - {selectedYear}
-              </Typography>
-              <Typography variant="body1">
-                {JSON.stringify(monthlyReport, null, 2)}
-              </Typography>
-            </CardContent>
-          </Card>
-        )}
+      <TabPanel value={activeTab} index={2}>
+        <Grid container spacing={3}>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>Camera Performance</Typography>
+                <Box sx={{ mb: 2, p: 2, bgcolor: 'success.light', borderRadius: 1, border: '1px solid', borderColor: 'success.main' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <CheckCircle color="success" />
+                      <Typography fontWeight="medium">Camera 001</Typography>
+                    </Box>
+                    <Chip size="small" label="Active" color="success" />
+                  </Box>
+                  <Typography variant="body2" color="text.secondary">
+                    Uptime: 99.8% | Violations: 27 | Accuracy: 98.2%
+                  </Typography>
+                </Box>
+                <Box sx={{ mb: 2, p: 2, bgcolor: 'success.light', borderRadius: 1, border: '1px solid', borderColor: 'success.main' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <CheckCircle color="success" />
+                      <Typography fontWeight="medium">Camera 002</Typography>
+                    </Box>
+                    <Chip size="small" label="Active" color="success" />
+                  </Box>
+                  <Typography variant="body2" color="text.secondary">
+                    Uptime: 98.5% | Violations: 8 | Accuracy: 97.8%
+                  </Typography>
+                </Box>
+                <Box sx={{ p: 2, bgcolor: 'warning.light', borderRadius: 1, border: '1px solid', borderColor: 'warning.main' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Schedule color="warning" />
+                      <Typography fontWeight="medium">Camera 003</Typography>
+                    </Box>
+                    <Chip size="small" label="Maintenance" color="warning" />
+                  </Box>
+                  <Typography variant="body2" color="text.secondary">
+                    Last active: 2 hours ago | Scheduled maintenance
+                  </Typography>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>System Health</Typography>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body2">CPU Usage</Typography>
+                    <Typography variant="body2">45%</Typography>
+                  </Box>
+                  <LinearProgress variant="determinate" value={45} />
+                </Box>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body2">Memory Usage</Typography>
+                    <Typography variant="body2">62%</Typography>
+                  </Box>
+                  <LinearProgress variant="determinate" value={62} color="success" />
+                </Box>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body2">Storage Usage</Typography>
+                    <Typography variant="body2">78%</Typography>
+                  </Box>
+                  <LinearProgress variant="determinate" value={78} color="warning" />
+                </Box>
+                <Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body2">Network Usage</Typography>
+                    <Typography variant="body2">23%</Typography>
+                  </Box>
+                  <LinearProgress variant="determinate" value={23} color="secondary" />
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
       </TabPanel>
 
-      {/* Compliance Report Tab */}
-      <TabPanel value={tabValue} index={5}>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 3 }}>
-          <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(33.33% - 12px)' } }}>
-            <TextField
-              fullWidth
-              label="Start Date"
-              type="date"
-              InputLabelProps={{ shrink: true }}
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-            />
-          </Box>
-          <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(33.33% - 12px)' } }}>
-            <TextField
-              fullWidth
-              label="End Date"
-              type="date"
-              InputLabelProps={{ shrink: true }}
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-            />
-          </Box>
-          <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(33.33% - 12px)' } }}>
-            <Button
-              variant="contained"
-              fullWidth
-              onClick={loadComplianceReport}
-              disabled={loading}
-              sx={{ height: '56px' }}
-            >
-              {loading ? <CircularProgress size={24} /> : 'Generate Report'}
-            </Button>
-          </Box>
-        </Box>
-
-        {complianceReport && (
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Compliance Report
-              </Typography>
-              <Typography variant="body1">
-                {JSON.stringify(complianceReport, null, 2)}
-              </Typography>
-            </CardContent>
-          </Card>
-        )}
+      <TabPanel value={activeTab} index={3}>
+        <Grid container spacing={3}>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>Traffic Patterns</Typography>
+                <Box sx={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'grey.50', borderRadius: 1 }}>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <BarChart sx={{ fontSize: 48, color: 'grey.400', mb: 1 }} />
+                    <Typography color="text.secondary">Traffic pattern chart would be displayed here</Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>Violation Distribution</Typography>
+                <Box sx={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'grey.50', borderRadius: 1 }}>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <PieChart sx={{ fontSize: 48, color: 'grey.400', mb: 1 }} />
+                    <Typography color="text.secondary">Violation distribution chart would be displayed here</Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
       </TabPanel>
     </Box>
   );
