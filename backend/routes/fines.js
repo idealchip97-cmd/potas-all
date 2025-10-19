@@ -176,50 +176,6 @@ router.post('/deny', authenticate, async (req, res) => {
     }
 });
 
-// Delete fine by ID
-router.delete('/:id', authenticate, async (req, res) => {
-    try {
-        const fineId = parseInt(req.params.id);
-        
-        if (!fineId) {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid fine ID'
-            });
-        }
-
-        // Find the fine first
-        const fine = await Fine.findByPk(fineId);
-        
-        if (!fine) {
-            return res.status(404).json({
-                success: false,
-                message: 'Fine not found'
-            });
-        }
-
-        // Delete the fine
-        await fine.destroy();
-        
-        console.log(`🗑️ Deleted fine #${fineId} by user ${req.user.email}`);
-        
-        res.json({
-            success: true,
-            message: 'Fine deleted successfully',
-            data: {
-                deletedFineId: fineId
-            }
-        });
-    } catch (error) {
-        console.error('Error deleting fine:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to delete fine',
-            error: error.message
-        });
-    }
-});
-
 // Update fine by ID
 router.put('/:id', authenticate, async (req, res) => {
     try {

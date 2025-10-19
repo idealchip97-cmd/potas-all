@@ -109,7 +109,40 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
       loadApprovedViolations();
     });
 
-    return unsubscribe;
+    // Subscribe to specific events for better synchronization
+    const unsubscribeFineDeleted = approvalSyncService.on('fineDeleted', (data) => {
+      console.log('🔄 Fine deleted event received:', data);
+      // Reload local state from localStorage
+      const savedApproved = localStorage.getItem('approvedViolations');
+      const savedDenied = localStorage.getItem('deniedViolations');
+      
+      if (savedApproved) {
+        setApprovedViolations(new Set(JSON.parse(savedApproved)));
+      }
+      if (savedDenied) {
+        setDeniedViolations(new Set(JSON.parse(savedDenied)));
+      }
+      
+      // Also reload from backend
+      loadApprovedViolations();
+    });
+
+    const unsubscribeViolationApproved = approvalSyncService.on('violationApproved', (data) => {
+      console.log('✅ Violation approved event received:', data);
+      loadApprovedViolations();
+    });
+
+    const unsubscribeViolationDenied = approvalSyncService.on('violationDenied', (data) => {
+      console.log('❌ Violation denied event received:', data);
+      loadApprovedViolations();
+    });
+
+    return () => {
+      unsubscribe();
+      unsubscribeFineDeleted();
+      unsubscribeViolationApproved();
+      unsubscribeViolationDenied();
+    };
   }, [dateFilter]); // Include dateFilter as dependency
 
   const loadApprovedViolations = async () => {
@@ -259,6 +292,14 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
       const data = await response.json();
 
       if (data.success) {
+        // Use approval sync service to handle approval state
+        approvalSyncService.handleViolationApproved({
+          camera: violation.camera,
+          date: violation.date,
+          case: violation.case
+        });
+        
+        // Update local state
         setApprovedViolations(prev => new Set(prev).add(violationId));
         setApprovedFromBackend(prev => new Set(prev).add(violationId));
         // Remove from denied if it was previously denied
@@ -309,6 +350,14 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
       const data = await response.json();
 
       if (data.success) {
+        // Use approval sync service to handle denial state and fine deletion
+        await approvalSyncService.handleViolationDenied({
+          camera: violation.camera,
+          date: violation.date,
+          case: violation.case
+        });
+        
+        // Update local state
         setDeniedViolations(prev => new Set(prev).add(violationId));
         // Remove from approved if it was previously approved
         setApprovedViolations(prev => {
@@ -321,9 +370,6 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
           newSet.delete(violationId);
           return newSet;
         });
-        
-        // Use approval sync service to handle fine deletion for denied violations
-        await approvalSyncService.handleViolationDenied(violation);
         
         console.log(`❌ Denied violation for case ${violation.case}`);
       } else {
