@@ -61,10 +61,17 @@ class AIFtpService {
   async getViolationCycles(limit: number = 50): Promise<AIViolationResponse> {
     try {
       // Use relative URL to go through React dev server proxy
-      const response = await fetch(`/api/ai-cases?limit=${limit}`);
+      const response = await fetch(`/api/ai-cases?limit=${limit}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error(`API Error ${response.status}:`, errorText);
+        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
       }
       
       const data = await response.json();
@@ -131,7 +138,19 @@ class AIFtpService {
         };
       }
       
-      throw new Error('No AI cases data available');
+      // Return empty response if no data
+      return {
+        success: true,
+        violations: [],
+        total: 0,
+        limit,
+        summary: {
+          totalViolations: 0,
+          totalPlates: 0,
+          cameras: [],
+          dates: []
+        }
+      };
     } catch (error) {
       console.error('❌ Error fetching AI violation cycles:', error);
       console.error('Error details:', {
@@ -139,55 +158,115 @@ class AIFtpService {
         stack: error instanceof Error ? error.stack : undefined,
         error: error
       });
-      throw error;
+      
+      // Return empty response instead of throwing to prevent crashes
+      return {
+        success: false,
+        violations: [],
+        total: 0,
+        limit,
+        summary: {
+          totalViolations: 0,
+          totalPlates: 0,
+          cameras: [],
+          dates: []
+        }
+      };
     }
   }
 
   async getProcessingSummary(): Promise<AISummaryResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/ftp-images/summary`);
+      const response = await fetch(`/api/ftp-images/summary`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error(`Processing Summary API Error ${response.status}:`, errorText);
+        // Return empty summary instead of throwing
+        return {
+          success: false,
+          summary: {
+            cameras: 0,
+            dates: 0,
+            totalCases: 0,
+            aiEnabledCases: 0,
+            processedCases: 0,
+            totalImages: 0,
+            totalPlates: 0,
+            processingMethods: {}
+          },
+          averagePlatesPerImage: '0.00'
+        };
       }
       
       const data = await response.json();
       return data;
     } catch (error) {
       console.error('❌ Error fetching processing summary:', error);
-      throw error;
+      // Return empty summary instead of throwing
+      return {
+        success: false,
+        summary: {
+          cameras: 0,
+          dates: 0,
+          totalCases: 0,
+          aiEnabledCases: 0,
+          processedCases: 0,
+          totalImages: 0,
+          totalPlates: 0,
+          processingMethods: {}
+        },
+        averagePlatesPerImage: '0.00'
+      };
     }
   }
 
   async getCameras(): Promise<{ success: boolean; cameras: string[]; count: number }> {
     try {
-      const response = await fetch(`${this.baseUrl}/discover/cameras`);
+      const response = await fetch(`/api/speeding-car-processor/cameras`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        console.error(`Cameras API Error ${response.status}`);
+        return { success: false, cameras: [], count: 0 };
       }
       
       const data = await response.json();
       return data;
     } catch (error) {
       console.error('❌ Error fetching cameras:', error);
-      throw error;
+      return { success: false, cameras: [], count: 0 };
     }
   }
 
   async getCameraDates(camera: string): Promise<{ success: boolean; camera: string; dates: string[]; count: number }> {
     try {
-      const response = await fetch(`${this.baseUrl}/discover/dates/${camera}`);
+      const response = await fetch(`/api/speeding-car-processor/dates`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        console.error(`Camera Dates API Error ${response.status}`);
+        return { success: false, camera, dates: [], count: 0 };
       }
       
       const data = await response.json();
       return data;
     } catch (error) {
       console.error('❌ Error fetching camera dates:', error);
-      throw error;
+      return { success: false, camera, dates: [], count: 0 };
     }
   }
 
@@ -229,15 +308,15 @@ class AIFtpService {
 
   async testConnection(): Promise<boolean> {
     try {
-      const response = await fetch(`/health`);
+      const response = await fetch(`/health`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
       return response.ok;
     } catch (error) {
-      console.error('❌ AI Backend Server connection test failed:', error);
-      console.error('Connection test error details:', {
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined,
-        error: error
-      });
+      console.info('ℹ️ AI Backend Server connection test failed (this is normal if AI service is not running):', error);
       return false;
     }
   }
