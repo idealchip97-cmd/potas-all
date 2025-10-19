@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 import {
   Box,
   Card,
@@ -42,9 +43,11 @@ import {
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { token } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [totalRevenue, setTotalRevenue] = useState(0);
   const [chartData, setChartData] = useState<any>({
     hourlyViolations: [],
     cameraStats: [],
@@ -52,13 +55,37 @@ const Dashboard: React.FC = () => {
     violationTypes: []
   });
 
+  // Fetch real revenue data from fines API
+  const fetchRevenueData = async () => {
+    try {
+      if (!token) return;
+      
+      const response = await fetch('/api/fines', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const revenue = (data.fines || []).reduce((sum: number, fine: any) => {
+          return sum + (parseFloat(fine.fineAmount) || 0);
+        }, 0);
+        setTotalRevenue(revenue);
+      }
+    } catch (error) {
+      console.error('Error fetching revenue data:', error);
+    }
+  };
+
   const fetchViolationSystemData = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      // Fetch data from all 3 cameras
-      const cameras = ['camera001', 'camera002', 'camera003'];
+      // Fetch data from all 2 active cameras
+      const cameras = ['camera001', 'camera002'];
       const date = new Date().toISOString().split('T')[0]; // Use today's date
       
       let totalCases = 0;
@@ -132,8 +159,8 @@ const Dashboard: React.FC = () => {
       
       // Update stats with real data
       setStats({
-        totalRadars: 3,
-        activeRadars: 3,
+        totalRadars: 2,
+        activeRadars: 2,
         totalFines: totalViolations,
         todayFines: totalViolations,
         totalRevenue: totalViolations * 150,
@@ -146,14 +173,14 @@ const Dashboard: React.FC = () => {
         cancelledFines: 0
       });
       
-      console.log(`✅ Dashboard loaded: ${totalCases} cases from 3 cameras`);
+      console.log(`✅ Dashboard loaded: ${totalCases} cases from 2 cameras`);
       
     } catch (error: any) {
       console.error('Failed to fetch violation system data:', error);
       setError(`Failed to load dashboard data: ${error.message}`);
       setStats({
-        totalRadars: 3,
-        activeRadars: 3,
+        totalRadars: 2,
+        activeRadars: 2,
         totalFines: 0,
         todayFines: 0,
         totalRevenue: 0,
@@ -172,7 +199,8 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     fetchViolationSystemData();
-  }, []);
+    fetchRevenueData();
+  }, [token]);
 
   const actionCards = [
     {
@@ -221,7 +249,7 @@ const Dashboard: React.FC = () => {
     },
     {
       title: 'Total Revenue',
-      value: `${stats?.totalRevenue || 0} SAR`,
+      value: `${totalRevenue.toFixed(2)} JD`,
       icon: <Assessment />,
       color: '#9c27b0',
     },
@@ -273,7 +301,7 @@ const Dashboard: React.FC = () => {
               />
               <Chip 
                 icon={<CameraAlt />} 
-                label="3 Cameras Active" 
+                label="2 Cameras Active" 
                 color="primary" 
                 variant="filled"
               />
