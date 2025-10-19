@@ -263,6 +263,55 @@ router.put('/:id', authenticate, async (req, res) => {
     }
 });
 
+// Delete individual fine
+router.delete('/:id', authenticate, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // Find the fine first to get case information
+        const fine = await Fine.findByPk(id);
+        if (!fine) {
+            return res.status(404).json({
+                success: false,
+                message: 'Fine not found'
+            });
+        }
+
+        // Extract case information from notes for approval state cleanup
+        let caseInfo = null;
+        if (fine.notes) {
+            const notesMatch = fine.notes.match(/from (\w+) case (\w+)/);
+            if (notesMatch) {
+                caseInfo = {
+                    camera: notesMatch[1],
+                    caseId: notesMatch[2]
+                };
+            }
+        }
+
+        // Delete the fine
+        await fine.destroy();
+
+        console.log(`🗑️ Deleted fine #${id} for case ${caseInfo?.camera}-${caseInfo?.caseId}`);
+        
+        res.json({
+            success: true,
+            message: 'Fine deleted successfully',
+            data: {
+                deletedFineId: id,
+                caseInfo: caseInfo
+            }
+        });
+    } catch (error) {
+        console.error('Error deleting fine:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to delete fine',
+            error: error.message
+        });
+    }
+});
+
 router.get('/radar/:radarId', getFinesByRadarId);
 router.get('/:id', getFineById);
 

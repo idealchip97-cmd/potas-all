@@ -42,6 +42,7 @@ import {
   Delete,
 } from '@mui/icons-material';
 import apiService from '../services/api';
+import approvalSyncService from '../services/approvalSyncService';
 import { Fine } from '../types';
 
 interface FineFilters {
@@ -151,6 +152,13 @@ const Fines: React.FC = () => {
         setSuccessMessage(`Fine #${fineToDelete.id} deleted successfully!`);
         setFines(fines.filter(f => f.id !== fineToDelete.id));
         calculateStats(fines.filter(f => f.id !== fineToDelete.id));
+        
+        // Notify approval sync service about the deletion
+        if (response.data?.caseInfo) {
+          // Use current date as default - in a real app you might want to track this better
+          const currentDate = new Date().toISOString().split('T')[0];
+          approvalSyncService.handleFineDeleted(response.data.caseInfo, currentDate);
+        }
         
         // Hide success message after 3 seconds
         setTimeout(() => setSuccessMessage(null), 3000);

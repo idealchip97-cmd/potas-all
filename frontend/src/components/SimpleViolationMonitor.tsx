@@ -38,6 +38,7 @@ import {
   ThumbDown,
 } from '@mui/icons-material';
 import aiFtpService, { AIViolation } from '../services/aiFtpService';
+import approvalSyncService from '../services/approvalSyncService';
 
 interface SimpleViolationMonitorProps {
   refreshTrigger?: number;
@@ -98,6 +99,16 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
   useEffect(() => {
     localStorage.setItem('deniedViolations', JSON.stringify(Array.from(deniedViolations)));
   }, [deniedViolations]);
+
+  // Subscribe to approval sync service changes
+  useEffect(() => {
+    const unsubscribe = approvalSyncService.subscribe(() => {
+      // Reload approval states when sync service notifies of changes
+      loadApprovedViolations();
+    });
+
+    return unsubscribe;
+  }, [dateFilter]); // Include dateFilter as dependency
 
   const loadApprovedViolations = async () => {
     try {
@@ -308,6 +319,10 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
           newSet.delete(violationId);
           return newSet;
         });
+        
+        // Use approval sync service to handle fine deletion for denied violations
+        await approvalSyncService.handleViolationDenied(violation);
+        
         console.log(`❌ Denied violation for case ${violation.case}`);
       } else {
         throw new Error(data.message || 'Failed to deny violation');
@@ -346,9 +361,8 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
         setDeniedViolations(new Set());
         setApprovedFromBackend(new Set());
         
-        // Clear localStorage
-        localStorage.removeItem('approvedViolations');
-        localStorage.removeItem('deniedViolations');
+        // Use approval sync service to clear all states
+        approvalSyncService.clearAllStates();
         
         console.log(`🗑️ Cleared all fines from database and reset approval states`);
         alert(`Successfully cleared all fines from the database and reset approval states`);
