@@ -173,7 +173,7 @@ const Login: React.FC = () => {
                 <Zoom in timeout={1500}>
                   <Box sx={{ mb: 3 }}>
                     <img 
-                      src="/ideal chip logo.png" 
+                      src="/idealchip-logo.png" 
                       alt="Ideal Chip Logo" 
                       style={{ 
                         height: '93px', // 55% larger than 60px
