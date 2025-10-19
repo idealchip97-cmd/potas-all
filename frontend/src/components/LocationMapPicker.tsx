@@ -32,15 +32,21 @@ const LocationMapPicker: React.FC<LocationMapPickerProps> = ({
   initialLat = 31.5497,
   initialLng = 35.4732,
 }) => {
-  const [selectedLat, setSelectedLat] = useState(initialLat);
-  const [selectedLng, setSelectedLng] = useState(initialLng);
+  // Ensure we always have valid numbers
+  const validInitialLat = typeof initialLat === 'number' && !isNaN(initialLat) ? initialLat : 31.5497;
+  const validInitialLng = typeof initialLng === 'number' && !isNaN(initialLng) ? initialLng : 35.4732;
+  
+  const [selectedLat, setSelectedLat] = useState(validInitialLat);
+  const [selectedLng, setSelectedLng] = useState(validInitialLng);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
-      setSelectedLat(initialLat);
-      setSelectedLng(initialLng);
+      const validLat = typeof initialLat === 'number' && !isNaN(initialLat) ? initialLat : 31.5497;
+      const validLng = typeof initialLng === 'number' && !isNaN(initialLng) ? initialLng : 35.4732;
+      setSelectedLat(validLat);
+      setSelectedLng(validLng);
       setError(null);
       loadGoogleMaps();
     }
@@ -182,7 +188,7 @@ const LocationMapPicker: React.FC<LocationMapPickerProps> = ({
           </Button>
           <Box sx={{ flex: 1, display: 'flex', gap: 1, alignItems: 'center' }}>
             <Typography variant="body2">
-              <strong>Selected:</strong> {selectedLat.toFixed(6)}, {selectedLng.toFixed(6)}
+              <strong>Selected:</strong> {(typeof selectedLat === 'number' ? selectedLat : 0).toFixed(6)}, {(typeof selectedLng === 'number' ? selectedLng : 0).toFixed(6)}
             </Typography>
           </Box>
         </Box>
@@ -214,14 +220,16 @@ const LocationMapPicker: React.FC<LocationMapPickerProps> = ({
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                 Map integration requires Google Maps API key.
                 <br />
-                Current coordinates: {selectedLat.toFixed(6)}, {selectedLng.toFixed(6)}
+                Current coordinates: {(typeof selectedLat === 'number' ? selectedLat : 0).toFixed(6)}, {(typeof selectedLng === 'number' ? selectedLng : 0).toFixed(6)}
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
                 <Button
                   size="small"
                   onClick={() => {
-                    const lat = parseFloat(prompt('Enter latitude:') || selectedLat.toString());
-                    const lng = parseFloat(prompt('Enter longitude:') || selectedLng.toString());
+                    const currentLat = typeof selectedLat === 'number' ? selectedLat : 0;
+                    const currentLng = typeof selectedLng === 'number' ? selectedLng : 0;
+                    const lat = parseFloat(prompt('Enter latitude:') || currentLat.toString());
+                    const lng = parseFloat(prompt('Enter longitude:') || currentLng.toString());
                     if (!isNaN(lat) && !isNaN(lng)) {
                       setSelectedLat(lat);
                       setSelectedLng(lng);

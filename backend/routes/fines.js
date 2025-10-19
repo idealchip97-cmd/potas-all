@@ -134,9 +134,17 @@ router.post('/approve', authenticate, async (req, res) => {
     }
 });
 
-// Deny violation and remove from fines table if exists
+// Deny violation and remove from fines table if exists (admin only)
 router.post('/deny', authenticate, async (req, res) => {
     try {
+        // Check if user is admin - only admin can deny violations
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied. Only admin can deny violations.'
+            });
+        }
+
         const { camera, date, caseId, plateNumber } = req.body;
         
         if (!camera || !date || !caseId) {

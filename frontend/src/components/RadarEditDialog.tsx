@@ -69,8 +69,8 @@ const RadarEditDialog: React.FC<RadarEditDialogProps> = ({
         serialNumber: radar.serialNumber || '',
         speedLimit: radar.speedLimit || 50,
         status: radar.status || 'active',
-        latitude: radar.latitude || 31.5497,
-        longitude: radar.longitude || 35.4732,
+        latitude: typeof radar.latitude === 'number' && !isNaN(radar.latitude) ? radar.latitude : 31.5497,
+        longitude: typeof radar.longitude === 'number' && !isNaN(radar.longitude) ? radar.longitude : 35.4732,
       });
       setImagePreview(radar.imageUrl ? `http://localhost:3001${radar.imageUrl}` : null);
     } else {

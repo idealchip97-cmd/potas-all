@@ -112,19 +112,28 @@ const SimpleViolationMonitor: React.FC<SimpleViolationMonitorProps> = ({
     // Subscribe to specific events for better synchronization
     const unsubscribeFineDeleted = approvalSyncService.on('fineDeleted', (data) => {
       console.log('🔄 Fine deleted event received:', data);
-      // Reload local state from localStorage
+      console.log('🔄 Removed IDs:', data.removedIds);
+      
+      // Force reload local state from localStorage
       const savedApproved = localStorage.getItem('approvedViolations');
       const savedDenied = localStorage.getItem('deniedViolations');
       
       if (savedApproved) {
-        setApprovedViolations(new Set(JSON.parse(savedApproved)));
+        const newApproved = new Set<string>(JSON.parse(savedApproved));
+        setApprovedViolations(newApproved);
+        console.log('🔄 Updated approved violations from localStorage:', Array.from(newApproved));
       }
       if (savedDenied) {
-        setDeniedViolations(new Set(JSON.parse(savedDenied)));
+        const newDenied = new Set<string>(JSON.parse(savedDenied));
+        setDeniedViolations(newDenied);
+        console.log('🔄 Updated denied violations from localStorage:', Array.from(newDenied));
       }
       
-      // Also reload from backend
+      // Also reload from backend to ensure consistency
       loadApprovedViolations();
+      
+      // Force a component re-render by updating a state
+      setError(null);
     });
 
     const unsubscribeViolationApproved = approvalSyncService.on('violationApproved', (data) => {

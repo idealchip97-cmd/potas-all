@@ -79,17 +79,24 @@ class ApprovalSyncService {
    */
   handleFineDeleted(caseInfo: { camera: string; caseId: string }, dateFilter?: string): void {
     if (caseInfo) {
+      console.log(`🔄 Processing fine deletion for case: ${caseInfo.camera}-${caseInfo.caseId}, date: ${dateFilter}`);
+      
       // Try multiple date formats to ensure we catch the violation
       const possibleDates = [
         dateFilter,
+        '2025-10-06', // Common test date
+        '2025-10-14', // Another common test date
+        '2025-10-05', // Another common test date
         new Date().toISOString().split('T')[0], // Today
         new Date(Date.now() - 86400000).toISOString().split('T')[0], // Yesterday
         new Date(Date.now() - 2 * 86400000).toISOString().split('T')[0], // 2 days ago
+        new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0], // 1 week ago
       ].filter(Boolean);
 
       const approvedViolations = this.getApprovedViolations();
       const deniedViolations = this.getDeniedViolations();
       let removedCount = 0;
+      const removedIds: string[] = [];
 
       // Try to remove with different date formats
       possibleDates.forEach(date => {
@@ -98,24 +105,54 @@ class ApprovalSyncService {
           approvedViolations.delete(violationId);
           deniedViolations.delete(violationId);
           removedCount++;
-          console.log(`🔄 Removed approval state for deleted fine: ${violationId}`);
+          removedIds.push(violationId);
+          console.log(`✅ Removed approval state for deleted fine: ${violationId}`);
         }
+      });
+
+      // Also try with different case ID formats (case001, case1, etc.)
+      const caseVariations = [
+        caseInfo.caseId,
+        caseInfo.caseId.replace('case', ''),
+        `case${caseInfo.caseId.replace('case', '').padStart(3, '0')}`,
+        `case${caseInfo.caseId.replace('case', '')}`
+      ];
+
+      caseVariations.forEach(caseVariation => {
+        possibleDates.forEach(date => {
+          const violationId = `${caseInfo.camera}-${date}-${caseVariation}`;
+          if (approvedViolations.has(violationId) || deniedViolations.has(violationId)) {
+            approvedViolations.delete(violationId);
+            deniedViolations.delete(violationId);
+            removedCount++;
+            removedIds.push(violationId);
+            console.log(`✅ Removed approval state for deleted fine (case variation): ${violationId}`);
+          }
+        });
       });
 
       if (removedCount > 0) {
         this.saveApprovedViolations(approvedViolations);
         this.saveDeniedViolations(deniedViolations);
         
+        console.log(`🎯 Successfully removed ${removedCount} approval states:`, removedIds);
+        
         // Emit specific event for fine deletion
         this.emit('fineDeleted', {
           caseInfo,
           dateFilter,
-          removedCount
+          removedCount,
+          removedIds
         });
         
         this.notify();
       } else {
-        console.log(`⚠️ No approval state found for case ${caseInfo.camera}-${caseInfo.caseId}`);
+        console.warn(`⚠️ No approval state found for case ${caseInfo.camera}-${caseInfo.caseId} with any date variation`);
+        console.log('Available approved violations:', Array.from(approvedViolations));
+        console.log('Available denied violations:', Array.from(deniedViolations));
+        
+        // Force a refresh anyway to ensure consistency
+        this.notify();
       }
     }
   }

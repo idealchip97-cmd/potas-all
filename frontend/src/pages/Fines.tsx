@@ -158,9 +158,19 @@ const Fines: React.FC = () => {
         
         // Notify approval sync service about the deletion
         if (response.data?.caseInfo) {
-          // Use current date as default - in a real app you might want to track this better
-          const currentDate = new Date().toISOString().split('T')[0];
-          approvalSyncService.handleFineDeleted(response.data.caseInfo, currentDate);
+          // Extract the actual violation date from the fine
+          let violationDate = new Date().toISOString().split('T')[0]; // Default to today
+          
+          if (fineToDelete.violationDateTime) {
+            violationDate = new Date(fineToDelete.violationDateTime).toISOString().split('T')[0];
+          } else if (fineToDelete.violationTime) {
+            violationDate = new Date(fineToDelete.violationTime).toISOString().split('T')[0];
+          }
+          
+          console.log(`🔄 Notifying sync service: Fine deleted for case ${response.data.caseInfo.camera}-${response.data.caseInfo.caseId} on date ${violationDate}`);
+          approvalSyncService.handleFineDeleted(response.data.caseInfo, violationDate);
+        } else {
+          console.warn('⚠️ No case info returned from fine deletion - sync may not work properly');
         }
         
         // Hide success message after 3 seconds

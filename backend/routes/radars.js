@@ -149,9 +149,17 @@ router.get('/discover', async (req, res) => {
     }
 });
 
-// Update radar information
+// Update radar information (admin only)
 router.put('/:id', upload.single('image'), async (req, res) => {
     try {
+        // Check if user is admin
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied. Admin role required to edit radars.'
+            });
+        }
+
         const { id } = req.params;
         const updateData = { ...req.body };
         
@@ -195,9 +203,17 @@ router.put('/:id', upload.single('image'), async (req, res) => {
     }
 });
 
-// Delete radar
+// Delete radar (admin only)
 router.delete('/:id', async (req, res) => {
     try {
+        // Check if user is admin
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied. Admin role required to delete radars.'
+            });
+        }
+
         const { id } = req.params;
         
         const radar = await Radar.findByPk(id);
